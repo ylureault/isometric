@@ -18,9 +18,11 @@ var Engine = {
   zoom: CONSTANTS.ZOOM_DEFAULT,
   keys: {},
   roomConfig: { name: 'Room', environment: 'bureau', gridSize: 20, roomId: null, isCreator: false },
-  stars: [], lastTime: 0, started: false,
+  lastTime: 0, started: false,
   reactions: [], confetti: [], spotlight: null,
   tables: new Map(),
+  // Camera drag state
+  isDragging: false, dragStart: { x: 0, y: 0 }, cameraStart: { x: 0, y: 0 },
 
   init: function() {
     this.player.colors = Object.assign({}, CONSTANTS.DEFAULT_COLORS);
@@ -31,7 +33,6 @@ var Engine = {
 
     this.parseRoomConfig();
     this.resize();
-    this.genStars();
 
     var self = this;
     window.addEventListener('resize', function() { self.resize(); });
@@ -39,8 +40,11 @@ var Engine = {
     window.addEventListener('keyup', function(e) { self.onKeyUp(e); });
     window.addEventListener('wheel', function(e) { self.onWheel(e); }, { passive: false });
     window.addEventListener('beforeunload', function() { Network.leaveRoom(); });
-    window.addEventListener('contextmenu', function(e) { e.preventDefault(); self.onRightClick(e); });
-    this.canvas.addEventListener('click', function() { UI.hideContextMenu(); });
+    window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+    this.canvas.addEventListener('mousedown', function(e) { self.onMouseDown(e); });
+    this.canvas.addEventListener('mousemove', function(e) { self.onMouseMove(e); });
+    this.canvas.addEventListener('mouseup', function(e) { self.onMouseUp(e); });
+    this.canvas.addEventListener('click', function(e) { self.onClick(e); });
 
     Network.init();
     Audio.init();
@@ -222,13 +226,64 @@ var Engine = {
     }
   },
 
-  onRightClick: function(e) {
+  onMouseDown: function(e) {
     if (!this.started) return;
+    // Right-click or middle-click: camera drag
+    if (e.button === 2 || e.button === 1) {
+      this.isDragging = true;
+      this.dragStart.x = e.clientX;
+      this.dragStart.y = e.clientY;
+      this.cameraStart.x = this.camera.x;
+      this.cameraStart.y = this.camera.y;
+      e.preventDefault();
+    }
+  },
+
+  onMouseMove: function(e) {
+    if (this.isDragging) {
+      this.camera.x = this.cameraStart.x + (e.clientX - this.dragStart.x);
+      this.camera.y = this.cameraStart.y + (e.clientY - this.dragStart.y);
+    }
+  },
+
+  onMouseUp: function(e) {
+    if (e.button === 2 || e.button === 1) {
+      // If barely moved, it was a right-click (context menu)
+      if (this.isDragging) {
+        var movedDist = Math.abs(e.clientX - this.dragStart.x) + Math.abs(e.clientY - this.dragStart.y);
+        if (movedDist < 5) {
+          // Treat as right-click: show context menu for nearby player
+          var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
+          var self = this;
+          Network.remotePlayers.forEach(function(rp, sid) {
+            var dist = Math.sqrt((gp.x - rp.renderX) * (gp.x - rp.renderX) + (gp.y - rp.renderY) * (gp.y - rp.renderY));
+            if (dist < 1.5) UI.showContextMenu(e.clientX, e.clientY, sid, rp);
+          });
+        }
+      }
+      this.isDragging = false;
+    }
+  },
+
+  onClick: function(e) {
+    UI.hideContextMenu();
+    if (!this.started) return;
+    // Check if clicked on a whiteboard
     var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
-    Network.remotePlayers.forEach(function(rp, sid) {
-      var dist = Math.sqrt((gp.x - rp.renderX) * (gp.x - rp.renderX) + (gp.y - rp.renderY) * (gp.y - rp.renderY));
-      if (dist < 1.5) UI.showContextMenu(e.clientX, e.clientY, sid, rp);
-    });
+    var clickX = Math.floor(gp.x);
+    var clickY = Math.floor(gp.y);
+    for (var i = 0; i < Board.furniture.length; i++) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def || !def.isWhiteboard) continue;
+      if (clickX >= item.x && clickX < item.x + def.width && clickY >= item.y && clickY < item.y + def.height) {
+        // Find or create whiteboard for this furniture item
+        var wbId = item.whiteboardId || ('wb_furn_' + i);
+        item.whiteboardId = wbId;
+        UI.openWhiteboard(wbId, item);
+        return;
+      }
+    }
   },
 
   sendReaction: function(emoji) {
@@ -339,28 +394,11 @@ var Engine = {
     var w = this.canvas.width;
     var h = this.canvas.height;
 
-    // Background
-    ctx.fillStyle = '#080816';
-    ctx.fillRect(0, 0, w, h);
-
-    // Stars
-    for (var i = 0; i < this.stars.length; i++) {
-      var st = this.stars[i];
-      var a = st.a * (0.5 + 0.5 * Math.sin(ts / 1000 * st.sp));
-      ctx.beginPath();
-      ctx.arc(st.x * w, st.y * h * 0.5, st.s, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(180,200,240,' + a + ')';
-      ctx.fill();
-    }
-
-    // Board glow
-    var cs = Board.iso(Board.gridSize / 2, Board.gridSize / 2);
-    var gx = cs.x * this.zoom + this.camera.x;
-    var gy = cs.y * this.zoom + this.camera.y;
-    var grad = ctx.createRadialGradient(gx, gy, 30, gx, gy, 500);
-    grad.addColorStop(0, 'rgba(126,184,218,0.03)');
-    grad.addColorStop(1, 'rgba(126,184,218,0)');
-    ctx.fillStyle = grad;
+    // Background — light professional
+    var bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0, '#e8ecf0');
+    bgGrad.addColorStop(1, '#d0d4d8');
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
     // Apply zoom transform
@@ -488,14 +526,14 @@ var Engine = {
     ctx.translate(pos.x, pos.y);
     ctx.scale(1, ry / rx);
     var g = ctx.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx);
-    g.addColorStop(0, 'rgba(126,184,218,0.07)');
-    g.addColorStop(0.6, 'rgba(126,184,218,0.03)');
-    g.addColorStop(1, 'rgba(126,184,218,0)');
+    g.addColorStop(0, 'rgba(70,130,180,0.08)');
+    g.addColorStop(0.6, 'rgba(70,130,180,0.03)');
+    g.addColorStop(1, 'rgba(70,130,180,0)');
     ctx.beginPath();
     ctx.arc(0, 0, rx, 0, Math.PI * 2);
     ctx.fillStyle = g;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(126,184,218,0.1)';
+    ctx.strokeStyle = 'rgba(70,130,180,0.12)';
     ctx.lineWidth = 1;
     ctx.stroke();
     ctx.restore();
@@ -537,7 +575,7 @@ var Engine = {
     var h = this.minimapCanvas.height;
     var sc = Math.min(w, h) / Board.gridSize;
 
-    ctx.fillStyle = '#0a0a1a';
+    ctx.fillStyle = '#e8e8e8';
     ctx.fillRect(0, 0, w, h);
     for (var y = 0; y < Board.gridSize; y++) {
       for (var x = 0; x < Board.gridSize; x++) {
@@ -549,18 +587,18 @@ var Engine = {
       var item = Board.furniture[fi];
       var def = Environments.furnitureTypes[item.type];
       if (!def) continue;
-      ctx.fillStyle = def.isStage ? '#9A7E68' : def.isZone ? 'rgba(126,184,218,0.2)' : def.color;
+      ctx.fillStyle = def.isStage ? '#C8A878' : def.isZone ? 'rgba(100,160,200,0.15)' : def.color;
       ctx.fillRect(item.x * sc, item.y * sc, (def.width || 1) * sc, (def.height || 1) * sc);
     }
     var self = this;
     Network.remotePlayers.forEach(function(p) {
       if (p.opacity <= 0) return;
-      ctx.fillStyle = p.disconnected ? 'rgba(255,255,100,0.5)' : '#6BFF6B';
+      ctx.fillStyle = p.disconnected ? 'rgba(200,200,50,0.5)' : '#2ecc71';
       ctx.beginPath(); ctx.arc(p.renderX * sc, p.renderY * sc, 2, 0, Math.PI * 2); ctx.fill();
     });
-    ctx.fillStyle = '#6B9FFF';
+    ctx.fillStyle = '#3498db';
     ctx.beginPath(); ctx.arc(this.player.x * sc, this.player.y * sc, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(126,184,218,0.25)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, w, h);
   },

@@ -191,6 +191,37 @@
     <canvas id="minimap-canvas" width="160" height="160"></canvas>
   </div>
 
+  <!-- Whiteboard Pop-in -->
+  <div class="whiteboard-overlay" id="whiteboard-overlay" style="display: none;">
+    <div class="whiteboard-popup">
+      <div class="whiteboard-header">
+        <h3>Tableau blanc collaboratif</h3>
+        <div class="whiteboard-tools">
+          <div class="wb-colors">
+            <button class="wb-color-btn active" data-color="#333333" style="background:#333333;"></button>
+            <button class="wb-color-btn" data-color="#e74c3c" style="background:#e74c3c;"></button>
+            <button class="wb-color-btn" data-color="#3498db" style="background:#3498db;"></button>
+            <button class="wb-color-btn" data-color="#2ecc71" style="background:#2ecc71;"></button>
+            <button class="wb-color-btn" data-color="#f39c12" style="background:#f39c12;"></button>
+            <button class="wb-color-btn" data-color="#9b59b6" style="background:#9b59b6;"></button>
+          </div>
+          <div class="wb-widths">
+            <button class="wb-width-btn" data-width="1">S</button>
+            <button class="wb-width-btn active" data-width="3">M</button>
+            <button class="wb-width-btn" data-width="6">L</button>
+            <button class="wb-width-btn" data-width="12">XL</button>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="wb-undo">↩ Annuler</button>
+          <button class="btn btn-secondary btn-sm" id="wb-clear" style="color:#e74c3c;">🗑 Effacer</button>
+        </div>
+        <button class="whiteboard-close-btn" id="wb-close">✕</button>
+      </div>
+      <div class="whiteboard-canvas-container">
+        <canvas id="whiteboard-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
   <!-- Shortcuts modal -->
   <div class="shortcuts-modal" id="shortcuts-modal" style="display: none;">
     <div class="shortcuts-inner">

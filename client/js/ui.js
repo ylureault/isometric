@@ -411,6 +411,198 @@ const UI = {
     if (container) container.style.display = 'none';
   },
 
+  // ===== WHITEBOARD POP-IN =====
+
+  openWhiteboard: function(whiteboardId, furnitureItem) {
+    var self = this;
+    var overlay = document.getElementById('whiteboard-overlay');
+    if (!overlay) return;
+
+    this.activeWhiteboardId = whiteboardId;
+    overlay.style.display = 'flex';
+
+    var canvas = document.getElementById('whiteboard-canvas');
+    var ctx = canvas.getContext('2d');
+    canvas.width = 900;
+    canvas.height = 600;
+
+    // Drawing state
+    var drawing = false;
+    var lastX = 0, lastY = 0;
+    var currentColor = '#333333';
+    var currentWidth = 3;
+    var strokes = [];
+    var currentStroke = null;
+
+    // Clear canvas
+    function clearCanvas() {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Draw grid
+      ctx.strokeStyle = '#f0f0f0';
+      ctx.lineWidth = 0.5;
+      for (var x = 0; x < canvas.width; x += 30) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+      }
+      for (var y = 0; y < canvas.height; y += 30) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+    }
+
+    function redraw() {
+      clearCanvas();
+      for (var i = 0; i < strokes.length; i++) {
+        drawStroke(strokes[i]);
+      }
+    }
+
+    function drawStroke(stroke) {
+      if (!stroke.points || stroke.points.length < 2) return;
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.color || '#333';
+      ctx.lineWidth = stroke.width || 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (var j = 1; j < stroke.points.length; j++) {
+        ctx.lineTo(stroke.points[j].x, stroke.points[j].y);
+      }
+      ctx.stroke();
+    }
+
+    // Load existing strokes from server
+    Network.socket.emit('wb-open', { whiteboardId: whiteboardId }, function(resp) {
+      if (resp.success && resp.strokes) {
+        strokes = resp.strokes;
+        redraw();
+      }
+    });
+
+    // Listen for remote strokes
+    function onRemoteStroke(data) {
+      if (data.whiteboardId !== whiteboardId) return;
+      strokes.push(data.strokeData);
+      drawStroke(data.strokeData);
+    }
+    Network.socket.on('wb-stroke', onRemoteStroke);
+
+    function onRemoteUndo(data) {
+      if (data.whiteboardId !== whiteboardId) return;
+      strokes.splice(data.index, 1);
+      redraw();
+    }
+    Network.socket.on('wb-undo', onRemoteUndo);
+
+    function onRemoteClear(data) {
+      if (data.whiteboardId !== whiteboardId) return;
+      strokes = [];
+      redraw();
+    }
+    Network.socket.on('wb-cleared', onRemoteClear);
+
+    // Mouse events
+    function getPos(e) {
+      var rect = canvas.getBoundingClientRect();
+      return { x: (e.clientX - rect.left) * (canvas.width / rect.width), y: (e.clientY - rect.top) * (canvas.height / rect.height) };
+    }
+
+    function onDown(e) {
+      drawing = true;
+      var p = getPos(e);
+      lastX = p.x; lastY = p.y;
+      currentStroke = { color: currentColor, width: currentWidth, points: [{ x: p.x, y: p.y }] };
+    }
+
+    function onMove(e) {
+      if (!drawing) return;
+      var p = getPos(e);
+      ctx.beginPath();
+      ctx.strokeStyle = currentColor;
+      ctx.lineWidth = currentWidth;
+      ctx.lineCap = 'round';
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      lastX = p.x; lastY = p.y;
+      currentStroke.points.push({ x: p.x, y: p.y });
+      // Send cursor position
+      Network.socket.emit('wb-cursor', { whiteboardId: whiteboardId, x: p.x, y: p.y });
+    }
+
+    function onUp() {
+      if (!drawing) return;
+      drawing = false;
+      if (currentStroke && currentStroke.points.length > 1) {
+        strokes.push(currentStroke);
+        Network.socket.emit('wb-stroke', { whiteboardId: whiteboardId, strokeData: currentStroke });
+      }
+      currentStroke = null;
+    }
+
+    canvas.addEventListener('mousedown', onDown);
+    canvas.addEventListener('mousemove', onMove);
+    canvas.addEventListener('mouseup', onUp);
+    canvas.addEventListener('mouseleave', onUp);
+
+    // Color buttons
+    var colorBtns = overlay.querySelectorAll('.wb-color-btn');
+    colorBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        currentColor = btn.dataset.color;
+        colorBtns.forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+      });
+    });
+
+    // Width buttons
+    var widthBtns = overlay.querySelectorAll('.wb-width-btn');
+    widthBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        currentWidth = parseInt(btn.dataset.width);
+        widthBtns.forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+      });
+    });
+
+    // Undo
+    var undoBtn = document.getElementById('wb-undo');
+    if (undoBtn) undoBtn.onclick = function() {
+      Network.socket.emit('wb-undo', { whiteboardId: whiteboardId });
+    };
+
+    // Clear
+    var clearBtn = document.getElementById('wb-clear');
+    if (clearBtn) clearBtn.onclick = function() {
+      if (confirm('Effacer tout le tableau ?')) {
+        Network.socket.emit('wb-clear', { whiteboardId: whiteboardId }, function() {});
+      }
+    };
+
+    // Close
+    var closeBtn = document.getElementById('wb-close');
+    function cleanup() {
+      overlay.style.display = 'none';
+      self.activeWhiteboardId = null;
+      canvas.removeEventListener('mousedown', onDown);
+      canvas.removeEventListener('mousemove', onMove);
+      canvas.removeEventListener('mouseup', onUp);
+      canvas.removeEventListener('mouseleave', onUp);
+      Network.socket.off('wb-stroke', onRemoteStroke);
+      Network.socket.off('wb-undo', onRemoteUndo);
+      Network.socket.off('wb-cleared', onRemoteClear);
+      Network.socket.emit('wb-close', { whiteboardId: whiteboardId });
+    }
+    if (closeBtn) closeBtn.onclick = cleanup;
+
+    // ESC closes
+    function onEsc(e) {
+      if (e.code === 'Escape') { cleanup(); window.removeEventListener('keydown', onEsc); }
+    }
+    window.addEventListener('keydown', onEsc);
+
+    clearCanvas();
+  },
+
   // ===== TIMER DISPLAY =====
 
   showTimer(timer) {

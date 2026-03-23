@@ -4,71 +4,72 @@ const Environments = {
   furnitureTypes: {
     desk: {
       name: 'Bureau', width: 2, height: 1, solid: true,
-      color: '#8B6914', topColor: '#A07828', drawHeight: 12,
+      color: '#C8A96E', topColor: '#DFC088', drawHeight: 12,
     },
     chair: {
       name: 'Chaise', width: 1, height: 1, solid: false,
-      color: '#555', topColor: '#666', drawHeight: 8,
+      color: '#3a3a3a', topColor: '#4a4a4a', drawHeight: 10,
     },
     plant: {
       name: 'Plante', width: 1, height: 1, solid: true,
-      color: '#2D5A27', topColor: '#3A7A32', drawHeight: 18, isPlant: true,
+      color: '#2D8A27', topColor: '#3A9A32', drawHeight: 20, isPlant: true,
     },
     palmTree: {
       name: 'Palmier', width: 1, height: 1, solid: true,
-      color: '#1D4A17', topColor: '#2A6A22', drawHeight: 28, isPlant: true, isPalm: true,
+      color: '#1D7A17', topColor: '#2A8A22', drawHeight: 32, isPlant: true, isPalm: true,
     },
     partition: {
-      name: 'Cloison', width: 1, height: 3, solid: true,
-      color: '#6a7a8a', topColor: '#7a8a9a', drawHeight: 25,
+      name: 'Cloison vitrée', width: 1, height: 3, solid: true,
+      color: '#b0c4d8', topColor: '#c8daea', drawHeight: 30, isPartition: true,
     },
     largeTable: {
       name: 'Grande table', width: 4, height: 2, solid: true,
-      color: '#6B4F2E', topColor: '#8B6B3E', drawHeight: 12,
+      color: '#2a2a2a', topColor: '#3a3a3a', drawHeight: 12,
     },
     roundTable: {
       name: 'Table ronde', width: 2, height: 2, solid: true,
-      color: '#7B5B2E', topColor: '#9B7B4E', drawHeight: 11, isRound: true,
+      color: '#e8e8e8', topColor: '#f5f5f5', drawHeight: 11, isRound: true,
     },
     screen: {
       name: 'Écran', width: 2, height: 1, solid: true,
-      color: '#222', topColor: '#333', drawHeight: 30, isScreen: true,
+      color: '#1a1a1a', topColor: '#2a2a2a', drawHeight: 35, isScreen: true,
     },
     stage: {
       name: 'Estrade', width: 5, height: 3, solid: false,
-      color: '#5A3E28', topColor: '#7A5E48', drawHeight: 6, isStage: true,
+      color: '#B08050', topColor: '#C89868', drawHeight: 6, isStage: true,
     },
     couch: {
       name: 'Canapé', width: 2, height: 1, solid: true,
-      color: '#6B4570', topColor: '#8B6590', drawHeight: 10,
+      color: '#E87830', topColor: '#F09048', drawHeight: 12,
     },
     coffeeTable: {
       name: 'Table basse', width: 1, height: 1, solid: true,
-      color: '#8B6914', topColor: '#A07828', drawHeight: 6,
+      color: '#e0e0e0', topColor: '#f0f0f0', drawHeight: 5,
     },
     bookshelf: {
       name: 'Bibliothèque', width: 2, height: 1, solid: true,
-      color: '#5A3E1E', topColor: '#7A5E3E', drawHeight: 28,
+      color: '#f0f0f0', topColor: '#fafafa', drawHeight: 32,
     },
     whiteboard: {
       name: 'Tableau blanc', width: 2, height: 1, solid: true,
-      color: '#ddd', topColor: '#f0f0f0', drawHeight: 30, isWhiteboard: true,
+      color: '#f5f5f5', topColor: '#ffffff', drawHeight: 35, isWhiteboard: true,
     },
     carpet: {
       name: 'Tapis', width: 3, height: 3, solid: false,
-      color: '#8B4513', topColor: '#A0522D', drawHeight: 0, isCarpet: true,
+      color: '#c8b090', topColor: '#d8c0a0', drawHeight: 0, isCarpet: true,
     },
     zoneMarker: {
       name: 'Zone', width: 4, height: 4, solid: false,
-      color: 'rgba(126,184,218,0.15)', topColor: 'rgba(126,184,218,0.25)', drawHeight: 0, isZone: true,
+      color: 'rgba(100,160,200,0.12)', topColor: 'rgba(100,160,200,0.2)', drawHeight: 0, isZone: true,
     },
   },
 
   presets: {
     'bureau': {
       name: 'Bureau',
-      floorColor1: '#3a4a5c',
-      floorColor2: '#344458',
+      floorColor1: '#c8c8c8',
+      floorColor2: '#b8b8b8',
+      wallColor: '#e8e0d8',
       furniture: (gs) => {
         const items = [];
         const m = 3;
@@ -90,8 +91,9 @@ const Environments = {
     },
     'open-space': {
       name: 'Open Space',
-      floorColor1: '#3c5048',
-      floorColor2: '#365048',
+      floorColor1: '#a8b0a0',
+      floorColor2: '#98a890',
+      wallColor: '#e0e0e0',
       furniture: (gs) => {
         const items = [];
         const cx = Math.floor(gs / 2);
@@ -119,8 +121,9 @@ const Environments = {
     },
     'salle-de-conference': {
       name: 'Salle de Conférence',
-      floorColor1: '#3a3a5c',
-      floorColor2: '#34345a',
+      floorColor1: '#b0b0b8',
+      floorColor2: '#a0a0a8',
+      wallColor: '#d8d0c8',
       furniture: (gs) => {
         const items = [];
         const cx = Math.floor(gs / 2);
@@ -142,8 +145,9 @@ const Environments = {
     },
     'coworking': {
       name: 'Espace Coworking',
-      floorColor1: '#3a4858',
-      floorColor2: '#344252',
+      floorColor1: '#c0c0c0',
+      floorColor2: '#b0b0b0',
+      wallColor: '#e0d8d0',
       furniture: (gs) => {
         const items = [];
         const cx = Math.floor(gs / 2);
