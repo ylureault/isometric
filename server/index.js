@@ -506,6 +506,23 @@ io.on('connection', (socket) => {
     callback(result);
   });
 
+  // ===== CHAT =====
+
+  socket.on('chat-message', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p) return;
+    const msg = {
+      socketId: socket.id,
+      pseudo: p.pseudo,
+      text: (data.text || '').slice(0, 200),
+      timestamp: Date.now(),
+    };
+    io.to(currentRoomId).emit('chat-message', msg);
+  });
+
   // ===== REACTIONS =====
 
   socket.on('reaction', (data) => {

@@ -381,6 +381,7 @@ const UI = {
         <h3>${vote.question}</h3>
         <div class="vote-options">${optionsHtml}</div>
         <p class="vote-info">${vote.totalVoters} vote(s)</p>
+        <button class="vote-close-btn" id="vote-close-btn">Fermer</button>
       </div>`;
     container.style.display = 'flex';
 
@@ -393,6 +394,9 @@ const UI = {
         container.querySelectorAll('.vote-option-btn').forEach(b => b.disabled = true);
       });
     });
+
+    const closeBtn = document.getElementById('vote-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', () => { this.hideVotePopup(); });
   },
 
   updateVotePopup(vote) {

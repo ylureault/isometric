@@ -57,6 +57,7 @@ var Engine = {
     Network.onReconnected = function() { UI.showReconnecting(false); UI.showNotification('Reconnecté !'); };
 
     this.setupNetworkEvents();
+    this.setupChat();
     this.checkRoom();
   },
 
@@ -284,6 +285,61 @@ var Engine = {
         return;
       }
     }
+  },
+
+  setupChat: function() {
+    var self = this;
+    var input = document.getElementById('chat-input');
+    var sendBtn = document.getElementById('chat-send');
+    var container = document.getElementById('chat-container');
+    var messages = document.getElementById('chat-messages');
+    var badge = document.getElementById('chat-badge');
+    var unread = 0;
+
+    function sendMessage() {
+      if (!input || !input.value.trim()) return;
+      Network.socket.emit('chat-message', { text: input.value.trim() });
+      input.value = '';
+    }
+
+    if (input) {
+      input.addEventListener('keydown', function(e) {
+        e.stopPropagation(); // Prevent game key handlers
+        if (e.code === 'Enter') sendMessage();
+      });
+    }
+    if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+
+    Network.socket.on('chat-message', function(msg) {
+      if (!messages) return;
+      var div = document.createElement('div');
+      div.className = 'chat-msg';
+      div.innerHTML = '<span class="chat-msg-author">' + (msg.pseudo || 'Anonyme') + ':</span> ' + self.escapeHtml(msg.text);
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+
+      // Badge if collapsed
+      if (container && container.classList.contains('chat-collapsed')) {
+        unread++;
+        if (badge) { badge.textContent = unread; badge.style.display = 'inline'; }
+      }
+    });
+
+    // Reset badge on open
+    if (container) {
+      container.addEventListener('click', function() {
+        if (!container.classList.contains('chat-collapsed')) {
+          unread = 0;
+          if (badge) badge.style.display = 'none';
+        }
+      });
+    }
+  },
+
+  escapeHtml: function(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   },
 
   sendReaction: function(emoji) {
