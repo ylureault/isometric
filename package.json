@@ -1,0 +1,13 @@
+{
+  "name": "isometric-collaborative-space",
+  "version": "0.1.0",
+  "description": "Espace collaboratif virtuel en vue isométrique 3D",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

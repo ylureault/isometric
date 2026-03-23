@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Espace Collaboratif Isométrique</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="landing-container" id="landing">
+    <h1>Espace Collaboratif</h1>
+    <p>Créez un espace isométrique pour vos réunions, ateliers et séminaires à distance. Jusqu'à 20 participants, audio par proximité.</p>
+
+    <div class="form-group">
+      <label for="room-name">Nom de la room</label>
+      <input type="text" id="room-name" placeholder="Ma réunion d'équipe" maxlength="50">
+      <span class="error-message" id="error-name">Le nom de la room est obligatoire</span>
+    </div>
+
+    <div class="form-group">
+      <label for="environment">Environnement</label>
+      <select id="environment">
+        <option value="bureau">Bureau</option>
+        <option value="open-space">Open Space</option>
+        <option value="salle-de-conference">Salle de Conférence</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="grid-size">Taille de la grille</label>
+      <input type="range" id="grid-size" min="20" max="200" value="20" step="5">
+      <div class="grid-size-display"><span id="grid-size-value">20</span> x <span id="grid-size-value2">20</span></div>
+    </div>
+
+    <button class="btn btn-primary" id="btn-create">Créer la room</button>
+
+    <div style="margin-top: 24px; border-top: 1px solid #333; padding-top: 24px; width: 320px; text-align: center;">
+      <p style="color: #666; font-size: 0.85rem; margin-bottom: 12px;">Ou rejoindre une room existante</p>
+      <div class="form-group">
+        <input type="text" id="room-id-input" placeholder="ID de la room">
+      </div>
+      <button class="btn btn-secondary" id="btn-join" style="margin-top: 8px;">Rejoindre</button>
+    </div>
+  </div>
+
+  <script src="../shared/constants.js"></script>
+  <script>
+    const gridSizeInput = document.getElementById('grid-size');
+    const gridSizeValue = document.getElementById('grid-size-value');
+    const gridSizeValue2 = document.getElementById('grid-size-value2');
+
+    gridSizeInput.addEventListener('input', () => {
+      gridSizeValue.textContent = gridSizeInput.value;
+      gridSizeValue2.textContent = gridSizeInput.value;
+    });
+
+    document.getElementById('btn-create').addEventListener('click', () => {
+      const name = document.getElementById('room-name').value.trim();
+      const errorEl = document.getElementById('error-name');
+
+      if (!name) {
+        errorEl.style.display = 'block';
+        return;
+      }
+      errorEl.style.display = 'none';
+
+      const env = document.getElementById('environment').value;
+      const size = parseInt(gridSizeInput.value);
+
+      // Generate a simple room ID
+      const roomId = Math.random().toString(36).substring(2, 10);
+
+      // Store room config and redirect
+      const params = new URLSearchParams({
+        room: roomId,
+        name: name,
+        env: env,
+        size: size,
+        creator: 'true'
+      });
+      window.location.href = `room.html?${params.toString()}`;
+    });
+
+    document.getElementById('btn-join').addEventListener('click', () => {
+      const roomId = document.getElementById('room-id-input').value.trim();
+      if (roomId) {
+        window.location.href = `room.html?room=${roomId}`;
+      }
+    });
+  </script>
+</body>
+</html>

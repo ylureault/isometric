@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Room — Espace Collaboratif</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Avatar Configuration Overlay -->
+  <div class="avatar-config-overlay" id="avatar-config">
+    <div class="avatar-config-panel">
+      <div class="avatar-preview-container">
+        <h2>Votre avatar</h2>
+        <canvas id="avatar-preview-canvas" width="180" height="240"></canvas>
+      </div>
+      <div>
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label for="pseudo-input">Pseudo (obligatoire)</label>
+          <input type="text" id="pseudo-input" placeholder="Votre pseudo" maxlength="20">
+          <span class="error-message" id="error-pseudo">Le pseudo est obligatoire</span>
+        </div>
+
+        <div class="color-picker-group">
+          <div class="color-picker-item">
+            <label>Peau</label>
+            <input type="color" id="color-skin" value="#FFDCB5">
+          </div>
+          <div class="color-picker-item">
+            <label>Cheveux</label>
+            <input type="color" id="color-hair" value="#4A3728">
+          </div>
+          <div class="color-picker-item">
+            <label>Haut</label>
+            <input type="color" id="color-shirt" value="#5B8DBE">
+          </div>
+          <div class="color-picker-item">
+            <label>Pantalon</label>
+            <input type="color" id="color-pants" value="#3D5A80">
+          </div>
+          <div class="color-picker-item">
+            <label>Chaussures</label>
+            <input type="color" id="color-shoes" value="#2B2B2B">
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-enter" style="margin-top: 24px; width: 100%;">Entrer dans la room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD -->
+  <div class="hud" id="hud" style="display: none;">
+    <div class="hud-item hud-room-name" id="hud-room-name"></div>
+    <div class="hud-item hud-coords" id="hud-coords">Position: 0, 0</div>
+    <div class="hud-item hud-participants" id="hud-participants">Participants: 1</div>
+  </div>
+
+  <!-- Minimap -->
+  <div class="minimap-container" id="minimap-container" style="display: none;">
+    <canvas id="minimap-canvas" width="160" height="160"></canvas>
+  </div>
+
+  <!-- Controls hint -->
+  <div class="controls-hint" id="controls-hint" style="display: none;">
+    Déplacement : <kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> ou <kbd>&#8593;</kbd><kbd>&#8592;</kbd><kbd>&#8595;</kbd><kbd>&#8594;</kbd>
+  </div>
+
+  <script src="../shared/constants.js"></script>
+  <script src="js/environments.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/character.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>

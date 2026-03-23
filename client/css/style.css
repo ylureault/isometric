@@ -1,0 +1,265 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0a0a1a;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Landing page */
+.landing-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 24px;
+}
+
+.landing-container h1 {
+  font-size: 2.5rem;
+  color: #7eb8da;
+  text-shadow: 0 0 20px rgba(126, 184, 218, 0.3);
+}
+
+.landing-container p {
+  color: #888;
+  font-size: 1.1rem;
+  max-width: 500px;
+  text-align: center;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 320px;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.form-group input,
+.form-group select {
+  padding: 10px 14px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #7eb8da;
+}
+
+.form-group input[type="range"] {
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.grid-size-display {
+  text-align: center;
+  color: #7eb8da;
+  font-size: 0.9rem;
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #5B8DBE, #7eb8da);
+  color: #0a0a1a;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(126, 184, 218, 0.3);
+}
+
+.btn-secondary {
+  background: #1a1a2e;
+  color: #7eb8da;
+  border: 1px solid #333;
+}
+
+.btn-secondary:hover {
+  border-color: #7eb8da;
+}
+
+.error-message {
+  color: #e74c3c;
+  font-size: 0.85rem;
+  display: none;
+}
+
+/* Room page */
+#game-canvas {
+  display: block;
+  cursor: default;
+}
+
+/* HUD */
+.hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.hud-item {
+  background: rgba(10, 10, 26, 0.8);
+  backdrop-filter: blur(8px);
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(126, 184, 218, 0.2);
+  font-size: 0.85rem;
+  pointer-events: auto;
+}
+
+.hud-room-name {
+  font-weight: 600;
+  color: #7eb8da;
+}
+
+.hud-coords {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.hud-participants {
+  color: #aaa;
+}
+
+/* Minimap */
+.minimap-container {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background: rgba(10, 10, 26, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(126, 184, 218, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#minimap-canvas {
+  display: block;
+}
+
+/* Avatar configuration */
+.avatar-config-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(10, 10, 26, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.avatar-config-panel {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 32px;
+  display: flex;
+  gap: 32px;
+  max-width: 700px;
+}
+
+.avatar-config-panel h2 {
+  color: #7eb8da;
+  margin-bottom: 16px;
+}
+
+.avatar-preview-container {
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+#avatar-preview-canvas {
+  background: #0a0a1a;
+  border-radius: 12px;
+  border: 1px solid #333;
+}
+
+.color-picker-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.color-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-picker-item label {
+  width: 80px;
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.color-picker-item input[type="color"] {
+  width: 40px;
+  height: 30px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1a1a2e;
+  cursor: pointer;
+  padding: 2px;
+}
+
+/* Controls hint */
+.controls-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(10, 10, 26, 0.8);
+  backdrop-filter: blur(8px);
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(126, 184, 218, 0.2);
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.controls-hint kbd {
+  background: #2a2a3e;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #444;
+  font-size: 0.7rem;
+  color: #aaa;
+}
