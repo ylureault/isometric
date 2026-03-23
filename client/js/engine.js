@@ -538,7 +538,7 @@ var Engine = {
 
     Network.sendPosition(this.player.x, this.player.y, this.player.direction, this.player.isWalking, this.player.walkPhase);
     Network.updateRemotePlayers(dt);
-    Audio.updateProximity(this.player, Network.remotePlayers, CONSTANTS.AUDIO_RADIUS);
+    Audio.updateProximity(this.player, Network.remotePlayers, this.player.audioRadius);
 
     // Camera follow with zoom
     var ps = Board.iso(this.player.x, this.player.y);
@@ -734,14 +734,46 @@ var Engine = {
   },
 
   drawProximityRadius: function(ctx) {
-    // Draw remote players' circles first (behind)
     var self = this;
+    var px = this.player.x;
+    var py = this.player.y;
+    var pr = this.player.audioRadius;
+
+    // Draw remote players' circles
     Network.remotePlayers.forEach(function(p) {
       if (p.opacity <= 0) return;
-      self.drawProximityCircle(ctx, p.renderX, p.renderY, CONSTANTS.AUDIO_RADIUS, 'rgb(46,204,113)', false);
+      var dist = Math.sqrt((px - p.renderX) * (px - p.renderX) + (py - p.renderY) * (py - p.renderY));
+      var inRange = dist < pr + CONSTANTS.AUDIO_RADIUS;
+      // Green if in range (can talk), gray if out of range
+      var color = inRange ? 'rgb(46,204,113)' : 'rgb(160,160,160)';
+      self.drawProximityCircle(ctx, p.renderX, p.renderY, CONSTANTS.AUDIO_RADIUS, color, false);
+
+      // Draw connection line between players who can hear each other
+      if (inRange && dist < pr) {
+        var p1 = Board.iso(px, py);
+        var p2 = Board.iso(p.renderX, p.renderY);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.strokeStyle = 'rgba(46,204,113,0.15)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     });
-    // Draw local player's circle on top
-    this.drawProximityCircle(ctx, this.player.x, this.player.y, this.player.audioRadius, 'rgb(52,152,219)', true);
+
+    // Draw local player's circle
+    this.drawProximityCircle(ctx, px, py, pr, 'rgb(52,152,219)', true);
+
+    // Stage indicator: if on stage, show broadcast icon
+    if (Board.isOnStage(Math.floor(px), Math.floor(py))) {
+      var stagePos = Board.iso(px, py);
+      ctx.font = 'bold 10px "Segoe UI", sans-serif';
+      ctx.fillStyle = 'rgba(241,196,15,0.8)';
+      ctx.textAlign = 'center';
+      ctx.fillText('📢 Sur l\'estrade', stagePos.x, stagePos.y - 50);
+    }
   },
 
   drawReactions: function(ctx) {

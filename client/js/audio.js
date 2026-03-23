@@ -226,48 +226,74 @@ const Audio = {
     for (const [socketId, remotePlayer] of remotePlayers) {
       const peer = this.peers.get(socketId);
 
-      // Check if we need to connect/disconnect
       const localOnStage = Board.isOnStage(Math.floor(localPlayer.x), Math.floor(localPlayer.y));
       const remoteOnStage = Board.isOnStage(Math.floor(remotePlayer.renderX), Math.floor(remotePlayer.renderY));
 
-      // Determine if audio should be active
       let volume = 0;
       const localTableId = localPlayer.tableId || null;
       const remoteTableId = remotePlayer.tableId || null;
 
-      // Stage broadcast: anyone on stage is heard by everyone
-      if (remoteOnStage && !remotePlayer.isMuted) {
+      // 1. Admin broadcast (Space key): heard by everyone at full volume
+      if (remotePlayer.isBroadcasting) {
         volume = 1;
       }
-      // Table bubble: same table = hear each other
+      // 2. Stage: anyone on stage is heard by everyone
+      else if (remoteOnStage && !remotePlayer.isMuted) {
+        volume = 1;
+      }
+      // 3. Table bubble: same table = hear each other clearly
       else if (localTableId && localTableId === remoteTableId) {
         volume = 1;
       }
-      // Proximity audio (only if both are NOT at tables)
-      else if (!localTableId && !remoteTableId) {
+      // 4. Proximity audio
+      else {
         const dist = Math.sqrt(
           (localPlayer.x - remotePlayer.renderX) ** 2 +
           (localPlayer.y - remotePlayer.renderY) ** 2
         );
         if (dist < audioRadius) {
-          volume = Math.max(0, 1 - dist / audioRadius);
+          // Smooth fade: full volume within AUDIO_FADE_START, fade to 0 at audioRadius
+          const fadeStart = Math.min(CONSTANTS.AUDIO_FADE_START, audioRadius * 0.5);
+          if (dist <= fadeStart) {
+            volume = 1;
+          } else {
+            volume = Math.max(0, 1 - (dist - fadeStart) / (audioRadius - fadeStart));
+          }
+          // Apply squared curve for more natural falloff
+          volume = volume * volume;
         }
       }
 
-      // Stage priority: if I'm at a table but someone is on stage, still hear them
-      if (remoteOnStage && !remotePlayer.isMuted) {
-        volume = Math.max(volume, 1);
+      // If I'm broadcasting (admin), everyone should hear me too — handled via their client
+      // If I'm on stage, everyone hears me — handled via their client
+
+      // Muted remote players: force volume 0 (but keep connection for when they unmute)
+      if (remotePlayer.isMuted && !remotePlayer.isBroadcasting) {
+        volume = 0;
       }
 
-      const shouldConnect = volume > 0 || localOnStage || remoteOnStage;
+      const shouldConnect = volume > 0 || localOnStage || remoteOnStage || remotePlayer.isBroadcasting || localPlayer.isBroadcasting;
 
       if (shouldConnect && !peer) {
         this.connectToPeer(socketId);
-      } else if (!shouldConnect && peer) {
-        this.disconnectPeer(socketId);
+      } else if (!shouldConnect && peer && volume === 0) {
+        // Don't immediately disconnect — give some hysteresis
+        // Only disconnect if they've been out of range for a while
+        if (!peer._disconnectTimer) {
+          peer._disconnectTimer = setTimeout(() => {
+            const p = this.peers.get(socketId);
+            if (p && p.currentVolume === 0) {
+              this.disconnectPeer(socketId);
+            }
+          }, 3000);
+        }
       }
 
       if (peer) {
+        if (volume > 0 && peer._disconnectTimer) {
+          clearTimeout(peer._disconnectTimer);
+          peer._disconnectTimer = null;
+        }
         peer.currentVolume = volume;
         if (peer.audioElement) {
           peer.audioElement.volume = volume * this.masterVolume;
