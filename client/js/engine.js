@@ -291,31 +291,53 @@ var Engine = {
     var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
     var clickX = Math.floor(gp.x);
     var clickY = Math.floor(gp.y);
+    var px = this.player.x;
+    var py = this.player.y;
 
-    // Check furniture clicks
-    for (var i = Board.furniture.length - 1; i >= 0; i--) {
+    // First check interactive wall objects (whiteboard, post-it board)
+    // These are on walls (y=0 or x=0) so we need proximity-based detection
+    for (var i = 0; i < Board.furniture.length; i++) {
       var item = Board.furniture[i];
       var def = Environments.furnitureTypes[item.type];
       if (!def) continue;
-      if (clickX >= item.x && clickX < item.x + (def.width || 1) && clickY >= item.y && clickY < item.y + (def.height || 1)) {
-        // Whiteboard click → open drawing
-        if (def.isWhiteboard) {
-          var wbId = item.whiteboardId || ('wb_furn_' + i);
-          item.whiteboardId = wbId;
-          UI.openWhiteboard(wbId, item);
-          return;
-        }
-        // Post-it board click → open drawing too (as whiteboard)
+      if (!def.isWhiteboard && !def.isPostItBoard) continue;
+
+      // Check player is close enough (within 3 tiles of the item center)
+      var icx = item.x + (def.width || 1) / 2;
+      var icy = item.y + (def.height || 1) / 2;
+      var distToPlayer = Math.sqrt((px - icx) * (px - icx) + (py - icy) * (py - icy));
+      if (distToPlayer > 4) continue;
+
+      // Expanded hit zone for wall items:
+      // Whiteboard is on y=0 wall → expand y hit area to include y=-1..1
+      // PostIt board is on x=0 wall → expand x hit area to include x=-1..1
+      var hitMinX = item.x - 1;
+      var hitMaxX = item.x + (def.width || 1) + 1;
+      var hitMinY = item.y - 1;
+      var hitMaxY = item.y + (def.height || 1) + 1;
+
+      if (clickX >= hitMinX && clickX < hitMaxX && clickY >= hitMinY && clickY < hitMaxY) {
+        var wbId = item.whiteboardId || ('wb_' + item.type + '_' + i);
+        item.whiteboardId = wbId;
         if (def.isPostItBoard) {
-          var pbId = item.whiteboardId || ('wb_postit_' + i);
-          item.whiteboardId = pbId;
-          UI.openWhiteboard(pbId, item);
-          return;
+          UI.openPostItBoard(wbId, item);
+        } else {
+          UI.openWhiteboard(wbId, item);
         }
+        return;
+      }
+    }
+
+    // Check other furniture clicks
+    for (var j = Board.furniture.length - 1; j >= 0; j--) {
+      var fitem = Board.furniture[j];
+      var fdef = Environments.furnitureTypes[fitem.type];
+      if (!fdef || fdef.isWhiteboard || fdef.isPostItBoard) continue;
+      if (clickX >= fitem.x && clickX < fitem.x + (fdef.width || 1) && clickY >= fitem.y && clickY < fitem.y + (fdef.height || 1)) {
         // Admin: select furniture for move/delete
-        if (this.player.isAdmin && item.id) {
-          this.selectedFurniture = item;
-          UI.showNotification('Sélectionné: ' + def.name + ' — Clic droit pour déplacer/supprimer');
+        if (this.player.isAdmin && fitem.id) {
+          this.selectedFurniture = fitem;
+          UI.showNotification('Sélectionné: ' + fdef.name + ' — Clic droit pour options');
           return;
         }
         return;

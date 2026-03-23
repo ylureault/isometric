@@ -592,6 +592,173 @@ const UI = {
     if (container) container.style.display = 'none';
   },
 
+  // ===== POST-IT BOARD POP-IN =====
+
+  openPostItBoard: function(boardId, furnitureItem) {
+    var self = this;
+    var overlay = document.getElementById('postit-overlay');
+    if (!overlay) return;
+
+    overlay.style.display = 'flex';
+    var board = document.getElementById('postit-board-bg');
+    board.innerHTML = '';
+
+    var currentColor = '#FFE066';
+    var postits = [];
+    var dragState = null;
+
+    function createPostItEl(postit) {
+      var el = document.createElement('div');
+      el.className = 'postit-note';
+      el.style.background = postit.color || currentColor;
+      el.style.left = postit.x + 'px';
+      el.style.top = postit.y + 'px';
+
+      var textarea = document.createElement('textarea');
+      textarea.value = postit.text || '';
+      textarea.placeholder = 'Écrire ici...';
+      textarea.addEventListener('input', function() {
+        postit.text = textarea.value;
+        Network.socket.emit('wb-postit', {
+          whiteboardId: boardId,
+          postitData: { id: postit.id, text: textarea.value, x: postit.x, y: postit.y, color: postit.color, pseudo: Engine.player.pseudo },
+        });
+      });
+      textarea.addEventListener('keydown', function(e) { e.stopPropagation(); });
+
+      var deleteBtn = document.createElement('button');
+      deleteBtn.className = 'postit-delete';
+      deleteBtn.textContent = '✕';
+      deleteBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        el.remove();
+        postits = postits.filter(function(p) { return p.id !== postit.id; });
+      });
+
+      var author = document.createElement('div');
+      author.className = 'postit-author';
+      author.textContent = postit.pseudo || Engine.player.pseudo;
+
+      el.appendChild(deleteBtn);
+      el.appendChild(textarea);
+      el.appendChild(author);
+
+      // Drag to move
+      el.addEventListener('mousedown', function(e) {
+        if (e.target === textarea || e.target === deleteBtn) return;
+        dragState = { el: el, postit: postit, startX: e.clientX, startY: e.clientY, origX: postit.x, origY: postit.y };
+        e.preventDefault();
+      });
+
+      board.appendChild(el);
+      return el;
+    }
+
+    function onMouseMove(e) {
+      if (!dragState) return;
+      var dx = e.clientX - dragState.startX;
+      var dy = e.clientY - dragState.startY;
+      dragState.postit.x = Math.max(0, dragState.origX + dx);
+      dragState.postit.y = Math.max(0, dragState.origY + dy);
+      dragState.el.style.left = dragState.postit.x + 'px';
+      dragState.el.style.top = dragState.postit.y + 'px';
+    }
+
+    function onMouseUp() {
+      if (dragState) {
+        // Send position update
+        Network.socket.emit('wb-postit', {
+          whiteboardId: boardId,
+          postitData: { id: dragState.postit.id, text: dragState.postit.text, x: dragState.postit.x, y: dragState.postit.y, color: dragState.postit.color, pseudo: dragState.postit.pseudo },
+        });
+        dragState = null;
+      }
+    }
+
+    overlay.addEventListener('mousemove', onMouseMove);
+    overlay.addEventListener('mouseup', onMouseUp);
+
+    // Load existing postits
+    Network.socket.emit('wb-open', { whiteboardId: boardId }, function(resp) {
+      if (resp && resp.success && resp.postits) {
+        for (var i = 0; i < resp.postits.length; i++) {
+          postits.push(resp.postits[i]);
+          createPostItEl(resp.postits[i]);
+        }
+      }
+    });
+
+    // Listen for remote post-its
+    function onRemotePostit(data) {
+      if (data.whiteboardId !== boardId) return;
+      var pd = data.postitData;
+      // Update existing or add new
+      var existing = postits.find(function(p) { return p.id === pd.id; });
+      if (existing) {
+        existing.text = pd.text;
+        existing.x = pd.x;
+        existing.y = pd.y;
+        // Update DOM
+        var els = board.querySelectorAll('.postit-note');
+        for (var i = 0; i < els.length; i++) {
+          if (parseInt(els[i].style.left) === existing.x || els[i].querySelector('textarea').value === existing.text) {
+            els[i].style.left = pd.x + 'px';
+            els[i].style.top = pd.y + 'px';
+            els[i].querySelector('textarea').value = pd.text;
+          }
+        }
+      } else {
+        postits.push(pd);
+        createPostItEl(pd);
+      }
+    }
+    Network.socket.on('wb-postit', onRemotePostit);
+
+    // Color buttons
+    var colorBtns = overlay.querySelectorAll('.postit-color-btn');
+    colorBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        currentColor = btn.dataset.color;
+        colorBtns.forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+      });
+    });
+
+    // Add post-it button
+    var addBtn = document.getElementById('postit-add');
+    if (addBtn) addBtn.onclick = function() {
+      var id = 'postit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+      var postit = {
+        id: id,
+        text: '',
+        x: 30 + Math.random() * 400,
+        y: 30 + Math.random() * 300,
+        color: currentColor,
+        pseudo: Engine.player.pseudo,
+      };
+      postits.push(postit);
+      createPostItEl(postit);
+      Network.socket.emit('wb-postit', { whiteboardId: boardId, postitData: postit });
+    };
+
+    // Close
+    function cleanup() {
+      overlay.style.display = 'none';
+      overlay.removeEventListener('mousemove', onMouseMove);
+      overlay.removeEventListener('mouseup', onMouseUp);
+      Network.socket.off('wb-postit', onRemotePostit);
+      Network.socket.emit('wb-close', { whiteboardId: boardId });
+    }
+
+    var closeBtn = document.getElementById('postit-close');
+    if (closeBtn) closeBtn.onclick = cleanup;
+
+    function onEsc(e) {
+      if (e.code === 'Escape') { cleanup(); window.removeEventListener('keydown', onEsc); }
+    }
+    window.addEventListener('keydown', onEsc);
+  },
+
   // ===== WHITEBOARD POP-IN =====
 
   openWhiteboard: function(whiteboardId, furnitureItem) {

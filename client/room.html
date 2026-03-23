@@ -208,6 +208,30 @@
     </div>
   </div>
 
+  <!-- Post-it Board Pop-in -->
+  <div class="whiteboard-overlay" id="postit-overlay" style="display: none;">
+    <div class="whiteboard-popup">
+      <div class="whiteboard-header">
+        <h3>Tableau Post-it collaboratif</h3>
+        <div class="whiteboard-tools">
+          <div class="wb-colors">
+            <button class="postit-color-btn active" data-color="#FFE066" style="background:#FFE066;"></button>
+            <button class="postit-color-btn" data-color="#FF6B6B" style="background:#FF6B6B;"></button>
+            <button class="postit-color-btn" data-color="#6BCB77" style="background:#6BCB77;"></button>
+            <button class="postit-color-btn" data-color="#4D96FF" style="background:#4D96FF;"></button>
+            <button class="postit-color-btn" data-color="#FF78C4" style="background:#FF78C4;"></button>
+            <button class="postit-color-btn" data-color="#FFB347" style="background:#FFB347;"></button>
+          </div>
+          <button class="btn btn-primary btn-sm" id="postit-add">+ Ajouter un post-it</button>
+        </div>
+        <button class="whiteboard-close-btn" id="postit-close">✕</button>
+      </div>
+      <div class="postit-canvas" id="postit-canvas">
+        <div class="postit-board-bg" id="postit-board-bg"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Whiteboard Pop-in -->
   <div class="whiteboard-overlay" id="whiteboard-overlay" style="display: none;">
     <div class="whiteboard-popup">
