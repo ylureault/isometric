@@ -124,6 +124,17 @@ const UI = {
       this.updateScreenShareButton();
     });
 
+    // View toggle button
+    document.getElementById('btn-view-toggle')?.addEventListener('click', () => {
+      Engine.viewMode = Engine.viewMode === 'iso' ? 'topdown' : 'iso';
+      this.showNotification('Vue: ' + (Engine.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus'));
+    });
+
+    // Edit mode button (admin only)
+    document.getElementById('btn-edit-mode')?.addEventListener('click', () => {
+      Engine.toggleEditMode();
+    });
+
     // Admin panel button
     document.getElementById('btn-admin')?.addEventListener('click', () => {
       this.toggleAdminPanel();
@@ -157,6 +168,9 @@ const UI = {
     document.getElementById('btn-hand')?.addEventListener('click', () => {
       Network.socket.emit('toggle-hand', {});
     });
+
+    // Edit mode toolbar
+    this.initEditToolbar();
   },
 
   updateMuteButton(muted) {
@@ -949,6 +963,83 @@ const UI = {
     window.addEventListener('keydown', onEsc);
 
     clearCanvas();
+  },
+
+  // ===== EDIT MODE TOOLBAR =====
+
+  showEditToolbar(show) {
+    var toolbar = document.getElementById('edit-toolbar');
+    if (!toolbar) return;
+    toolbar.style.display = show ? 'flex' : 'none';
+
+    if (show) {
+      this.buildEditCatalog();
+      this.updateEditToolButtons();
+      var gridInfo = document.getElementById('edit-grid-info');
+      if (gridInfo) gridInfo.textContent = Board.gridSize + 'x' + Board.gridSize;
+    }
+
+    // Hide/show normal toolbar
+    var normalToolbar = document.getElementById('toolbar');
+    if (normalToolbar) normalToolbar.style.display = show ? 'none' : 'flex';
+  },
+
+  buildEditCatalog() {
+    var select = document.getElementById('edit-catalog-select');
+    if (!select) return;
+
+    var html = '<option value="">-- Choisir un mobilier --</option>';
+    for (var type in Environments.furnitureTypes) {
+      var def = Environments.furnitureTypes[type];
+      if (def.isZone || def.isCarpet || def.isStage) continue;
+      html += '<option value="' + type + '">' + def.name + ' (' + (def.width || 1) + 'x' + (def.height || 1) + ')</option>';
+    }
+    select.innerHTML = html;
+
+    if (Engine.editSelectedType) {
+      select.value = Engine.editSelectedType;
+    }
+  },
+
+  updateEditToolButtons() {
+    var btns = document.querySelectorAll('.edit-tool-btn');
+    btns.forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.tool === Engine.editTool);
+    });
+  },
+
+  initEditToolbar() {
+    var self = this;
+
+    var select = document.getElementById('edit-catalog-select');
+    if (select) {
+      select.addEventListener('change', function() {
+        Engine.editSelectedType = select.value || null;
+        if (Engine.editSelectedType) {
+          Engine.editTool = 'place';
+          self.updateEditToolButtons();
+        }
+      });
+    }
+
+    document.querySelectorAll('.edit-tool-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        Engine.editTool = btn.dataset.tool;
+        self.updateEditToolButtons();
+        if (btn.dataset.tool !== 'place') {
+          Engine.editSelectedType = null;
+          if (select) select.value = '';
+        }
+      });
+    });
+
+    var quitBtn = document.getElementById('edit-quit-btn');
+    if (quitBtn) {
+      quitBtn.addEventListener('click', function() {
+        Engine.toggleEditMode();
+      });
+    }
+
   },
 
   // ===== TIMER DISPLAY =====

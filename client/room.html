@@ -76,8 +76,33 @@
       </div>
     </div>
     <div class="toolbar-right">
+      <button class="toolbar-btn" id="btn-view-toggle" title="Changer de vue (V)">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5zM12 17c-2.8 0-5-2.2-5-5s2.2-5 5-5 5 2.2 5 5-2.2 5-5 5zm0-8c-1.7 0-3 1.3-3 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3z"/></svg>
+      </button>
+      <button class="toolbar-btn admin-only" id="btn-edit-mode" title="Mode édition (admin)">✏️</button>
       <button class="toolbar-btn admin-only" id="btn-admin" title="Panneau admin">⚙️</button>
       <button class="toolbar-btn toolbar-btn-danger" id="btn-leave" title="Quitter">✕</button>
+    </div>
+  </div>
+
+  <!-- Edit Mode Toolbar -->
+  <div class="edit-toolbar" id="edit-toolbar" style="display: none;">
+    <div class="edit-toolbar-section">
+      <span class="edit-toolbar-label">Catalogue</span>
+      <select id="edit-catalog-select" class="edit-catalog-select">
+        <option value="">-- Choisir --</option>
+      </select>
+    </div>
+    <div class="edit-toolbar-section">
+      <button class="edit-tool-btn active" data-tool="place" title="Placer un mobilier">Placer</button>
+      <button class="edit-tool-btn" data-tool="move" title="Deplacer un mobilier">Deplacer</button>
+      <button class="edit-tool-btn" data-tool="delete" title="Supprimer un mobilier">Supprimer</button>
+    </div>
+    <div class="edit-toolbar-section">
+      <span class="edit-toolbar-info">Grille: <span id="edit-grid-info">20x20</span></span>
+    </div>
+    <div class="edit-toolbar-section">
+      <button class="edit-quit-btn" id="edit-quit-btn">Quitter l'edition</button>
     </div>
   </div>
 

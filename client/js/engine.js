@@ -24,6 +24,27 @@ var Engine = {
   tables: new Map(),
   // Camera drag state
   isDragging: false, dragStart: { x: 0, y: 0 }, cameraStart: { x: 0, y: 0 },
+  // View mode: 'iso' or 'topdown'
+  viewMode: 'iso',
+  // Edit mode (admin only)
+  editMode: false,
+  editTool: 'place', // 'place', 'move', 'delete'
+  editSelectedType: null,
+  editDragging: null,
+  editHover: { x: -1, y: -1 },
+
+  // Edit mode state
+  editMode: false,
+  editTool: 'place', // 'place', 'move', 'delete'
+  editSelectedType: null,
+  editDragging: null, // { item, startX, startY, origX, origY }
+  editCamera: { x: 0, y: 0 },
+  editZoom: 1,
+  editHovered: null, // furniture item under cursor
+  editMouseGrid: { x: 0, y: 0 }, // current mouse grid position
+  editIsPanning: false,
+  editPanStart: { x: 0, y: 0 },
+  editCameraStart: { x: 0, y: 0 },
 
   init: function() {
     this.player.colors = Object.assign({}, CONSTANTS.DEFAULT_COLORS);
@@ -198,6 +219,7 @@ var Engine = {
 
   onWheel: function(e) {
     if (!this.started) return;
+    if (this.editMode) { this.onEditWheel(e); return; }
     e.preventDefault();
     var d = e.deltaY > 0 ? -CONSTANTS.ZOOM_STEP : CONSTANTS.ZOOM_STEP;
     this.zoom = Math.max(CONSTANTS.ZOOM_MIN, Math.min(CONSTANTS.ZOOM_MAX, this.zoom + d));
@@ -211,7 +233,9 @@ var Engine = {
     if (e.code === 'KeyH') Network.socket.emit('toggle-hand', {});
     if (e.code === 'Tab') { e.preventDefault(); var mc = document.getElementById('minimap-container'); if (mc) mc.style.display = mc.style.display === 'none' ? 'block' : 'none'; }
     if (e.key === '?') UI.toggleShortcutsModal();
-    if (e.code === 'Escape') { UI.hideContextMenu(); if (UI.shortcutsModalOpen) UI.toggleShortcutsModal(); if (UI.adminPanelOpen) UI.toggleAdminPanel(); }
+    if (e.code === 'KeyV' && !this.editMode) { this.viewMode = this.viewMode === 'iso' ? 'topdown' : 'iso'; UI.showNotification('Vue: ' + (this.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus')); }
+    if (e.code === 'KeyE' && this.player.isAdmin) this.toggleEditMode();
+    if (e.code === 'Escape') { if (this.editMode) { this.toggleEditMode(); return; } UI.hideContextMenu(); if (UI.shortcutsModalOpen) UI.toggleShortcutsModal(); if (UI.adminPanelOpen) UI.toggleAdminPanel(); }
     if (e.code === 'Space' && this.player.isAdmin && !this.player.isBroadcasting) {
       this.player.isBroadcasting = true;
       Network.socket.emit('admin-broadcast-start');
@@ -230,6 +254,7 @@ var Engine = {
 
   onMouseDown: function(e) {
     if (!this.started) return;
+    if (this.editMode) { this.onEditMouseDown(e); return; }
     // Right-click or middle-click: camera drag
     if (e.button === 2 || e.button === 1) {
       this.isDragging = true;
@@ -242,6 +267,7 @@ var Engine = {
   },
 
   onMouseMove: function(e) {
+    if (this.editMode) { this.onEditMouseMove(e); return; }
     if (this.isDragging) {
       this.camera.x = this.cameraStart.x + (e.clientX - this.dragStart.x);
       this.camera.y = this.cameraStart.y + (e.clientY - this.dragStart.y);
@@ -249,6 +275,7 @@ var Engine = {
   },
 
   onMouseUp: function(e) {
+    if (this.editMode) { this.onEditMouseUp(e); return; }
     if (e.button === 2 || e.button === 1) {
       // If barely moved, it was a right-click (context menu)
       if (this.isDragging) {
@@ -288,6 +315,7 @@ var Engine = {
   onClick: function(e) {
     UI.hideContextMenu();
     if (!this.started) return;
+    if (this.editMode) { this.onEditClick(e); return; }
     var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
     var clickX = Math.floor(gp.x);
     var clickY = Math.floor(gp.y);
@@ -492,6 +520,7 @@ var Engine = {
   },
 
   update: function(dt) {
+    if (this.editMode) return; // Skip player update in edit mode
     var dx = 0, dy = 0;
     if (this.keys['ArrowUp'] || this.keys['KeyW'] || this.keys['KeyZ']) dy = -1;
     if (this.keys['ArrowDown'] || this.keys['KeyS']) dy = 1;
@@ -572,6 +601,9 @@ var Engine = {
   },
 
   render: function(ts) {
+    if (this.editMode) { this.renderEditMode(ts); return; }
+    if (this.viewMode === 'topdown') { this.renderTopDown(ts); return; }
+
     var ctx = this.ctx;
     var w = this.canvas.width;
     var h = this.canvas.height;
@@ -838,6 +870,580 @@ var Engine = {
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, w, h);
+  },
+
+  // ===== TOP-DOWN NAVIGATION VIEW =====
+
+  renderTopDown: function(ts) {
+    var ctx = this.ctx;
+    var w = this.canvas.width;
+    var h = this.canvas.height;
+    var gs = Board.gridSize;
+
+    // Calculate cell size to fit the screen nicely
+    var cellSize = Math.min((w - 40) / gs, (h - 100) / gs) * this.zoom;
+    var gridW = gs * cellSize;
+    var gridH = gs * cellSize;
+
+    // Center with camera offset
+    var ox = this.camera.x + (w - gridW) / 2;
+    var oy = this.camera.y + (h - gridH) / 2;
+
+    // Background
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, w, h);
+
+    // Floor tiles
+    for (var y = 0; y < gs; y++) {
+      for (var x = 0; x < gs; x++) {
+        ctx.fillStyle = (x + y) % 2 === 0 ? Board.floorColor1 : Board.floorColor2;
+        ctx.fillRect(ox + x * cellSize, oy + y * cellSize, cellSize, cellSize);
+      }
+    }
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+    ctx.lineWidth = 0.5;
+    for (var i = 0; i <= gs; i++) {
+      ctx.beginPath();
+      ctx.moveTo(ox + i * cellSize, oy);
+      ctx.lineTo(ox + i * cellSize, oy + gridH);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ox, oy + i * cellSize);
+      ctx.lineTo(ox + gridW, oy + i * cellSize);
+      ctx.stroke();
+    }
+
+    // Walls
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox + gridW, oy);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox, oy + gridH);
+    ctx.stroke();
+
+    // Furniture
+    var furnitureColors = {};
+    for (var type in Environments.furnitureTypes) {
+      furnitureColors[type] = Environments.furnitureTypes[type].color;
+    }
+
+    for (var fi = 0; fi < Board.furniture.length; fi++) {
+      var item = Board.furniture[fi];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      var fw = (def.width || 1) * cellSize;
+      var fh = (def.height || 1) * cellSize;
+      var fx = ox + item.x * cellSize;
+      var fy = oy + item.y * cellSize;
+
+      ctx.fillStyle = def.color || '#999';
+      ctx.fillRect(fx + 1, fy + 1, fw - 2, fh - 2);
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(fx + 1, fy + 1, fw - 2, fh - 2);
+
+      // Type label
+      if (cellSize > 15) {
+        ctx.font = Math.max(8, Math.min(11, cellSize * 0.35)) + 'px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(def.name, fx + fw / 2, fy + fh / 2);
+      }
+    }
+
+    // Tables
+    var self = this;
+    this.tables.forEach(function(t) {
+      var tx = ox + t.x * cellSize;
+      var ty = oy + t.y * cellSize;
+      var tw = t.width * cellSize;
+      var th = t.height * cellSize;
+      ctx.strokeStyle = '#e67e22';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(tx, ty, tw, th);
+      ctx.setLineDash([]);
+      if (t.name && cellSize > 12) {
+        ctx.font = 'bold 10px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#e67e22';
+        ctx.textAlign = 'center';
+        ctx.fillText(t.name, tx + tw / 2, ty + th / 2);
+      }
+    });
+
+    // Remote players
+    Network.remotePlayers.forEach(function(p) {
+      if (p.opacity <= 0) return;
+      var rpx = ox + p.renderX * cellSize;
+      var rpy = oy + p.renderY * cellSize;
+      // Proximity circle
+      ctx.beginPath();
+      ctx.arc(rpx, rpy, CONSTANTS.AUDIO_RADIUS * cellSize, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(46,204,113,0.05)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(46,204,113,0.2)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Player dot
+      ctx.beginPath();
+      ctx.arc(rpx, rpy, Math.max(4, cellSize * 0.3), 0, Math.PI * 2);
+      ctx.fillStyle = p.colors ? p.colors.shirt : '#2ecc71';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Name
+      if (cellSize > 12) {
+        ctx.font = '9px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#555';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.pseudo || '', rpx, rpy - Math.max(6, cellSize * 0.4));
+      }
+    });
+
+    // Local player
+    var lpx = ox + this.player.x * cellSize;
+    var lpy = oy + this.player.y * cellSize;
+    // Proximity circle
+    ctx.beginPath();
+    ctx.arc(lpx, lpy, this.player.audioRadius * cellSize, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(52,152,219,0.06)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(52,152,219,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Player dot
+    ctx.beginPath();
+    ctx.arc(lpx, lpy, Math.max(5, cellSize * 0.35), 0, Math.PI * 2);
+    ctx.fillStyle = this.player.colors ? this.player.colors.shirt : '#3498db';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Direction arrow
+    var dx = this.player.direction.dx || 0;
+    var dy = this.player.direction.dy || 0;
+    if (dx !== 0 || dy !== 0) {
+      var len = Math.sqrt(dx * dx + dy * dy);
+      ctx.beginPath();
+      ctx.moveTo(lpx, lpy);
+      ctx.lineTo(lpx + (dx / len) * cellSize * 0.6, lpy + (dy / len) * cellSize * 0.6);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    // Name
+    ctx.font = 'bold 10px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#3498db';
+    ctx.textAlign = 'center';
+    ctx.fillText(this.player.pseudo || 'Vous', lpx, lpy - Math.max(8, cellSize * 0.45));
+
+    // HUD info
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'left';
+    ctx.fillText('Vue de dessus — V pour basculer', 16, h - 70);
+
+    // Minimap not needed in topdown
+  },
+
+  // ===== EDIT MODE =====
+
+  toggleEditMode: function() {
+    if (!this.player.isAdmin) return;
+    this.editMode = !this.editMode;
+    if (this.editMode) {
+      // Center camera on grid
+      var cellSize = this.getEditCellSize();
+      this.editZoom = 1;
+      this.editCamera.x = this.canvas.width / 2 - (Board.gridSize * cellSize) / 2;
+      this.editCamera.y = this.canvas.height / 2 - (Board.gridSize * cellSize) / 2;
+      this.editTool = 'place';
+      this.editSelectedType = null;
+      this.editDragging = null;
+      this.editHovered = null;
+      UI.showEditToolbar(true);
+      UI.showNotification('Mode edition active - Vue du dessus');
+    } else {
+      Board.buildCollisionMap();
+      UI.showEditToolbar(false);
+      UI.showNotification('Mode edition desactive');
+    }
+  },
+
+  getEditCellSize: function() {
+    var maxDim = Math.min(this.canvas.width, this.canvas.height) * 0.85;
+    return Math.max(10, Math.min(40, Math.floor(maxDim / Board.gridSize)));
+  },
+
+  editScreenToGrid: function(sx, sy) {
+    var cellSize = this.getEditCellSize() * this.editZoom;
+    var gx = Math.floor((sx - this.editCamera.x) / cellSize);
+    var gy = Math.floor((sy - this.editCamera.y) / cellSize);
+    return { x: gx, y: gy };
+  },
+
+  editFurnitureAt: function(gx, gy) {
+    for (var i = Board.furniture.length - 1; i >= 0; i--) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      var w = def.width || 1;
+      var h = def.height || 1;
+      if (gx >= item.x && gx < item.x + w && gy >= item.y && gy < item.y + h) {
+        return item;
+      }
+    }
+    return null;
+  },
+
+  onEditMouseDown: function(e) {
+    var gp = this.editScreenToGrid(e.clientX, e.clientY);
+
+    if (this.editTool === 'move') {
+      var item = this.editFurnitureAt(gp.x, gp.y);
+      if (item) {
+        this.editDragging = { item: item, startX: e.clientX, startY: e.clientY, origX: item.x, origY: item.y };
+        return;
+      }
+    }
+
+    // Pan: left click on empty space (or any click when in place mode on empty)
+    if (e.button === 0 && this.editTool !== 'delete') {
+      var furn = this.editFurnitureAt(gp.x, gp.y);
+      if (!furn && this.editTool !== 'place') {
+        this.editIsPanning = true;
+        this.editPanStart.x = e.clientX;
+        this.editPanStart.y = e.clientY;
+        this.editCameraStart.x = this.editCamera.x;
+        this.editCameraStart.y = this.editCamera.y;
+        return;
+      }
+      // Also allow panning if in place mode but no type selected
+      if (this.editTool === 'place' && !this.editSelectedType) {
+        this.editIsPanning = true;
+        this.editPanStart.x = e.clientX;
+        this.editPanStart.y = e.clientY;
+        this.editCameraStart.x = this.editCamera.x;
+        this.editCameraStart.y = this.editCamera.y;
+        return;
+      }
+    }
+
+    // Right-click to pan
+    if (e.button === 2) {
+      this.editIsPanning = true;
+      this.editPanStart.x = e.clientX;
+      this.editPanStart.y = e.clientY;
+      this.editCameraStart.x = this.editCamera.x;
+      this.editCameraStart.y = this.editCamera.y;
+      e.preventDefault();
+    }
+  },
+
+  onEditMouseMove: function(e) {
+    var gp = this.editScreenToGrid(e.clientX, e.clientY);
+    this.editMouseGrid.x = gp.x;
+    this.editMouseGrid.y = gp.y;
+
+    if (this.editIsPanning) {
+      this.editCamera.x = this.editCameraStart.x + (e.clientX - this.editPanStart.x);
+      this.editCamera.y = this.editCameraStart.y + (e.clientY - this.editPanStart.y);
+      return;
+    }
+
+    if (this.editDragging) {
+      var cellSize = this.getEditCellSize() * this.editZoom;
+      var dx = Math.round((e.clientX - this.editDragging.startX) / cellSize);
+      var dy = Math.round((e.clientY - this.editDragging.startY) / cellSize);
+      this.editDragging.item.x = this.editDragging.origX + dx;
+      this.editDragging.item.y = this.editDragging.origY + dy;
+      return;
+    }
+
+    // Hover detection for move/delete
+    if (this.editTool === 'move' || this.editTool === 'delete') {
+      this.editHovered = this.editFurnitureAt(gp.x, gp.y);
+    } else {
+      this.editHovered = null;
+    }
+  },
+
+  onEditMouseUp: function(e) {
+    if (this.editIsPanning) {
+      this.editIsPanning = false;
+      return;
+    }
+
+    if (this.editDragging) {
+      var item = this.editDragging.item;
+      this.editDragging = null;
+      Board.buildCollisionMap();
+      // Sync move to server: remove + re-add
+      if (item.id) {
+        var self = this;
+        Network.socket.emit('remove-furniture', { furnitureId: item.id }, function(r) {
+          if (r && r.success) {
+            Network.socket.emit('add-furniture', { type: item.type, x: item.x, y: item.y }, function(r2) {
+              if (r2 && r2.success) {
+                // Replace local item with server version
+                for (var i = 0; i < Board.furniture.length; i++) {
+                  if (Board.furniture[i] === item) {
+                    Board.furniture[i] = r2.item;
+                    break;
+                  }
+                }
+                Board.buildCollisionMap();
+              }
+            });
+          }
+        });
+      }
+      return;
+    }
+  },
+
+  onEditClick: function(e) {
+    if (this.editIsPanning) return;
+    var gp = this.editScreenToGrid(e.clientX, e.clientY);
+
+    if (this.editTool === 'place' && this.editSelectedType) {
+      var def = Environments.furnitureTypes[this.editSelectedType];
+      if (!def) return;
+      if (gp.x < 0 || gp.y < 0 || gp.x + (def.width || 1) > Board.gridSize || gp.y + (def.height || 1) > Board.gridSize) return;
+
+      var self = this;
+      Network.socket.emit('add-furniture', { type: this.editSelectedType, x: gp.x, y: gp.y }, function(r) {
+        if (r && r.success) {
+          Board.furniture.push(r.item);
+          Board.buildCollisionMap();
+          UI.showNotification(def.name + ' place');
+        }
+      });
+      return;
+    }
+
+    if (this.editTool === 'delete') {
+      var item = this.editFurnitureAt(gp.x, gp.y);
+      if (item && item.id) {
+        Network.socket.emit('remove-furniture', { furnitureId: item.id }, function(r) {
+          if (r && r.success) {
+            Board.furniture = Board.furniture.filter(function(f) { return f.id !== item.id; });
+            Board.buildCollisionMap();
+            UI.showNotification('Mobilier supprime');
+          }
+        });
+      }
+      return;
+    }
+  },
+
+  onEditWheel: function(e) {
+    e.preventDefault();
+    var oldZoom = this.editZoom;
+    var d = e.deltaY > 0 ? -0.1 : 0.1;
+    this.editZoom = Math.max(0.3, Math.min(3, this.editZoom + d));
+
+    // Zoom toward mouse position
+    var ratio = this.editZoom / oldZoom;
+    this.editCamera.x = e.clientX - (e.clientX - this.editCamera.x) * ratio;
+    this.editCamera.y = e.clientY - (e.clientY - this.editCamera.y) * ratio;
+  },
+
+  renderEditMode: function(ts) {
+    var ctx = this.ctx;
+    var w = this.canvas.width;
+    var h = this.canvas.height;
+    var gs = Board.gridSize;
+    var cellSize = this.getEditCellSize() * this.editZoom;
+
+    // White background
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.translate(this.editCamera.x, this.editCamera.y);
+
+    // Draw floor tiles
+    for (var y = 0; y < gs; y++) {
+      for (var x = 0; x < gs; x++) {
+        ctx.fillStyle = (x + y) % 2 === 0 ? '#e8ecf0' : '#dee2e6';
+        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+      }
+    }
+
+    // Draw grid lines
+    ctx.strokeStyle = '#ced4da';
+    ctx.lineWidth = 0.5;
+    for (var gx = 0; gx <= gs; gx++) {
+      ctx.beginPath();
+      ctx.moveTo(gx * cellSize, 0);
+      ctx.lineTo(gx * cellSize, gs * cellSize);
+      ctx.stroke();
+    }
+    for (var gy = 0; gy <= gs; gy++) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy * cellSize);
+      ctx.lineTo(gs * cellSize, gy * cellSize);
+      ctx.stroke();
+    }
+
+    // Draw walls as thick lines on top and left edges
+    ctx.strokeStyle = '#5a6268';
+    ctx.lineWidth = Math.max(3, cellSize * 0.12);
+    // Top wall
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(gs * cellSize, 0);
+    ctx.stroke();
+    // Left wall
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, gs * cellSize);
+    ctx.stroke();
+    // Bottom and right (thinner)
+    ctx.lineWidth = Math.max(2, cellSize * 0.06);
+    ctx.strokeStyle = '#adb5bd';
+    ctx.beginPath();
+    ctx.moveTo(gs * cellSize, 0);
+    ctx.lineTo(gs * cellSize, gs * cellSize);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, gs * cellSize);
+    ctx.lineTo(gs * cellSize, gs * cellSize);
+    ctx.stroke();
+
+    // Draw furniture
+    for (var fi = 0; fi < Board.furniture.length; fi++) {
+      var item = Board.furniture[fi];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      var fw = (def.width || 1) * cellSize;
+      var fh = (def.height || 1) * cellSize;
+      var fx = item.x * cellSize;
+      var fy = item.y * cellSize;
+
+      // Fill
+      ctx.fillStyle = def.color || '#ccc';
+      ctx.fillRect(fx + 1, fy + 1, fw - 2, fh - 2);
+
+      // Border
+      var isHovered = (this.editHovered === item);
+      if (isHovered && this.editTool === 'delete') {
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 3;
+      } else if (isHovered && this.editTool === 'move') {
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 3;
+      } else {
+        ctx.strokeStyle = this.darkenColor(def.color || '#ccc', 0.3);
+        ctx.lineWidth = 1.5;
+      }
+      ctx.strokeRect(fx + 1, fy + 1, fw - 2, fh - 2);
+
+      // Type name centered
+      var fontSize = Math.max(7, Math.min(12, cellSize * 0.35));
+      ctx.font = 'bold ' + fontSize + 'px "Segoe UI", sans-serif';
+      ctx.fillStyle = '#333';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      var label = def.name;
+      if (label.length > 12 && cellSize < 25) label = label.substring(0, 10) + '..';
+      ctx.fillText(label, fx + fw / 2, fy + fh / 2);
+    }
+
+    // Draw players as colored circles
+    var self = this;
+    // Local player
+    var playerR = Math.max(4, cellSize * 0.3);
+    ctx.fillStyle = '#3498db';
+    ctx.beginPath();
+    ctx.arc(this.player.x * cellSize, this.player.y * cellSize, playerR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Remote players
+    Network.remotePlayers.forEach(function(p) {
+      if (p.opacity <= 0) return;
+      ctx.fillStyle = p.disconnected ? '#aaa' : '#2ecc71';
+      ctx.beginPath();
+      ctx.arc(p.renderX * cellSize, p.renderY * cellSize, playerR * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    // Ghost preview if in place mode with selected type
+    if (this.editTool === 'place' && this.editSelectedType) {
+      var gdef = Environments.furnitureTypes[this.editSelectedType];
+      if (gdef) {
+        var gmx = this.editMouseGrid.x;
+        var gmy = this.editMouseGrid.y;
+        var gw = (gdef.width || 1) * cellSize;
+        var gh = (gdef.height || 1) * cellSize;
+        var outOfBounds = gmx < 0 || gmy < 0 || gmx + (gdef.width || 1) > gs || gmy + (gdef.height || 1) > gs;
+
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = outOfBounds ? '#e74c3c' : (gdef.color || '#ccc');
+        ctx.fillRect(gmx * cellSize, gmy * cellSize, gw, gh);
+        ctx.strokeStyle = outOfBounds ? '#c0392b' : '#2980b9';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(gmx * cellSize, gmy * cellSize, gw, gh);
+        ctx.setLineDash([]);
+
+        var gFontSize = Math.max(7, Math.min(11, cellSize * 0.3));
+        ctx.font = 'bold ' + gFontSize + 'px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(gdef.name, gmx * cellSize + gw / 2, gmy * cellSize + gh / 2);
+        ctx.restore();
+      }
+    }
+
+    // Coordinate labels on edges
+    if (cellSize > 15) {
+      var coordFontSize = Math.max(6, Math.min(10, cellSize * 0.25));
+      ctx.font = coordFontSize + 'px "Segoe UI", sans-serif';
+      ctx.fillStyle = '#999';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      for (var cx = 0; cx < gs; cx += Math.ceil(gs / 20)) {
+        ctx.fillText(cx, cx * cellSize + cellSize / 2, -2);
+      }
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (var cy = 0; cy < gs; cy += Math.ceil(gs / 20)) {
+        ctx.fillText(cy, -4, cy * cellSize + cellSize / 2);
+      }
+    }
+
+    ctx.restore();
+  },
+
+  darkenColor: function(hex, amount) {
+    if (!hex || hex.indexOf('#') !== 0) return '#666';
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    r = Math.max(0, Math.floor(r * (1 - amount)));
+    g = Math.max(0, Math.floor(g * (1 - amount)));
+    b = Math.max(0, Math.floor(b * (1 - amount)));
+    return '#' + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0');
   },
 };
 
