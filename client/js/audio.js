@@ -2,7 +2,7 @@
 
 const Audio = {
   localStream: null,
-  peers: new Map(), // socketId -> { connection, audioElement, gainNode }
+  peers: new Map(), // socketId -> { connection, audioElement, currentVolume, connected, pendingCandidates }
   audioContext: null,
   masterVolume: 1,
   isMuted: false,
@@ -11,6 +11,9 @@ const Audio = {
   // Audio devices
   selectedInputDevice: null,
   selectedOutputDevice: null,
+
+  // Prevent rapid connect/disconnect
+  _connectingPeers: new Set(),
 
   async init() {
     try {
@@ -52,7 +55,6 @@ const Audio = {
         track.enabled = !this.isMuted;
       });
     }
-    // Notify server
     if (Network.socket) {
       Network.socket.emit('mute-changed', { muted: this.isMuted });
     }
@@ -61,7 +63,6 @@ const Audio = {
 
   setMasterVolume(vol) {
     this.masterVolume = Math.max(0, Math.min(1, vol));
-    // Update all peer volumes
     for (const [, peer] of this.peers) {
       if (peer.audioElement) {
         peer.audioElement.volume = peer.currentVolume * this.masterVolume;
@@ -69,19 +70,16 @@ const Audio = {
     }
   },
 
-  // Create or update peer connection for audio
-  async connectToPeer(socketId) {
-    if (this.peers.has(socketId)) return;
-    if (!this.localStream) return;
-
-    const config = {
+  _createPeerConfig() {
+    return {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
       ],
     };
+  },
 
-    const connection = new RTCPeerConnection(config);
+  _setupPeerConnection(socketId, connection) {
     const audioElement = new window.Audio();
     audioElement.autoplay = true;
 
@@ -90,14 +88,18 @@ const Audio = {
       audioElement,
       currentVolume: 0,
       connected: false,
+      pendingCandidates: [],
+      _disconnectTimer: null,
     };
 
     this.peers.set(socketId, peer);
 
     // Add local tracks
-    this.localStream.getTracks().forEach(track => {
-      connection.addTrack(track, this.localStream);
-    });
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        connection.addTrack(track, this.localStream);
+      });
+    }
 
     // Handle remote stream
     connection.ontrack = (event) => {
@@ -116,13 +118,27 @@ const Audio = {
     };
 
     connection.onconnectionstatechange = () => {
-      if (connection.connectionState === 'failed' || connection.connectionState === 'closed') {
+      const state = connection.connectionState;
+      if (state === 'failed' || state === 'closed') {
         this.disconnectPeer(socketId);
       }
     };
 
-    // Create offer
+    return peer;
+  },
+
+  // Create or update peer connection for audio
+  async connectToPeer(socketId) {
+    if (this.peers.has(socketId) || this._connectingPeers.has(socketId)) return;
+    if (!this.localStream) return;
+
+    this._connectingPeers.add(socketId);
+
     try {
+      const connection = new RTCPeerConnection(this._createPeerConfig());
+      this._setupPeerConnection(socketId, connection);
+
+      // Create offer
       const offer = await connection.createOffer();
       await connection.setLocalDescription(offer);
       Network.socket.emit('rtc-offer', {
@@ -130,95 +146,122 @@ const Audio = {
         offer: connection.localDescription,
       });
     } catch (e) {
-      console.error('Error creating offer:', e);
+      console.error('Error creating offer for', socketId, ':', e.message);
+      this.peers.delete(socketId);
+    } finally {
+      this._connectingPeers.delete(socketId);
     }
   },
 
   async handleOffer(fromSocketId, offer) {
     if (!this.localStream) return;
 
+    // If we already have a peer with an active connection, handle glare
     let peer = this.peers.get(fromSocketId);
-    if (!peer) {
-      const config = {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      };
-      const connection = new RTCPeerConnection(config);
-      const audioElement = new window.Audio();
-      audioElement.autoplay = true;
-
-      peer = { connection, audioElement, currentVolume: 0, connected: false };
-      this.peers.set(fromSocketId, peer);
-
-      this.localStream.getTracks().forEach(track => {
-        connection.addTrack(track, this.localStream);
-      });
-
-      connection.ontrack = (event) => {
-        audioElement.srcObject = event.streams[0];
-        peer.connected = true;
-      };
-
-      connection.onicecandidate = (event) => {
-        if (event.candidate) {
-          Network.socket.emit('rtc-ice-candidate', {
-            targetSocketId: fromSocketId,
-            candidate: event.candidate,
-          });
-        }
-      };
-
-      connection.onconnectionstatechange = () => {
-        if (connection.connectionState === 'failed' || connection.connectionState === 'closed') {
+    if (peer) {
+      const state = peer.connection.signalingState;
+      if (state === 'have-local-offer') {
+        // Glare: both sides sent offers. Use socket ID comparison to break tie.
+        // Lower socket ID wins (keeps their offer, other side accepts)
+        if (Network.mySocketId < fromSocketId) {
+          // We win: ignore their offer, they'll accept our answer
+          return;
+        } else {
+          // They win: close our connection, accept their offer
           this.disconnectPeer(fromSocketId);
         }
-      };
+      } else if (state !== 'stable' && state !== 'closed') {
+        // Connection in unexpected state — reset
+        this.disconnectPeer(fromSocketId);
+      } else if (state === 'stable' && peer.connected) {
+        // Already connected and stable — ignore duplicate offer
+        return;
+      }
     }
 
     try {
-      await peer.connection.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await peer.connection.createAnswer();
-      await peer.connection.setLocalDescription(answer);
+      const connection = new RTCPeerConnection(this._createPeerConfig());
+      peer = this._setupPeerConnection(fromSocketId, connection);
+
+      await connection.setRemoteDescription(new RTCSessionDescription(offer));
+
+      // Flush any pending ICE candidates
+      for (const candidate of peer.pendingCandidates) {
+        await connection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+      peer.pendingCandidates = [];
+
+      const answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
       Network.socket.emit('rtc-answer', {
         targetSocketId: fromSocketId,
-        answer: peer.connection.localDescription,
+        answer: connection.localDescription,
       });
     } catch (e) {
-      console.error('Error handling offer:', e);
+      console.error('Error handling offer from', fromSocketId, ':', e.message);
+      this.disconnectPeer(fromSocketId);
     }
   },
 
   async handleAnswer(fromSocketId, answer) {
     const peer = this.peers.get(fromSocketId);
     if (!peer) return;
+
+    // Only set remote description if we're in the right state
+    const state = peer.connection.signalingState;
+    if (state !== 'have-local-offer') {
+      console.warn('Ignoring answer from', fromSocketId, '- state is', state);
+      return;
+    }
+
     try {
       await peer.connection.setRemoteDescription(new RTCSessionDescription(answer));
+
+      // Flush any pending ICE candidates
+      for (const candidate of peer.pendingCandidates) {
+        await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+      peer.pendingCandidates = [];
     } catch (e) {
-      console.error('Error handling answer:', e);
+      console.error('Error handling answer from', fromSocketId, ':', e.message);
+      this.disconnectPeer(fromSocketId);
     }
   },
 
   async handleIceCandidate(fromSocketId, candidate) {
     const peer = this.peers.get(fromSocketId);
     if (!peer) return;
+
     try {
+      // If remote description is not set yet, queue the candidate
+      if (!peer.connection.remoteDescription) {
+        peer.pendingCandidates.push(candidate);
+        return;
+      }
       await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
     } catch (e) {
-      console.error('Error adding ICE candidate:', e);
+      // Silently ignore ICE candidate errors (common and non-fatal)
     }
   },
 
   disconnectPeer(socketId) {
     const peer = this.peers.get(socketId);
     if (!peer) return;
-    if (peer.connection) peer.connection.close();
+    if (peer._disconnectTimer) {
+      clearTimeout(peer._disconnectTimer);
+      peer._disconnectTimer = null;
+    }
+    try {
+      if (peer.connection && peer.connection.connectionState !== 'closed') {
+        peer.connection.close();
+      }
+    } catch (e) { /* ignore */ }
     if (peer.audioElement) {
       peer.audioElement.srcObject = null;
-      peer.audioElement.remove();
+      try { peer.audioElement.remove(); } catch (e) { /* ignore */ }
     }
     this.peers.delete(socketId);
+    this._connectingPeers.delete(socketId);
   },
 
   // Update volumes based on proximity
@@ -252,33 +295,27 @@ const Audio = {
           (localPlayer.y - remotePlayer.renderY) ** 2
         );
         if (dist < audioRadius) {
-          // Smooth fade: full volume within AUDIO_FADE_START, fade to 0 at audioRadius
           const fadeStart = Math.min(CONSTANTS.AUDIO_FADE_START, audioRadius * 0.5);
           if (dist <= fadeStart) {
             volume = 1;
           } else {
             volume = Math.max(0, 1 - (dist - fadeStart) / (audioRadius - fadeStart));
           }
-          // Apply squared curve for more natural falloff
           volume = volume * volume;
         }
       }
 
-      // If I'm broadcasting (admin), everyone should hear me too — handled via their client
-      // If I'm on stage, everyone hears me — handled via their client
-
-      // Muted remote players: force volume 0 (but keep connection for when they unmute)
+      // Muted remote players: force volume 0 but keep connection
       if (remotePlayer.isMuted && !remotePlayer.isBroadcasting) {
         volume = 0;
       }
 
       const shouldConnect = volume > 0 || localOnStage || remoteOnStage || remotePlayer.isBroadcasting || localPlayer.isBroadcasting;
 
-      if (shouldConnect && !peer) {
+      if (shouldConnect && !peer && !this._connectingPeers.has(socketId)) {
         this.connectToPeer(socketId);
       } else if (!shouldConnect && peer && volume === 0) {
-        // Don't immediately disconnect — give some hysteresis
-        // Only disconnect if they've been out of range for a while
+        // Hysteresis: don't immediately disconnect
         if (!peer._disconnectTimer) {
           peer._disconnectTimer = setTimeout(() => {
             const p = this.peers.get(socketId);
@@ -309,11 +346,8 @@ const Audio = {
     }
   },
 
-  // Check if local user is speaking (for visual indicator)
   isSpeaking() {
     if (!this.localStream || this.isMuted || !this.audioContext) return false;
-    // Simple speaking detection based on audio level would require analyser node
-    // For now, return false - full implementation would use AudioAnalyser
     return false;
   },
 
@@ -334,7 +368,6 @@ const Audio = {
     if (this.localStream) {
       this.localStream.getTracks().forEach(t => t.stop());
       await this.requestMicrophone();
-      // Re-add tracks to existing connections
       for (const [, peer] of this.peers) {
         const senders = peer.connection.getSenders();
         const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
