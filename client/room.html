@@ -16,36 +16,18 @@
       </div>
       <div>
         <div id="room-info-display" class="room-info-display" style="display: none;"></div>
-
         <div class="form-group" style="margin-bottom: 16px;">
           <label for="pseudo-input">Pseudo (obligatoire)</label>
           <input type="text" id="pseudo-input" placeholder="Votre pseudo" maxlength="20">
           <span class="error-message" id="error-pseudo">Le pseudo est obligatoire</span>
         </div>
-
         <div class="color-picker-group">
-          <div class="color-picker-item">
-            <label>Peau</label>
-            <input type="color" id="color-skin" value="#FFDCB5">
-          </div>
-          <div class="color-picker-item">
-            <label>Cheveux</label>
-            <input type="color" id="color-hair" value="#4A3728">
-          </div>
-          <div class="color-picker-item">
-            <label>Haut</label>
-            <input type="color" id="color-shirt" value="#5B8DBE">
-          </div>
-          <div class="color-picker-item">
-            <label>Pantalon</label>
-            <input type="color" id="color-pants" value="#3D5A80">
-          </div>
-          <div class="color-picker-item">
-            <label>Chaussures</label>
-            <input type="color" id="color-shoes" value="#2B2B2B">
-          </div>
+          <div class="color-picker-item"><label>Peau</label><input type="color" id="color-skin" value="#FFDCB5"></div>
+          <div class="color-picker-item"><label>Cheveux</label><input type="color" id="color-hair" value="#4A3728"></div>
+          <div class="color-picker-item"><label>Haut</label><input type="color" id="color-shirt" value="#5B8DBE"></div>
+          <div class="color-picker-item"><label>Pantalon</label><input type="color" id="color-pants" value="#3D5A80"></div>
+          <div class="color-picker-item"><label>Chaussures</label><input type="color" id="color-shoes" value="#2B2B2B"></div>
         </div>
-
         <button class="btn btn-primary" id="btn-enter" style="margin-top: 24px; width: 100%;">Entrer dans la room</button>
       </div>
     </div>
@@ -54,35 +36,175 @@
   <!-- Game Canvas -->
   <canvas id="game-canvas"></canvas>
 
-  <!-- HUD -->
+  <!-- HUD top-left -->
   <div class="hud" id="hud" style="display: none;">
     <div class="hud-item hud-room-name" id="hud-room-name"></div>
     <div class="hud-item hud-coords" id="hud-coords">Position: 0, 0</div>
     <div class="hud-item hud-participants" id="hud-participants">Participants: 1</div>
-    <!-- Copy link -->
     <div class="hud-item copy-link-container" id="copy-link-container" style="display: none;">
       <span id="room-url-display" class="room-url-display"></span>
       <button class="btn-copy" id="btn-copy-link" title="Copier le lien">Copier</button>
     </div>
   </div>
 
-  <!-- Reconnecting indicator -->
-  <div class="reconnecting-indicator" id="reconnecting-indicator" style="display: none;">
-    <div class="reconnecting-spinner"></div>
-    <span>Reconnexion en cours...</span>
+  <!-- Toolbar bottom -->
+  <div class="toolbar" id="toolbar" style="display: none;">
+    <div class="toolbar-left">
+      <button class="toolbar-btn" id="btn-mute" title="Couper le micro (M)">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 1c1.9 0 3.5 1.6 3.5 3.5v7c0 1.9-1.6 3.5-3.5 3.5s-3.5-1.6-3.5-3.5v-7C8.5 2.6 10.1 1 12 1zm5.5 10.5c0 3-2.5 5.5-5.5 5.5s-5.5-2.5-5.5-5.5H5c0 3.5 2.7 6.2 6.2 6.7V22h1.5v-3.8c3.5-.5 6.2-3.2 6.2-6.7h-1.5z"/></svg>
+      </button>
+      <div class="toolbar-volume">
+        <input type="range" id="volume-slider" min="0" max="100" value="100" title="Volume">
+      </div>
+      <button class="toolbar-btn" id="btn-hand" title="Lever la main (H)">✋</button>
+    </div>
+    <div class="toolbar-center">
+      <button class="toolbar-btn admin-only" id="btn-screen-share" title="Partager mon écran">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
+      </button>
+      <div class="reaction-bar">
+        <button class="reaction-btn" data-emoji="👍" title="1">👍</button>
+        <button class="reaction-btn" data-emoji="👏" title="2">👏</button>
+        <button class="reaction-btn" data-emoji="❓" title="3">❓</button>
+        <button class="reaction-btn" data-emoji="💡" title="4">💡</button>
+        <button class="reaction-btn" data-emoji="❤️" title="5">❤️</button>
+        <button class="reaction-btn" data-emoji="😂" title="6">😂</button>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <button class="toolbar-btn admin-only" id="btn-admin" title="Panneau admin">⚙️</button>
+      <button class="toolbar-btn toolbar-btn-danger" id="btn-leave" title="Quitter">✕</button>
+    </div>
   </div>
 
-  <!-- Notifications container -->
+  <!-- Context menu -->
+  <div class="context-menu" id="context-menu" style="display: none;"></div>
+
+  <!-- Admin Panel (sidebar) -->
+  <div class="admin-panel" id="admin-panel">
+    <div class="admin-panel-header">
+      <h3>Administration</h3>
+      <button class="admin-close-btn" onclick="UI.toggleAdminPanel()">✕</button>
+    </div>
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-tab="participants" onclick="this.parentElement.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');document.querySelectorAll('.admin-tab-content').forEach(c=>c.style.display='none');document.getElementById('tab-participants').style.display='block';UI.refreshParticipantsList();">Participants</button>
+      <button class="admin-tab" data-tab="mobilier" onclick="this.parentElement.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');document.querySelectorAll('.admin-tab-content').forEach(c=>c.style.display='none');document.getElementById('tab-mobilier').style.display='block';">Mobilier</button>
+      <button class="admin-tab" data-tab="reglages" onclick="this.parentElement.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');document.querySelectorAll('.admin-tab-content').forEach(c=>c.style.display='none');document.getElementById('tab-reglages').style.display='block';UI.updateAdminSettings();">Réglages</button>
+      <button class="admin-tab" data-tab="theme" onclick="this.parentElement.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');document.querySelectorAll('.admin-tab-content').forEach(c=>c.style.display='none');document.getElementById('tab-theme').style.display='block';">Thème</button>
+    </div>
+
+    <!-- Participants tab -->
+    <div class="admin-tab-content" id="tab-participants" style="display: block;">
+      <div id="admin-participants-list"></div>
+      <div style="margin-top: 12px;">
+        <button class="btn btn-secondary btn-sm" onclick="Network.socket.emit('lower-all-hands',{},()=>{});">Baisser toutes les mains</button>
+      </div>
+      <div style="margin-top: 12px;">
+        <h4 style="margin-bottom: 8px;">Effets</h4>
+        <button class="btn btn-secondary btn-sm" onclick="Network.socket.emit('trigger-effect',{type:'confetti'});">🎊 Confettis</button>
+        <button class="btn btn-secondary btn-sm" onclick="Network.socket.emit('trigger-effect',{type:'applause'});">👏 Applaudissements</button>
+      </div>
+      <div style="margin-top: 12px;">
+        <h4 style="margin-bottom: 8px;">Vote rapide</h4>
+        <input type="text" id="vote-question" placeholder="Question" class="admin-input" style="width:100%;margin-bottom:4px;">
+        <input type="text" id="vote-options" placeholder="Options (séparées par ,)" class="admin-input" style="width:100%;margin-bottom:4px;">
+        <button class="btn btn-primary btn-sm" onclick="const q=document.getElementById('vote-question').value;const o=document.getElementById('vote-options').value.split(',').map(s=>s.trim()).filter(Boolean);if(q&&o.length>=2)Network.socket.emit('create-vote',{question:q,options:o,duration:60},()=>{});">Lancer le vote</button>
+      </div>
+      <div style="margin-top: 12px;">
+        <h4 style="margin-bottom: 8px;">Timer</h4>
+        <input type="number" id="timer-duration" placeholder="Minutes" value="5" min="1" max="120" class="admin-input" style="width:80px;">
+        <button class="btn btn-primary btn-sm" onclick="const d=parseInt(document.getElementById('timer-duration').value)*60;Network.socket.emit('create-timer',{duration:d},()=>{});">Démarrer</button>
+      </div>
+    </div>
+
+    <!-- Mobilier tab -->
+    <div class="admin-tab-content" id="tab-mobilier" style="display: none;">
+      <h4>Tables de travail</h4>
+      <div style="margin-bottom: 8px;">
+        <input type="text" id="new-table-name" placeholder="Nom de la table" class="admin-input" style="width:100%;margin-bottom:4px;">
+        <button class="btn btn-primary btn-sm" onclick="const n=document.getElementById('new-table-name').value||'Table';Network.socket.emit('create-table',{name:n,x:Math.floor(Engine.player.x)+2,y:Math.floor(Engine.player.y)+2,width:3,height:3},(r)=>{if(r.success){Engine.tables.set(r.table.id,r.table);UI.showNotification('Table créée');}});">Ajouter une table</button>
+      </div>
+      <h4 style="margin-top:12px;">Catalogue de mobilier</h4>
+      <div class="furniture-catalog">
+        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'desk',x:Math.floor(Engine.player.x)+2,y:Math.floor(Engine.player.y)},()=>{});">🪑 Bureau</button>
+        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'chair',x:Math.floor(Engine.player.x)+1,y:Math.floor(Engine.player.y)+2},()=>{});">💺 Chaise</button>
+        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'plant',x:Math.floor(Engine.player.x)-1,y:Math.floor(Engine.player.y)},()=>{});">🌿 Plante</button>
+        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'couch',x:Math.floor(Engine.player.x)+2,y:Math.floor(Engine.player.y)+2},()=>{});">🛋️ Canapé</button>
+        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'coffeeTable',x:Math.floor(Engine.player.x)+1,y:Math.floor(Engine.player.y)+1},()=>{});">☕ Table basse</button>
+        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'partition',x:Math.floor(Engine.player.x)+3,y:Math.floor(Engine.player.y)},()=>{});">🧱 Cloison</button>
+      </div>
+    </div>
+
+    <!-- Réglages tab -->
+    <div class="admin-tab-content" id="tab-reglages" style="display: none;">
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Taille de la grille</label>
+        <input type="number" id="admin-grid-size" min="20" max="200" value="20" class="admin-input">
+        <button class="btn btn-secondary btn-sm" style="margin-top:4px;" onclick="const s=parseInt(document.getElementById('admin-grid-size').value);Network.socket.emit('resize-grid',{size:s},()=>{});">Appliquer</button>
+      </div>
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Environnement</label>
+        <select id="admin-environment" class="admin-input">
+          <option value="bureau">Bureau</option>
+          <option value="open-space">Open Space</option>
+          <option value="salle-de-conference">Salle de Conférence</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" style="margin-top:4px;" onclick="if(confirm('Le mobilier actuel sera remplacé. Continuer ?')){Network.socket.emit('change-environment',{environment:document.getElementById('admin-environment').value},()=>{});}">Changer</button>
+      </div>
+      <div class="form-group" style="margin-bottom: 12px;" id="close-room-section">
+        <button class="btn btn-sm" style="background:#e74c3c;color:#fff;margin-top:12px;" onclick="if(confirm('Fermer la room pour tous les participants ?')){Network.socket.emit('close-room',{},(r)=>{if(r.success)window.location.href='/client/index.html'});}">Fermer la room</button>
+      </div>
+    </div>
+
+    <!-- Thème tab -->
+    <div class="admin-tab-content" id="tab-theme" style="display: none;">
+      <div class="color-picker-item"><label>Case claire</label><input type="color" id="theme-color1" value="#3a4a5c" onchange="Network.socket.emit('update-theme',{floorColor1:this.value},()=>{Board.floorColor1=this.value;});"></div>
+      <div class="color-picker-item"><label>Case foncée</label><input type="color" id="theme-color2" value="#344458" onchange="Network.socket.emit('update-theme',{floorColor2:this.value},()=>{Board.floorColor2=this.value;});"></div>
+      <h4 style="margin-top:12px;">Palettes prédéfinies</h4>
+      <div class="theme-presets">
+        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#3a4a5c',floorColor2:'#344458'},()=>{Board.floorColor1='#3a4a5c';Board.floorColor2='#344458';});">Nuit</button>
+        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#8a9aac',floorColor2:'#7a8a9c'},()=>{Board.floorColor1='#8a9aac';Board.floorColor2='#7a8a9c';});">Jour</button>
+        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#4a5a6c',floorColor2:'#3a4a5c'},()=>{Board.floorColor1='#4a5a6c';Board.floorColor2='#3a4a5c';});">Corporate</button>
+        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#3c5a3c',floorColor2:'#2c4a2c'},()=>{Board.floorColor1='#3c5a3c';Board.floorColor2='#2c4a2c';});">Nature</button>
+        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#5c3a5c',floorColor2:'#4c2a4c'},()=>{Board.floorColor1='#5c3a5c';Board.floorColor2='#4c2a4c';});">Festif</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reconnecting -->
+  <div class="reconnecting-indicator" id="reconnecting-indicator" style="display: none;">
+    <div class="reconnecting-spinner"></div><span>Reconnexion en cours...</span>
+  </div>
+
+  <!-- Notifications -->
   <div class="notifications-container" id="notifications-container"></div>
+
+  <!-- Vote popup -->
+  <div class="vote-popup" id="vote-popup" style="display: none;"></div>
+
+  <!-- Timer display -->
+  <div class="timer-display" id="timer-display" style="display: none;"></div>
 
   <!-- Minimap -->
   <div class="minimap-container" id="minimap-container" style="display: none;">
     <canvas id="minimap-canvas" width="160" height="160"></canvas>
   </div>
 
-  <!-- Controls hint -->
-  <div class="controls-hint" id="controls-hint" style="display: none;">
-    Déplacement : <kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> ou <kbd>&#8593;</kbd><kbd>&#8592;</kbd><kbd>&#8595;</kbd><kbd>&#8594;</kbd>
+  <!-- Shortcuts modal -->
+  <div class="shortcuts-modal" id="shortcuts-modal" style="display: none;">
+    <div class="shortcuts-inner">
+      <h3>Raccourcis clavier</h3>
+      <table class="shortcuts-table">
+        <tr><td><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> / Flèches</td><td>Déplacement</td></tr>
+        <tr><td><kbd>M</kbd></td><td>Mute / Unmute micro</td></tr>
+        <tr><td><kbd>H</kbd></td><td>Lever / Baisser la main</td></tr>
+        <tr><td><kbd>1</kbd>-<kbd>6</kbd></td><td>Réactions rapides</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Minimap on/off</td></tr>
+        <tr><td><kbd>Echap</kbd></td><td>Fermer la pop-in active</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Afficher cette aide</td></tr>
+      </table>
+      <button class="btn btn-secondary btn-sm" onclick="UI.toggleShortcutsModal();">Fermer</button>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -91,11 +213,12 @@
   <script src="js/board.js"></script>
   <script src="js/character.js"></script>
   <script src="js/network.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/screen-share.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/engine.js"></script>
   <script>
-    // Copy link button
-    document.getElementById('btn-copy-link').addEventListener('click', () => {
+    document.getElementById('btn-copy-link')?.addEventListener('click', () => {
       const url = document.getElementById('room-url-display').textContent;
       navigator.clipboard.writeText(url).then(() => {
         const btn = document.getElementById('btn-copy-link');

@@ -5,10 +5,17 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node server/index.js"
+    "dev": "node server/index.js",
+    "test": "jest --forceExit --detectOpenHandles",
+    "test:gherkin": "node tests/gherkin-runner.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^12.7.0",
+    "jest": "^30.3.0",
+    "socket.io-client": "^4.8.3"
   }
 }
