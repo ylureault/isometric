@@ -11,6 +11,8 @@ const Character = {
       isWalking = false,
       pseudo = '',
       isOnStage = false,
+      isAdmin = false,
+      disconnected = false,
     } = options;
 
     const pos = Board.iso(gx, gy, isOnStage ? 6 : 0);
@@ -170,18 +172,28 @@ const Character = {
 
     // --- Pseudo label ---
     if (pseudo) {
-      this.drawPseudo(ctx, sx, headY - 16, pseudo);
+      this.drawPseudo(ctx, sx, headY - 16, pseudo, isAdmin);
+    }
+
+    // Disconnected indicator
+    if (disconnected) {
+      ctx.font = '8px "Segoe UI", sans-serif';
+      ctx.fillStyle = '#FF6B6B';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('(déconnecté)', sx, headY - (pseudo ? 28 : 16));
     }
 
     // Stage indicator
-    if (isOnStage) {
-      this.drawBroadcastIndicator(ctx, sx, headY - (pseudo ? 28 : 16));
+    if (isOnStage && !disconnected) {
+      this.drawBroadcastIndicator(ctx, sx, headY - (pseudo ? (disconnected ? 38 : 28) : 16));
     }
   },
 
-  drawPseudo(ctx, sx, sy, text) {
+  drawPseudo(ctx, sx, sy, text, isAdmin = false) {
+    const displayText = isAdmin ? `★ ${text}` : text;
     ctx.font = 'bold 10px "Segoe UI", sans-serif';
-    const metrics = ctx.measureText(text);
+    const metrics = ctx.measureText(displayText);
     const tw = metrics.width + 8;
     const th = 14;
 
@@ -197,10 +209,10 @@ const Character = {
     ctx.stroke();
 
     // Text
-    ctx.fillStyle = '#e0e0e0';
+    ctx.fillStyle = isAdmin ? '#FFD700' : '#e0e0e0';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, sx, sy);
+    ctx.fillText(displayText, sx, sy);
   },
 
   drawBroadcastIndicator(ctx, sx, sy) {

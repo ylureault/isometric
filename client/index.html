@@ -21,7 +21,7 @@
       <label for="environment">Environnement</label>
       <select id="environment">
         <option value="bureau">Bureau</option>
-        <option value="open-space">Open Space</option>
+        <option value="open-space" selected>Open Space</option>
         <option value="salle-de-conference">Salle de Conférence</option>
       </select>
     </div>
@@ -33,6 +33,7 @@
     </div>
 
     <button class="btn btn-primary" id="btn-create">Créer la room</button>
+    <span class="error-message" id="error-create" style="text-align:center;"></span>
 
     <div style="margin-top: 24px; border-top: 1px solid #333; padding-top: 24px; width: 320px; text-align: center;">
       <p style="color: #666; font-size: 0.85rem; margin-bottom: 12px;">Ou rejoindre une room existante</p>
@@ -54,31 +55,49 @@
       gridSizeValue2.textContent = gridSizeInput.value;
     });
 
-    document.getElementById('btn-create').addEventListener('click', () => {
+    document.getElementById('btn-create').addEventListener('click', async () => {
       const name = document.getElementById('room-name').value.trim();
       const errorEl = document.getElementById('error-name');
+      const errorCreate = document.getElementById('error-create');
 
       if (!name) {
         errorEl.style.display = 'block';
         return;
       }
       errorEl.style.display = 'none';
+      errorCreate.style.display = 'none';
 
       const env = document.getElementById('environment').value;
       const size = parseInt(gridSizeInput.value);
 
-      // Generate a simple room ID
-      const roomId = Math.random().toString(36).substring(2, 10);
+      try {
+        const resp = await fetch('/api/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, environment: env, gridSize: size }),
+        });
 
-      // Store room config and redirect
-      const params = new URLSearchParams({
-        room: roomId,
-        name: name,
-        env: env,
-        size: size,
-        creator: 'true'
-      });
-      window.location.href = `room.html?${params.toString()}`;
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          errorCreate.textContent = data.error || 'Erreur lors de la création';
+          errorCreate.style.display = 'block';
+          return;
+        }
+
+        // Redirect to room with creator flag
+        const params = new URLSearchParams({
+          room: data.roomId,
+          name: name,
+          env: env,
+          size: size,
+          creator: 'true',
+        });
+        window.location.href = `room.html?${params.toString()}`;
+      } catch (err) {
+        errorCreate.textContent = 'Impossible de contacter le serveur';
+        errorCreate.style.display = 'block';
+      }
     });
 
     document.getElementById('btn-join').addEventListener('click', () => {

@@ -19,6 +19,12 @@ const CONSTANTS = {
   MOVE_SPEED: 0.06, // tiles per frame
   ANIMATION_SPEED: 0.12,
 
+  // Network
+  POSITION_SEND_RATE: 15, // max messages per second
+  INTERPOLATION_DELAY: 80, // ms — smooth interpolation buffer
+  RECONNECT_TIMEOUT: 30000, // ms — 30 seconds before full disconnect
+  NOTIFICATION_DURATION: 3000, // ms
+
   // Environments
   ENVIRONMENTS: ['bureau', 'open-space', 'salle-de-conference'],
 

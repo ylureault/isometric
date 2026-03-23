@@ -15,6 +15,8 @@ const Engine = {
     isWalking: false,
     pseudo: '',
     colors: { ...CONSTANTS.DEFAULT_COLORS },
+    role: 'participant',
+    isAdmin: false,
   },
 
   // Camera
@@ -31,6 +33,7 @@ const Engine = {
     name: 'Room',
     environment: 'bureau',
     gridSize: 20,
+    roomId: null,
     isCreator: false,
   },
 
@@ -39,6 +42,7 @@ const Engine = {
 
   // Time
   lastTime: 0,
+  started: false,
 
   init() {
     this.canvas = document.getElementById('game-canvas');
@@ -53,27 +57,38 @@ const Engine = {
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
     window.addEventListener('keyup', (e) => this.onKeyUp(e));
-
-    // Initialize board
-    Board.init(this.roomConfig.gridSize, this.roomConfig.environment);
-
-    // Place player at center of grid
-    this.player.x = Math.floor(this.roomConfig.gridSize / 2);
-    this.player.y = Math.floor(this.roomConfig.gridSize / 2);
-
-    // Setup avatar configuration
-    UI.initAvatarConfig((config) => {
-      this.player.pseudo = config.pseudo;
-      this.player.colors = config.colors;
-      this.start();
+    window.addEventListener('beforeunload', () => {
+      Network.leaveRoom();
     });
 
-    // Update HUD room name
-    document.getElementById('hud-room-name').textContent = this.roomConfig.name;
+    // Initialize network
+    Network.init();
+
+    // Network callbacks
+    Network.onParticipantJoined = (data) => {
+      UI.showNotification(`${data.pseudo} a rejoint la room`);
+    };
+    Network.onParticipantLeft = (data) => {
+      UI.showNotification(`${data.pseudo} a quitté la room`);
+    };
+    Network.onParticipantDisconnected = (data) => {
+      UI.showNotification(`${data.pseudo} s'est déconnecté`);
+    };
+    Network.onReconnecting = () => {
+      UI.showReconnecting(true);
+    };
+    Network.onReconnected = () => {
+      UI.showReconnecting(false);
+      UI.showNotification('Reconnecté !');
+    };
+
+    // Check if room exists on server (for joiners)
+    this.checkRoom();
   },
 
   parseRoomConfig() {
     const params = new URLSearchParams(window.location.search);
+    this.roomConfig.roomId = params.get('room') || null;
     this.roomConfig.name = params.get('name') || 'Room';
     this.roomConfig.environment = params.get('env') || 'bureau';
     this.roomConfig.gridSize = Math.min(
@@ -81,6 +96,94 @@ const Engine = {
       Math.max(CONSTANTS.GRID_MIN, parseInt(params.get('size')) || CONSTANTS.GRID_DEFAULT)
     );
     this.roomConfig.isCreator = params.get('creator') === 'true';
+  },
+
+  async checkRoom() {
+    if (!this.roomConfig.roomId) {
+      UI.showError('Aucun ID de room spécifié');
+      return;
+    }
+
+    // If creator, we'll create on join. If joiner, check room exists
+    if (!this.roomConfig.isCreator) {
+      try {
+        const resp = await fetch(`/api/rooms/${this.roomConfig.roomId}`);
+        if (resp.ok) {
+          const info = await resp.json();
+          this.roomConfig.name = info.name;
+          this.roomConfig.environment = info.environment;
+          this.roomConfig.gridSize = info.gridSize;
+
+          if (info.participantCount >= info.maxParticipants) {
+            UI.showError(`Cette room est pleine (${info.participantCount}/${info.maxParticipants})`);
+            return;
+          }
+
+          // Show room info in avatar config
+          UI.showRoomInfo(info);
+        } else {
+          UI.showError('Room introuvable');
+          return;
+        }
+      } catch (e) {
+        // Server not responding — proceed anyway, socket will fail
+      }
+    }
+
+    // Initialize board with room config
+    Board.init(this.roomConfig.gridSize, this.roomConfig.environment);
+
+    // Setup avatar configuration
+    UI.initAvatarConfig((config) => {
+      this.player.pseudo = config.pseudo;
+      this.player.colors = config.colors;
+      this.joinRoom();
+    });
+
+    document.getElementById('hud-room-name').textContent = this.roomConfig.name;
+  },
+
+  joinRoom() {
+    Network.joinRoom(this.roomConfig.roomId, {
+      pseudo: this.player.pseudo,
+      colors: this.player.colors,
+      isCreator: this.roomConfig.isCreator,
+      roomName: this.roomConfig.name,
+      environment: this.roomConfig.environment,
+      gridSize: this.roomConfig.gridSize,
+    }, (response) => {
+      if (response.error) {
+        const messages = {
+          room_not_found: 'Room introuvable',
+          room_full: 'Cette room est pleine (20/20)',
+          room_closed: 'Cette room a été fermée',
+        };
+        UI.showError(messages[response.error] || 'Erreur de connexion');
+        return;
+      }
+
+      // Set player position from server
+      this.player.x = response.you.x;
+      this.player.y = response.you.y;
+      this.player.role = response.you.role;
+      this.player.isAdmin = response.you.isAdmin;
+
+      // Update room info from server
+      this.roomConfig.name = response.room.name;
+      this.roomConfig.environment = response.room.environment;
+      this.roomConfig.gridSize = response.room.gridSize;
+      document.getElementById('hud-room-name').textContent = this.roomConfig.name;
+
+      // Re-init board if config came from server (joiner)
+      if (!this.roomConfig.isCreator) {
+        Board.init(response.room.gridSize, response.room.environment);
+      }
+
+      // Show copy link button
+      UI.showCopyLink(this.roomConfig.roomId);
+
+      this.start();
+    });
   },
 
   resize() {
@@ -102,9 +205,11 @@ const Engine = {
   },
 
   onKeyDown(e) {
+    // Don't capture keys when typing in inputs
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
     this.keys[e.code] = true;
 
-    // Prevent scrolling with arrow keys
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
       e.preventDefault();
     }
@@ -115,6 +220,8 @@ const Engine = {
   },
 
   start() {
+    if (this.started) return;
+    this.started = true;
     this.lastTime = performance.now();
     this.loop(this.lastTime);
   },
@@ -142,25 +249,21 @@ const Engine = {
     const isMoving = dx !== 0 || dy !== 0;
 
     if (isMoving) {
-      // Normalize diagonal movement
       const len = Math.sqrt(dx * dx + dy * dy);
       dx /= len;
       dy /= len;
 
-      const speed = CONSTANTS.MOVE_SPEED * 60; // Convert to per-second
+      const speed = CONSTANTS.MOVE_SPEED * 60;
       const newX = this.player.x + dx * speed * dt;
       const newY = this.player.y + dy * speed * dt;
 
-      // Check collision for X movement
       if (!Board.isSolid(newX, this.player.y) && Board.isInBounds(newX, this.player.y)) {
         this.player.x = newX;
       }
-      // Check collision for Y movement
       if (!Board.isSolid(this.player.x, newY) && Board.isInBounds(this.player.x, newY)) {
         this.player.y = newY;
       }
 
-      // Clamp to bounds
       this.player.x = Math.max(0.5, Math.min(Board.gridSize - 0.5, this.player.x));
       this.player.y = Math.max(0.5, Math.min(Board.gridSize - 0.5, this.player.y));
 
@@ -170,6 +273,18 @@ const Engine = {
     } else {
       this.player.isWalking = false;
     }
+
+    // Send position to server
+    Network.sendPosition(
+      this.player.x,
+      this.player.y,
+      this.player.direction,
+      this.player.isWalking,
+      this.player.walkPhase
+    );
+
+    // Update remote players interpolation
+    Network.updateRemotePlayers(dt);
 
     // Camera follows player smoothly
     const targetCamX = this.canvas.width / 2;
@@ -183,7 +298,7 @@ const Engine = {
       this.roomConfig.name,
       this.player.x,
       this.player.y,
-      1 // Phase 1: single player
+      Network.getParticipantCount()
     );
   },
 
@@ -192,20 +307,15 @@ const Engine = {
     const w = this.canvas.width;
     const h = this.canvas.height;
 
-    // Clear
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, 0, w, h);
 
-    // Stars background
     this.drawStars(ctx, w, h, timestamp);
-
-    // Board glow effect
     this.drawBoardGlow(ctx, w, h);
 
     const ox = this.camera.x;
     const oy = this.camera.y;
 
-    // Draw grid
     Board.drawGrid(ctx, ox, oy, this.player.x, this.player.y);
 
     // Collect all drawable entities for depth sorting
@@ -215,18 +325,25 @@ const Engine = {
     for (const item of Board.furniture) {
       const def = Environments.furnitureTypes[item.type];
       const sortY = item.x + item.y + (def ? (def.width + def.height) / 2 : 0);
-      entities.push({
-        type: 'furniture',
-        item,
-        sortKey: sortY,
-      });
+      entities.push({ type: 'furniture', item, sortKey: sortY });
     }
 
-    // Player
+    // Local player
     entities.push({
-      type: 'player',
+      type: 'local-player',
       sortKey: this.player.x + this.player.y,
     });
+
+    // Remote players
+    for (const [socketId, player] of Network.remotePlayers) {
+      if (player.opacity <= 0) continue;
+      entities.push({
+        type: 'remote-player',
+        player,
+        socketId,
+        sortKey: player.renderX + player.renderY,
+      });
+    }
 
     // Sort by depth
     entities.sort((a, b) => a.sortKey - b.sortKey);
@@ -235,11 +352,8 @@ const Engine = {
     for (const entity of entities) {
       if (entity.type === 'furniture') {
         Board.drawFurnitureItem(ctx, entity.item, ox, oy);
-      } else if (entity.type === 'player') {
-        const onStage = Board.isOnStage(
-          Math.floor(this.player.x),
-          Math.floor(this.player.y)
-        );
+      } else if (entity.type === 'local-player') {
+        const onStage = Board.isOnStage(Math.floor(this.player.x), Math.floor(this.player.y));
         Character.draw(ctx, this.player.x, this.player.y, ox, oy, {
           colors: this.player.colors,
           direction: this.player.direction,
@@ -247,7 +361,24 @@ const Engine = {
           isWalking: this.player.isWalking,
           pseudo: this.player.pseudo,
           isOnStage: onStage,
+          isAdmin: this.player.isAdmin,
         });
+      } else if (entity.type === 'remote-player') {
+        const p = entity.player;
+        const onStage = Board.isOnStage(Math.floor(p.renderX), Math.floor(p.renderY));
+        ctx.save();
+        ctx.globalAlpha = p.opacity;
+        Character.draw(ctx, p.renderX, p.renderY, ox, oy, {
+          colors: p.colors,
+          direction: p.direction,
+          walkPhase: p.walkPhase,
+          isWalking: p.isWalking,
+          pseudo: p.pseudo,
+          isOnStage: onStage,
+          isAdmin: p.isAdmin,
+          disconnected: p.disconnected,
+        });
+        ctx.restore();
       }
     }
 
@@ -255,13 +386,54 @@ const Engine = {
     this.drawProximityRadius(ctx, ox, oy);
 
     // Minimap
-    Board.drawMinimap(
-      this.minimapCtx,
-      this.minimapCanvas.width,
-      this.minimapCanvas.height,
-      this.player.x,
-      this.player.y
-    );
+    this.drawMinimap();
+  },
+
+  drawMinimap() {
+    const ctx = this.minimapCtx;
+    const w = this.minimapCanvas.width;
+    const h = this.minimapCanvas.height;
+    const scale = Math.min(w, h) / Board.gridSize;
+
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid tiles
+    for (let y = 0; y < Board.gridSize; y++) {
+      for (let x = 0; x < Board.gridSize; x++) {
+        const isEven = (x + y) % 2 === 0;
+        ctx.fillStyle = isEven ? Board.floorColor1 : Board.floorColor2;
+        ctx.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+
+    // Furniture
+    for (const item of Board.furniture) {
+      const def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      ctx.fillStyle = def.isStage ? '#9A7E68' : def.color;
+      ctx.fillRect(item.x * scale, item.y * scale, def.width * scale, def.height * scale);
+    }
+
+    // Remote players (green dots)
+    for (const [, player] of Network.remotePlayers) {
+      if (player.opacity <= 0) continue;
+      ctx.fillStyle = player.disconnected ? 'rgba(255,255,100,0.5)' : '#6BFF6B';
+      ctx.beginPath();
+      ctx.arc(player.renderX * scale, player.renderY * scale, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Local player (blue dot)
+    ctx.fillStyle = '#6B9FFF';
+    ctx.beginPath();
+    ctx.arc(this.player.x * scale, this.player.y * scale, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(126, 184, 218, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, w, h);
   },
 
   drawStars(ctx, w, h, timestamp) {
@@ -291,7 +463,6 @@ const Engine = {
     const sx = pos.x + ox;
     const sy = pos.y + oy;
 
-    // Audio proximity radius (ellipse in isometric)
     const radiusTiles = CONSTANTS.AUDIO_RADIUS;
     const tw = Board.tileWidth * Math.cos(Math.PI / 6);
     const radiusX = radiusTiles * tw * 0.5;
@@ -305,7 +476,6 @@ const Engine = {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Filled with very subtle color
     ctx.fillStyle = 'rgba(126, 184, 218, 0.03)';
     ctx.fill();
   },
