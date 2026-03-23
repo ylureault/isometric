@@ -125,6 +125,12 @@ const Character = {
     var isRight = facing.indexOf('right') >= 0;
     var bodyFlip = isRight ? 1 : -1;
 
+    // Isometric body tilt — lean slightly in direction of movement
+    var tiltX = bodyFlip * 2 * S;
+    // In iso, body should appear slightly rotated
+    var shoulderNear = 13 * S;  // shoulder closer to viewer is wider
+    var shoulderFar = 10 * S;   // farther shoulder is narrower (perspective)
+
     // ===== LEGS =====
     var legSpread = 4 * S;
     var legTop = sy - 4 * S;
@@ -158,24 +164,27 @@ const Character = {
     // ===== TORSO =====
     var torsoTop = sy - 22 * S;
     var torsoBot = legTop + 2 * S;
-    var torsoW = 12 * S;
+    var torsoWL = isRight ? shoulderFar : shoulderNear;
+    var torsoWR = isRight ? shoulderNear : shoulderFar;
 
     ctx.fillStyle = colors.shirt;
     ctx.beginPath();
-    ctx.moveTo(sx - torsoW, torsoBot);
-    ctx.lineTo(sx + torsoW, torsoBot);
-    ctx.lineTo(sx + torsoW - 1 * S, torsoTop);
-    ctx.lineTo(sx - torsoW + 1 * S, torsoTop);
+    ctx.moveTo(sx - torsoWL + tiltX, torsoBot);
+    ctx.lineTo(sx + torsoWR + tiltX, torsoBot);
+    ctx.lineTo(sx + torsoWR - 1 * S + tiltX, torsoTop);
+    ctx.lineTo(sx - torsoWL + 1 * S + tiltX, torsoTop);
     ctx.closePath();
     ctx.fill();
 
-    // 3D shading on torso
-    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    // 3D shading on far side of torso
+    var shadeLeft = isRight ? sx - torsoWL + tiltX : sx + tiltX;
+    var shadeRight = isRight ? sx + tiltX : sx + torsoWR + tiltX;
+    ctx.fillStyle = 'rgba(0,0,0,0.1)';
     ctx.beginPath();
-    ctx.moveTo(sx + (isRight ? -2 : 2) * S, torsoBot);
-    ctx.lineTo(sx + torsoW * (isRight ? -1 : 1), torsoBot);
-    ctx.lineTo(sx + (torsoW - 1) * (isRight ? -1 : 1), torsoTop);
-    ctx.lineTo(sx + (isRight ? -2 : 2) * S, torsoTop);
+    ctx.moveTo(shadeLeft, torsoBot);
+    ctx.lineTo(shadeRight, torsoBot);
+    ctx.lineTo(shadeRight, torsoTop);
+    ctx.lineTo(shadeLeft, torsoTop);
     ctx.closePath();
     ctx.fill();
 
@@ -186,7 +195,7 @@ const Character = {
 
     // Left arm
     ctx.save();
-    ctx.translate(sx - torsoW, armY);
+    ctx.translate(sx - torsoWL + tiltX, armY);
     ctx.rotate(-armSwing * 0.8);
     ctx.fillStyle = colors.shirt;
     ctx.fillRect(-armW, 0, armW, armLen * 0.6);
@@ -196,7 +205,7 @@ const Character = {
 
     // Right arm
     ctx.save();
-    ctx.translate(sx + torsoW, armY);
+    ctx.translate(sx + torsoWR + tiltX, armY);
     ctx.rotate(handRaised ? -1.2 : armSwing * 0.8);
     ctx.fillStyle = colors.shirt;
     ctx.fillRect(0, 0, armW, armLen * 0.6);
@@ -210,10 +219,10 @@ const Character = {
 
     // ===== NECK =====
     ctx.fillStyle = colors.skin;
-    ctx.fillRect(sx - 3 * S, torsoTop - 3 * S, 6 * S, 6 * S);
+    ctx.fillRect(sx + tiltX - 3 * S, torsoTop - 3 * S, 6 * S, 6 * S);
 
     // ===== HEAD =====
-    var headCx = sx;
+    var headCx = sx + tiltX;
     var headCy = torsoTop - 12 * S;
     var headRx = 9 * S;
     var headRy = 10 * S;

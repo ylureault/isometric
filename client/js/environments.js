@@ -58,6 +58,10 @@ const Environments = {
       name: 'Tapis', width: 3, height: 3, solid: false,
       color: '#c8b090', topColor: '#d8c0a0', drawHeight: 0, isCarpet: true,
     },
+    postItBoard: {
+      name: 'Tableau Post-it', width: 1, height: 2, solid: true,
+      color: '#c4a06a', topColor: '#d4b07a', drawHeight: 35, isPostItBoard: true,
+    },
     zoneMarker: {
       name: 'Zone', width: 4, height: 4, solid: false,
       color: 'rgba(100,160,200,0.12)', topColor: 'rgba(100,160,200,0.2)', drawHeight: 0, isZone: true,
@@ -86,6 +90,10 @@ const Environments = {
         items.push({ type: 'bookshelf', x: gs - 4, y: 2 });
         items.push({ type: 'stage', x: Math.floor(gs / 2) - 2, y: 1 });
         items.push({ type: 'screen', x: Math.floor(gs / 2) - 1, y: 0 });
+        // Whiteboard on back-right wall (y=0)
+        items.push({ type: 'whiteboard', x: gs - 4, y: 0 });
+        // Post-it board on back-left wall (x=0)
+        items.push({ type: 'postItBoard', x: 0, y: Math.floor(gs / 2) });
         return items;
       },
     },
@@ -116,6 +124,8 @@ const Environments = {
         items.push({ type: 'plant', x: 1, y: cx });
         // Stage below center
         items.push({ type: 'stage', x: cx - 2, y: cx + 2 });
+        items.push({ type: 'whiteboard', x: gs - 4, y: 0 });
+        items.push({ type: 'postItBoard', x: 0, y: cx });
         return items;
       },
     },
@@ -135,7 +145,10 @@ const Environments = {
         }
         items.push({ type: 'screen', x: cx - 1, y: 1 });
         items.push({ type: 'stage', x: cx - 2, y: 2 });
-        items.push({ type: 'whiteboard', x: cx + 3, y: cx + 2 });
+        // Whiteboard on back-right wall
+        items.push({ type: 'whiteboard', x: cx + 2, y: 0 });
+        // Post-it board on back-left wall
+        items.push({ type: 'postItBoard', x: 0, y: cx + 2 });
         items.push({ type: 'plant', x: 1, y: 1 });
         items.push({ type: 'plant', x: gs - 2, y: 1 });
         items.push({ type: 'plant', x: 1, y: gs - 2 });

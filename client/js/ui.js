@@ -109,6 +109,11 @@ const UI = {
       Audio.setMasterVolume(parseFloat(e.target.value) / 100);
     });
 
+    // Radius slider
+    document.getElementById('radius-slider')?.addEventListener('input', (e) => {
+      Engine.player.audioRadius = parseInt(e.target.value);
+    });
+
     // Screen share button
     document.getElementById('btn-screen-share')?.addEventListener('click', () => {
       if (ScreenShare.isSharing) {

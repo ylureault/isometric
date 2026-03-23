@@ -12,6 +12,7 @@ var Engine = {
     role: 'participant', isAdmin: false,
     isMuted: true, tableId: null, handRaised: false,
     isBroadcasting: false,
+    audioRadius: CONSTANTS.AUDIO_RADIUS,
   },
 
   camera: { x: 0, y: 0 },
@@ -573,26 +574,49 @@ var Engine = {
     }
   },
 
-  drawProximityRadius: function(ctx) {
-    var pos = Board.iso(this.player.x, this.player.y);
-    var rx = CONSTANTS.AUDIO_RADIUS * (Board.tileWidth / 2);
-    var ry = CONSTANTS.AUDIO_RADIUS * (Board.tileHeight / 2);
+  drawProximityCircle: function(ctx, px, py, radius, color, isLocal) {
+    var pos = Board.iso(px, py);
+    var rx = radius * (Board.tileWidth / 2);
+    var ry = radius * (Board.tileHeight / 2);
 
     ctx.save();
     ctx.translate(pos.x, pos.y);
     ctx.scale(1, ry / rx);
-    var g = ctx.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx);
-    g.addColorStop(0, 'rgba(70,130,180,0.08)');
-    g.addColorStop(0.6, 'rgba(70,130,180,0.03)');
-    g.addColorStop(1, 'rgba(70,130,180,0)');
+
+    // Fill gradient
+    var g = ctx.createRadialGradient(0, 0, rx * 0.1, 0, 0, rx);
+    g.addColorStop(0, color.replace(')', ',0.06)').replace('rgb', 'rgba'));
+    g.addColorStop(0.7, color.replace(')', ',0.02)').replace('rgb', 'rgba'));
+    g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.beginPath();
     ctx.arc(0, 0, rx, 0, Math.PI * 2);
     ctx.fillStyle = g;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(70,130,180,0.12)';
-    ctx.lineWidth = 1;
+
+    // Border — dashed for remote, solid for local
+    if (isLocal) {
+      ctx.strokeStyle = color.replace(')', ',0.25)').replace('rgb', 'rgba');
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+    } else {
+      ctx.strokeStyle = color.replace(')', ',0.15)').replace('rgb', 'rgba');
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+    }
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.restore();
+  },
+
+  drawProximityRadius: function(ctx) {
+    // Draw remote players' circles first (behind)
+    var self = this;
+    Network.remotePlayers.forEach(function(p) {
+      if (p.opacity <= 0) return;
+      self.drawProximityCircle(ctx, p.renderX, p.renderY, CONSTANTS.AUDIO_RADIUS, 'rgb(46,204,113)', false);
+    });
+    // Draw local player's circle on top
+    this.drawProximityCircle(ctx, this.player.x, this.player.y, this.player.audioRadius, 'rgb(52,152,219)', true);
   },
 
   drawReactions: function(ctx) {

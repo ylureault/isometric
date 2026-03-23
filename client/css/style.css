@@ -18,14 +18,24 @@ body {
 .landing-container p { color: rgba(255,255,255,0.8); font-size: 1.1rem; max-width: 500px; text-align: center; }
 
 .form-group { display: flex; flex-direction: column; gap: 8px; width: 320px; }
-.form-group label { font-size: 0.9rem; color: rgba(255,255,255,0.7); }
-.form-group input, .form-group select {
+.form-group label { font-size: 0.9rem; color: #666; }
+.landing-container .form-group label { color: rgba(255,255,255,0.7); }
+.landing-container .form-group input,
+.landing-container .form-group select {
   padding: 10px 14px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
   background: rgba(255,255,255,0.15); color: #fff; font-size: 1rem; outline: none;
   transition: border-color 0.2s; backdrop-filter: blur(4px);
 }
-.form-group input::placeholder { color: rgba(255,255,255,0.5); }
-.form-group input:focus, .form-group select:focus { border-color: rgba(255,255,255,0.5); }
+.landing-container .form-group input::placeholder { color: rgba(255,255,255,0.5); }
+.landing-container .form-group input:focus,
+.landing-container .form-group select:focus { border-color: rgba(255,255,255,0.5); }
+.form-group input, .form-group select {
+  padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px;
+  background: #fff; color: #333; font-size: 1rem; outline: none;
+  transition: border-color 0.2s;
+}
+.form-group input::placeholder { color: #999; }
+.form-group input:focus, .form-group select:focus { border-color: #4a6fa5; }
 .form-group input[type="range"] { padding: 0; background: transparent; border: none; }
 .grid-size-display { text-align: center; color: #fff; font-size: 0.9rem; }
 
@@ -35,8 +45,13 @@ body {
 }
 .btn-primary { background: #fff; color: #5B6ABF; }
 .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-.btn-secondary { background: rgba(255,255,255,0.1); color: #555; border: 1px solid #ccc; }
-.btn-secondary:hover { border-color: #999; background: rgba(255,255,255,0.2); }
+.btn-secondary { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.3); }
+.btn-secondary:hover { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.25); }
+.avatar-config-panel .btn-secondary,
+.admin-panel .btn-secondary,
+.shortcuts-inner .btn-secondary { background: #f0f0f0; color: #555; border: 1px solid #ddd; }
+.avatar-config-panel .btn-secondary:hover,
+.admin-panel .btn-secondary:hover { background: #e0e0e0; border-color: #bbb; }
 .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
 .error-message { color: #e74c3c; font-size: 0.85rem; display: none; }
 
@@ -86,6 +101,8 @@ body {
 .toolbar-btn-danger { border-color: rgba(255,107,107,0.3); color: #e74c3c; }
 .toolbar-btn-danger:hover { background: rgba(255,107,107,0.15); }
 .toolbar-volume { width: 80px; }
+.toolbar-radius { display: flex; align-items: center; gap: 4px; }
+.toolbar-radius input[type="range"] { width: 60px; accent-color: #4a6fa5; }
 .toolbar-volume input[type="range"] { width: 100%; accent-color: #4a6fa5; }
 .reaction-bar { display: flex; gap: 4px; position: relative; z-index: 35; }
 .reaction-btn {

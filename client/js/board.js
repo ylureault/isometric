@@ -219,6 +219,7 @@ const Board = {
     if (def.isPlant) return this.drawPlant(ctx, item, def);
     if (def.isScreen) return this.drawScreen(ctx, item, def);
     if (def.isWhiteboard) return this.drawWhiteboard(ctx, item, def);
+    if (def.isPostItBoard) return this.drawPostItBoard(ctx, item, def);
     if (def.isZone) return this.drawZoneOverlay(ctx, item, def);
     if (def.isPartition) return this.drawPartition(ctx, item, def);
     if (item.type === 'desk') return this.drawDesk(ctx, item, def);
@@ -398,6 +399,43 @@ const Board = {
     this.drawIsoPoly(ctx, [[x,y+0.3,2],[x,y+d*0.6,2],[x,y+d*0.6,h-2],[x,y+0.3,h-2]], '#fff', null, 0);
     ctx.globalAlpha = 1;
     ctx.restore();
+  },
+
+  drawPostItBoard(ctx, item, def) {
+    // Cork board mounted on left wall (x=0)
+    var x = item.x, y = item.y;
+    var d = def.height;
+    var bz = 20;
+    var bh = 18;
+
+    // Cork background
+    this.drawIsoPoly(ctx, [
+      [x, y, bz],
+      [x, y+d, bz],
+      [x, y+d, bz+bh],
+      [x, y, bz+bh]
+    ], '#c4a06a', '#a08050', 1);
+
+    // Post-its (colorful squares on the cork)
+    var postItColors = ['#FFE066','#FF6B6B','#6BCB77','#4D96FF','#FF78C4','#FFB347'];
+    for (var i = 0; i < 6; i++) {
+      var py = y + 0.15 + (i % 3) * (d - 0.3) / 3;
+      var pz = bz + 2 + Math.floor(i / 3) * (bh - 4) / 2;
+      var pw = (d - 0.3) / 3 - 0.1;
+      var ph = (bh - 4) / 2 - 1;
+      this.drawIsoPoly(ctx, [
+        [x, py, pz],
+        [x, py+pw, pz],
+        [x, py+pw, pz+ph],
+        [x, py, pz+ph]
+      ], postItColors[i], null, 0);
+    }
+
+    // Frame
+    this.drawIsoLine(ctx, [x,y,bz], [x,y+d,bz], '#8a6a4a', 1.5);
+    this.drawIsoLine(ctx, [x,y+d,bz], [x,y+d,bz+bh], '#8a6a4a', 1.5);
+    this.drawIsoLine(ctx, [x,y+d,bz+bh], [x,y,bz+bh], '#8a6a4a', 1.5);
+    this.drawIsoLine(ctx, [x,y,bz+bh], [x,y,bz], '#8a6a4a', 1.5);
   },
 
   drawStage(ctx, item, def) {
