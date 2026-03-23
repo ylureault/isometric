@@ -27,18 +27,12 @@ var Engine = {
   isDragging: false, dragStart: { x: 0, y: 0 }, cameraStart: { x: 0, y: 0 },
   // View mode: 'iso' or 'topdown'
   viewMode: 'iso',
-  // Edit mode (admin only)
-  editMode: false,
-  editTool: 'place', // 'place', 'move', 'delete'
-  editSelectedType: null,
-  editDragging: null,
-  editHover: { x: -1, y: -1 },
-
-  // Edit mode state
+  // Edit mode state (admin only)
   editMode: false,
   editTool: 'place', // 'place', 'move', 'delete'
   editSelectedType: null,
   editDragging: null, // { item, startX, startY, origX, origY }
+  editHover: { x: -1, y: -1 },
   editCamera: { x: 0, y: 0 },
   editZoom: 1,
   editHovered: null, // furniture item under cursor
@@ -140,9 +134,9 @@ var Engine = {
     s.on('participant-speaking-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isSpeaking = d.speaking; });
 
     // Sub-rooms
-    s.on('sub-room-created', function(d) { if (!self.subRooms) self.subRooms = new Map(); self.subRooms.set(d.id, d); });
-    s.on('sub-room-deleted', function(d) { if (self.subRooms) self.subRooms.delete(d.subRoomId); });
-    s.on('sub-room-updated', function(d) { if (self.subRooms) { var sr = self.subRooms.get(d.subRoomId); if (sr) sr.participants = d.participants; } });
+    s.on('sub-room-created', function(d) { self.subRooms.set(d.id, d); });
+    s.on('sub-room-deleted', function(d) { self.subRooms.delete(d.subRoomId); });
+    s.on('sub-room-updated', function(d) { var sr = self.subRooms.get(d.subRoomId); if (sr) sr.participants = d.participants; });
 
     // Collab spaces
     s.on('collab-space-updated', function(d) { UI.updateCollabSpaceUsers(d); });
@@ -346,7 +340,8 @@ var Engine = {
           var srDist = Math.sqrt((px - (sr.x + srw/2)) * (px - (sr.x + srw/2)) + (py - (sr.y + srh/2)) * (py - (sr.y + srh/2)));
           if (srDist < srw + 2) {
             // Open sub-room in new tab
-            var subUrl = '/client/room.html?room=' + this.roomConfig.roomId + '_' + srId + '&name=' + encodeURIComponent(sr.name) + '&env=' + this.roomConfig.environment + '&size=15';
+            var subUrl = '/client/room.html?room=' + this.roomConfig.roomId + '_' + srId + '&name=' + encodeURIComponent(sr.name) + '&env=' + this.roomConfig.environment + '&size=15&creator=true';
+            Network.socket.emit('join-sub-room', { subRoomId: srId });
             window.open(subUrl, '_blank');
             return;
           }
@@ -364,7 +359,7 @@ var Engine = {
       if (clickX >= citem.x && clickX < citem.x + cw && clickY >= citem.y && clickY < citem.y + ch) {
         var dist = Math.sqrt((px - (citem.x + cw/2)) * (px - (citem.x + cw/2)) + (py - (citem.y + ch/2)) * (py - (citem.y + ch/2)));
         if (dist < cw + 2) {
-          var spaceId = 'collab_' + citem.x + '_' + citem.y;
+          var spaceId = citem.id ? ('collab_' + citem.id) : ('collab_' + citem.x + '_' + citem.y);
           UI.openCollabSpace(spaceId);
           return;
         }

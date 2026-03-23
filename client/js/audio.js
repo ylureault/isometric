@@ -356,6 +356,11 @@ const Audio = {
   setupAnalyser() {
     if (this._analyser || !this.audioContext || !this.localStream) return;
     try {
+      // Resume audio context if suspended (needed after user gesture)
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume();
+        return; // Retry on next call
+      }
       var source = this.audioContext.createMediaStreamSource(this.localStream);
       this._analyser = this.audioContext.createAnalyser();
       this._analyser.fftSize = 256;

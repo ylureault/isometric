@@ -126,8 +126,38 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
     const p = roomManager.markDisconnected(currentRoomId, socket.id);
     if (!p) return;
+
+    // Clean up collab spaces
+    if (room && room.collabSpaces) {
+      for (const [spaceId, space] of room.collabSpaces) {
+        if (space.users.has(socket.id) || space.screens.has(socket.id)) {
+          space.users.delete(socket.id);
+          space.screens.delete(socket.id);
+          io.to(currentRoomId).emit('collab-screen-stopped', { spaceId, socketId: socket.id });
+          io.to(currentRoomId).emit('collab-space-updated', {
+            spaceId,
+            users: Array.from(space.users),
+            screens: Array.from(space.screens.keys()),
+          });
+        }
+      }
+    }
+
+    // Clean up sub-rooms
+    if (room && room.subRooms) {
+      for (const [subRoomId, sr] of room.subRooms) {
+        if (sr.participants.has(socket.id)) {
+          sr.participants.delete(socket.id);
+          io.to(currentRoomId).emit('sub-room-updated', {
+            subRoomId,
+            participants: Array.from(sr.participants),
+          });
+        }
+      }
+    }
 
     socket.to(currentRoomId).emit('participant-disconnected', {
       socketId: socket.id,
@@ -137,9 +167,9 @@ io.on('connection', (socket) => {
     const roomId = currentRoomId;
     const sid = socket.id;
     setTimeout(() => {
-      const room = roomManager.getRoom(roomId);
-      if (!room) return;
-      const pp = room.participants.get(sid);
+      const rm = roomManager.getRoom(roomId);
+      if (!rm) return;
+      const pp = rm.participants.get(sid);
       if (pp && pp.disconnected) {
         roomManager.leaveRoom(roomId, sid);
         io.to(roomId).emit('participant-left', { socketId: sid, pseudo: pp.pseudo });
@@ -630,13 +660,14 @@ io.on('connection', (socket) => {
 
     if (!room.subRooms) room.subRooms = new Map();
     const subRoomId = 'sub_' + Date.now().toString(36);
+    const gs = room.gridSize;
     const subRoom = {
       id: subRoomId,
-      name: data.name || 'Sous-salle',
-      x: data.x || 0,
-      y: data.y || 0,
-      width: data.width || 3,
-      height: data.height || 3,
+      name: (data.name || 'Sous-salle').slice(0, 30),
+      x: Math.max(0, Math.min(gs - 3, parseInt(data.x) || 0)),
+      y: Math.max(0, Math.min(gs - 3, parseInt(data.y) || 0)),
+      width: Math.max(2, Math.min(6, parseInt(data.width) || 3)),
+      height: Math.max(2, Math.min(6, parseInt(data.height) || 3)),
       participants: new Set(),
     };
     room.subRooms.set(subRoomId, subRoom);

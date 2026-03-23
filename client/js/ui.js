@@ -364,6 +364,7 @@ const UI = {
     this.initMobilierTab();
     this.refreshFurnitureList();
     this.refreshTablesList();
+    this.refreshSubRoomsList();
   },
 
   refreshParticipantsList() {
@@ -433,8 +434,9 @@ const UI = {
       desk: '🪑', chair: '💺', plant: '🌿', palmTree: '🌴', partition: '🔲',
       largeTable: '📐', roundTable: '⭕', screen: '🖥️', couch: '🛋️',
       coffeeTable: '☕', bookshelf: '📚', whiteboard: '📋', postItBoard: '📌',
-      smallStage: '🎭', podium: '🎤', projector: '📽️', waterCooler: '🚰',
+      stage: '🎭', smallStage: '🎭', podium: '🎤', projector: '📽️', waterCooler: '🚰',
       filingCabinet: '🗄️', standingDesk: '🖥️', lamp: '💡',
+      collabSpace: '🤝', carpet: '🟫', largeCarpet: '🟫',
     };
 
     var html = '';
@@ -539,6 +541,36 @@ const UI = {
             UI.showNotification('Table supprimée');
           }
         });
+      });
+    });
+  },
+
+  refreshSubRoomsList() {
+    var list = document.getElementById('sub-rooms-list');
+    if (!list) return;
+    var html = '';
+    Engine.subRooms.forEach(function(sr, id) {
+      var count = sr.participants ? sr.participants.length : 0;
+      html += '<div class="placed-item">';
+      html += '<span style="font-size:0.8rem;">🚪 ' + (sr.name || 'Sous-salle') + ' <span style="color:#999;">(' + count + ' pers.)</span></span>';
+      html += '<button class="admin-action-btn danger" data-action="delete-subroom" data-id="' + id + '" title="Supprimer">✕</button>';
+      html += '</div>';
+    });
+    if (!html) html = '<p style="font-size:0.75rem;color:#999;">Aucune sous-salle</p>';
+    list.innerHTML = html;
+
+    list.querySelectorAll('[data-action="delete-subroom"]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var srid = btn.dataset.id;
+        if (confirm('Supprimer cette sous-salle ?')) {
+          Network.socket.emit('delete-sub-room', { subRoomId: srid }, function(r) {
+            if (r && r.success) {
+              Engine.subRooms.delete(srid);
+              UI.refreshSubRoomsList();
+              UI.showNotification('Sous-salle supprimée');
+            }
+          });
+        }
       });
     });
   },
