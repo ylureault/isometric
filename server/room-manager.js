@@ -495,11 +495,22 @@ class RoomManager {
     return { success: true };
   }
 
+  getOrCreateWhiteboard(room, wbId) {
+    let wb = room.whiteboards.get(wbId);
+    if (!wb) {
+      wb = {
+        id: wbId, x: 0, y: 0, radius: 5, tableId: null,
+        strokes: [], texts: [], postits: [], activeUsers: new Set(),
+      };
+      room.whiteboards.set(wbId, wb);
+    }
+    return wb;
+  }
+
   addWhiteboardStroke(roomId, wbId, strokeData) {
     const room = this.rooms.get(roomId);
     if (!room) return null;
-    const wb = room.whiteboards.get(wbId);
-    if (!wb) return null;
+    const wb = this.getOrCreateWhiteboard(room, wbId);
     wb.strokes.push(strokeData);
     return strokeData;
   }
@@ -507,8 +518,7 @@ class RoomManager {
   addWhiteboardText(roomId, wbId, textData) {
     const room = this.rooms.get(roomId);
     if (!room) return null;
-    const wb = room.whiteboards.get(wbId);
-    if (!wb) return null;
+    const wb = this.getOrCreateWhiteboard(room, wbId);
     wb.texts.push(textData);
     return textData;
   }
@@ -516,17 +526,21 @@ class RoomManager {
   addWhiteboardPostit(roomId, wbId, postitData) {
     const room = this.rooms.get(roomId);
     if (!room) return null;
-    const wb = room.whiteboards.get(wbId);
-    if (!wb) return null;
-    wb.postits.push(postitData);
+    const wb = this.getOrCreateWhiteboard(room, wbId);
+    // Update existing postit or add new
+    const existing = wb.postits.findIndex(p => p.id === postitData.id);
+    if (existing >= 0) {
+      wb.postits[existing] = postitData;
+    } else {
+      wb.postits.push(postitData);
+    }
     return postitData;
   }
 
   undoWhiteboardStroke(roomId, wbId, socketId) {
     const room = this.rooms.get(roomId);
     if (!room) return null;
-    const wb = room.whiteboards.get(wbId);
-    if (!wb) return null;
+    const wb = this.getOrCreateWhiteboard(room, wbId);
     // Find last stroke by this user
     for (let i = wb.strokes.length - 1; i >= 0; i--) {
       if (wb.strokes[i].socketId === socketId) {
@@ -542,8 +556,7 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
-    const wb = room.whiteboards.get(wbId);
-    if (!wb) return { error: 'not_found' };
+    const wb = this.getOrCreateWhiteboard(room, wbId);
     wb.strokes = [];
     wb.texts = [];
     wb.postits = [];

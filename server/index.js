@@ -415,8 +415,17 @@ io.on('connection', (socket) => {
     if (!currentRoomId) return callback({ error: 'not_in_room' });
     const room = roomManager.getRoom(currentRoomId);
     if (!room) return callback({ error: 'room_not_found' });
-    const wb = room.whiteboards.get(data.whiteboardId);
-    if (!wb) return callback({ error: 'not_found' });
+    // Auto-create whiteboard if it doesn't exist (for furniture-attached boards)
+    let wb = room.whiteboards.get(data.whiteboardId);
+    if (!wb) {
+      wb = {
+        id: data.whiteboardId,
+        x: 0, y: 0, radius: 5, tableId: null,
+        strokes: [], texts: [], postits: [],
+        activeUsers: new Set(),
+      };
+      room.whiteboards.set(data.whiteboardId, wb);
+    }
     wb.activeUsers.add(socket.id);
     callback({
       success: true,
