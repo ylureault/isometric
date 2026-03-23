@@ -254,9 +254,25 @@ var Engine = {
       if (this.isDragging) {
         var movedDist = Math.abs(e.clientX - this.dragStart.x) + Math.abs(e.clientY - this.dragStart.y);
         if (movedDist < 5) {
-          // Treat as right-click: show context menu for nearby player
           var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
           var self = this;
+
+          // Check if right-clicking on furniture (admin)
+          if (this.player.isAdmin) {
+            var clickX = Math.floor(gp.x);
+            var clickY = Math.floor(gp.y);
+            for (var fi = Board.furniture.length - 1; fi >= 0; fi--) {
+              var fitem = Board.furniture[fi];
+              var fdef = Environments.furnitureTypes[fitem.type];
+              if (!fdef || !fitem.id) continue;
+              if (clickX >= fitem.x && clickX < fitem.x + (fdef.width || 1) && clickY >= fitem.y && clickY < fitem.y + (fdef.height || 1)) {
+                UI.showFurnitureMenu(e.clientX, e.clientY, fitem, fdef);
+                return;
+              }
+            }
+          }
+
+          // Otherwise show player context menu
           Network.remotePlayers.forEach(function(rp, sid) {
             var dist = Math.sqrt((gp.x - rp.renderX) * (gp.x - rp.renderX) + (gp.y - rp.renderY) * (gp.y - rp.renderY));
             if (dist < 1.5) UI.showContextMenu(e.clientX, e.clientY, sid, rp);
@@ -267,25 +283,46 @@ var Engine = {
     }
   },
 
+  selectedFurniture: null,
+
   onClick: function(e) {
     UI.hideContextMenu();
     if (!this.started) return;
-    // Check if clicked on a whiteboard
     var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
     var clickX = Math.floor(gp.x);
     var clickY = Math.floor(gp.y);
-    for (var i = 0; i < Board.furniture.length; i++) {
+
+    // Check furniture clicks
+    for (var i = Board.furniture.length - 1; i >= 0; i--) {
       var item = Board.furniture[i];
       var def = Environments.furnitureTypes[item.type];
-      if (!def || !def.isWhiteboard) continue;
-      if (clickX >= item.x && clickX < item.x + def.width && clickY >= item.y && clickY < item.y + def.height) {
-        // Find or create whiteboard for this furniture item
-        var wbId = item.whiteboardId || ('wb_furn_' + i);
-        item.whiteboardId = wbId;
-        UI.openWhiteboard(wbId, item);
+      if (!def) continue;
+      if (clickX >= item.x && clickX < item.x + (def.width || 1) && clickY >= item.y && clickY < item.y + (def.height || 1)) {
+        // Whiteboard click → open drawing
+        if (def.isWhiteboard) {
+          var wbId = item.whiteboardId || ('wb_furn_' + i);
+          item.whiteboardId = wbId;
+          UI.openWhiteboard(wbId, item);
+          return;
+        }
+        // Post-it board click → open drawing too (as whiteboard)
+        if (def.isPostItBoard) {
+          var pbId = item.whiteboardId || ('wb_postit_' + i);
+          item.whiteboardId = pbId;
+          UI.openWhiteboard(pbId, item);
+          return;
+        }
+        // Admin: select furniture for move/delete
+        if (this.player.isAdmin && item.id) {
+          this.selectedFurniture = item;
+          UI.showNotification('Sélectionné: ' + def.name + ' — Clic droit pour déplacer/supprimer');
+          return;
+        }
         return;
       }
     }
+    // Click on empty space: deselect
+    this.selectedFurniture = null;
   },
 
   setupChat: function() {
@@ -341,6 +378,53 @@ var Engine = {
     var div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  },
+
+  // ===== SOUND DESIGN =====
+  sfxCtx: null,
+  sfxLastStep: 0,
+  sfxInitialized: false,
+
+  initSfx: function() {
+    if (this.sfxInitialized) return;
+    try {
+      this.sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+      this.sfxInitialized = true;
+    } catch(e) {}
+  },
+
+  playSfx: function(type) {
+    if (!this.sfxCtx) return;
+    try {
+      var ctx = this.sfxCtx;
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'step') {
+        osc.type = 'sine';
+        osc.frequency.value = 180 + Math.random() * 40;
+        gain.gain.value = 0.03;
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.08);
+      } else if (type === 'bump') {
+        osc.type = 'triangle';
+        osc.frequency.value = 120;
+        gain.gain.value = 0.06;
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.15);
+      } else if (type === 'proximity') {
+        osc.type = 'sine';
+        osc.frequency.value = 440;
+        gain.gain.value = 0.02;
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.2);
+      }
+    } catch(e) {}
   },
 
   sendReaction: function(emoji) {
@@ -400,13 +484,32 @@ var Engine = {
       var ny = this.player.y + dy * speed * dt;
       // Allow movement out of solid tiles (spawned inside furniture)
       var stuckInSolid = Board.isSolid(this.player.x, this.player.y);
-      if (stuckInSolid || (!Board.isSolid(nx, this.player.y) && Board.isInBounds(nx, this.player.y))) this.player.x = nx;
-      if (stuckInSolid || (!Board.isSolid(this.player.x, ny) && Board.isInBounds(this.player.x, ny))) this.player.y = ny;
+      var couldMoveX = stuckInSolid || (!Board.isSolid(nx, this.player.y) && Board.isInBounds(nx, this.player.y));
+      var couldMoveY = stuckInSolid || (!Board.isSolid(this.player.x, ny) && Board.isInBounds(this.player.x, ny));
+      if (couldMoveX) this.player.x = nx;
+      if (couldMoveY) this.player.y = ny;
+
+      // Bump sound when hitting wall/furniture
+      if (!couldMoveX || !couldMoveY) {
+        this.initSfx();
+        if (performance.now() - this.sfxLastStep > 300) {
+          this.playSfx('bump');
+          this.sfxLastStep = performance.now();
+        }
+      }
+
       this.player.x = Math.max(0.5, Math.min(Board.gridSize - 0.5, this.player.x));
       this.player.y = Math.max(0.5, Math.min(Board.gridSize - 0.5, this.player.y));
       this.player.direction = { dx: dx, dy: dy };
       this.player.isWalking = true;
       this.player.walkPhase += CONSTANTS.ANIMATION_SPEED * 60 * dt;
+
+      // Footstep sound
+      this.initSfx();
+      if (performance.now() - this.sfxLastStep > 250) {
+        this.playSfx('step');
+        this.sfxLastStep = performance.now();
+      }
     } else {
       this.player.isWalking = false;
     }

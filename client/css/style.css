@@ -187,6 +187,13 @@ body {
 }
 .catalog-item:hover { background: rgba(74,111,165,0.12); border-color: #4a6fa5; }
 
+.placed-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.05);
+  font-size: 0.8rem; color: #555;
+}
+.placed-item:hover { background: rgba(74,111,165,0.04); }
+
 .theme-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .preset-btn {
   padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px;

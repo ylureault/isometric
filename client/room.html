@@ -126,17 +126,17 @@
       <h4>Tables de travail</h4>
       <div style="margin-bottom: 8px;">
         <input type="text" id="new-table-name" placeholder="Nom de la table" class="admin-input" style="width:100%;margin-bottom:4px;">
-        <button class="btn btn-primary btn-sm" onclick="const n=document.getElementById('new-table-name').value||'Table';Network.socket.emit('create-table',{name:n,x:Math.floor(Engine.player.x)+2,y:Math.floor(Engine.player.y)+2,width:3,height:3},(r)=>{if(r.success){Engine.tables.set(r.table.id,r.table);UI.showNotification('Table créée');}});">Ajouter une table</button>
+        <button class="btn btn-primary btn-sm" id="btn-add-table">Ajouter une table</button>
       </div>
-      <h4 style="margin-top:12px;">Catalogue de mobilier</h4>
-      <div class="furniture-catalog">
-        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'desk',x:Math.floor(Engine.player.x)+2,y:Math.floor(Engine.player.y)},()=>{});">🪑 Bureau</button>
-        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'chair',x:Math.floor(Engine.player.x)+1,y:Math.floor(Engine.player.y)+2},()=>{});">💺 Chaise</button>
-        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'plant',x:Math.floor(Engine.player.x)-1,y:Math.floor(Engine.player.y)},()=>{});">🌿 Plante</button>
-        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'couch',x:Math.floor(Engine.player.x)+2,y:Math.floor(Engine.player.y)+2},()=>{});">🛋️ Canapé</button>
-        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'coffeeTable',x:Math.floor(Engine.player.x)+1,y:Math.floor(Engine.player.y)+1},()=>{});">☕ Table basse</button>
-        <button class="catalog-item" onclick="Network.socket.emit('add-furniture',{type:'partition',x:Math.floor(Engine.player.x)+3,y:Math.floor(Engine.player.y)},()=>{});">🧱 Cloison</button>
-      </div>
+      <div id="tables-list" style="margin-bottom:12px;"></div>
+
+      <h4>Ajouter du mobilier</h4>
+      <p style="font-size:0.75rem;color:#999;margin-bottom:8px;">Le mobilier sera placé devant votre personnage</p>
+      <div class="furniture-catalog" id="furniture-catalog"></div>
+
+      <h4 style="margin-top:12px;">Mobilier placé <span id="furniture-count" style="color:#999;font-weight:400;"></span></h4>
+      <p style="font-size:0.75rem;color:#999;margin-bottom:4px;">Cliquez sur un objet dans la scène pour le sélectionner</p>
+      <div id="placed-furniture-list"></div>
     </div>
 
     <!-- Réglages tab -->

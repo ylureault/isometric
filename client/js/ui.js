@@ -250,6 +250,57 @@ const UI = {
     });
   },
 
+  showFurnitureMenu(x, y, item, def) {
+    this.hideContextMenu();
+    var menu = document.getElementById('context-menu');
+    if (!menu) return;
+
+    var html = '<div class="ctx-menu-header">' + def.name + ' (' + item.x + ',' + item.y + ')</div>';
+    html += '<div class="ctx-menu-item" data-action="move-here">Déplacer devant moi</div>';
+    html += '<div class="ctx-menu-item" data-action="duplicate">Dupliquer</div>';
+    html += '<div class="ctx-menu-item ctx-menu-danger" data-action="delete">Supprimer</div>';
+
+    menu.innerHTML = html;
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.display = 'block';
+    this.contextMenuOpen = true;
+
+    var self = this;
+    menu.querySelectorAll('.ctx-menu-item').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var action = el.dataset.action;
+        if (action === 'delete' && item.id) {
+          Network.socket.emit('remove-furniture', { furnitureId: item.id }, function(r) {
+            if (r && r.success) {
+              Board.furniture = Board.furniture.filter(function(f) { return f.id !== item.id; });
+              Board.buildCollisionMap();
+              self.showNotification('Mobilier supprimé');
+              self.refreshFurnitureList();
+            }
+          });
+        } else if (action === 'move-here' && item.id) {
+          var nx = Math.floor(Engine.player.x) + 2;
+          var ny = Math.floor(Engine.player.y);
+          item.x = nx;
+          item.y = ny;
+          Board.buildCollisionMap();
+          self.showNotification('Mobilier déplacé');
+        } else if (action === 'duplicate') {
+          Network.socket.emit('add-furniture', { type: item.type, x: item.x + 1, y: item.y + 1 }, function(r) {
+            if (r && r.success) {
+              Board.furniture.push(r.item);
+              Board.buildCollisionMap();
+              self.showNotification('Mobilier dupliqué');
+              self.refreshFurnitureList();
+            }
+          });
+        }
+        self.hideContextMenu();
+      });
+    });
+  },
+
   hideContextMenu() {
     const menu = document.getElementById('context-menu');
     if (menu) menu.style.display = 'none';
@@ -296,6 +347,9 @@ const UI = {
   refreshAdminPanel() {
     this.refreshParticipantsList();
     this.updateAdminSettings();
+    this.initMobilierTab();
+    this.refreshFurnitureList();
+    this.refreshTablesList();
   },
 
   refreshParticipantsList() {
@@ -353,6 +407,124 @@ const UI = {
     }
 
     return `<div class="participant-row">${badge}${name} ${muteBadge}${handBadge}${dc}<div class="participant-actions">${actions}</div></div>`;
+  },
+
+  initMobilierTab() {
+    var self = this;
+    // Build furniture catalog from Environments.furnitureTypes
+    var catalog = document.getElementById('furniture-catalog');
+    if (!catalog) return;
+
+    var icons = {
+      desk: '🪑', chair: '💺', plant: '🌿', palmTree: '🌴', partition: '🔲',
+      largeTable: '📐', roundTable: '⭕', screen: '🖥️', couch: '🛋️',
+      coffeeTable: '☕', bookshelf: '📚', whiteboard: '📋', postItBoard: '📌',
+    };
+
+    var html = '';
+    for (var type in Environments.furnitureTypes) {
+      var def = Environments.furnitureTypes[type];
+      if (def.isZone || def.isCarpet || def.isStage) continue;
+      var icon = icons[type] || '📦';
+      html += '<button class="catalog-item" data-type="' + type + '">' + icon + ' ' + def.name + '</button>';
+    }
+    catalog.innerHTML = html;
+
+    catalog.querySelectorAll('.catalog-item').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var type = btn.dataset.type;
+        var px = Math.floor(Engine.player.x) + 2;
+        var py = Math.floor(Engine.player.y);
+        Network.socket.emit('add-furniture', { type: type, x: px, y: py }, function(r) {
+          if (r && r.success) {
+            Board.furniture.push(r.item);
+            Board.buildCollisionMap();
+            self.showNotification(Environments.furnitureTypes[type].name + ' ajouté');
+            self.refreshFurnitureList();
+          }
+        });
+      });
+    });
+
+    // Add table button
+    var addTableBtn = document.getElementById('btn-add-table');
+    if (addTableBtn) addTableBtn.addEventListener('click', function() {
+      var name = document.getElementById('new-table-name').value || 'Table';
+      Network.socket.emit('create-table', {
+        name: name,
+        x: Math.floor(Engine.player.x) + 2,
+        y: Math.floor(Engine.player.y) + 2,
+        width: 3, height: 3,
+      }, function(r) {
+        if (r && r.success) {
+          Engine.tables.set(r.table.id, r.table);
+          self.showNotification('Table "' + name + '" créée');
+          self.refreshTablesList();
+        }
+      });
+    });
+  },
+
+  refreshFurnitureList() {
+    var list = document.getElementById('placed-furniture-list');
+    var countEl = document.getElementById('furniture-count');
+    if (!list) return;
+    if (countEl) countEl.textContent = '(' + Board.furniture.length + ')';
+
+    var html = '';
+    for (var i = 0; i < Board.furniture.length; i++) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      html += '<div class="placed-item" data-index="' + i + '">';
+      html += '<span style="font-size:0.8rem;">' + def.name + ' (' + item.x + ',' + item.y + ')</span>';
+      if (item.id) {
+        html += '<button class="admin-action-btn danger" data-action="remove" data-id="' + item.id + '" title="Supprimer">✕</button>';
+      }
+      html += '</div>';
+    }
+    list.innerHTML = html;
+
+    list.querySelectorAll('[data-action="remove"]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var fid = btn.dataset.id;
+        Network.socket.emit('remove-furniture', { furnitureId: fid }, function(r) {
+          if (r && r.success) {
+            Board.furniture = Board.furniture.filter(function(f) { return f.id !== fid; });
+            Board.buildCollisionMap();
+            UI.refreshFurnitureList();
+            UI.showNotification('Mobilier supprimé');
+          }
+        });
+      });
+    });
+  },
+
+  refreshTablesList() {
+    var list = document.getElementById('tables-list');
+    if (!list) return;
+
+    var html = '';
+    Engine.tables.forEach(function(t, id) {
+      html += '<div class="placed-item">';
+      html += '<span style="font-size:0.8rem;">📐 ' + (t.name || 'Table') + '</span>';
+      html += '<button class="admin-action-btn danger" data-action="delete-table" data-id="' + id + '" title="Supprimer">✕</button>';
+      html += '</div>';
+    });
+    list.innerHTML = html;
+
+    list.querySelectorAll('[data-action="delete-table"]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var tid = btn.dataset.id;
+        Network.socket.emit('delete-table', { tableId: tid }, function(r) {
+          if (r && r.success) {
+            Engine.tables.delete(tid);
+            UI.refreshTablesList();
+            UI.showNotification('Table supprimée');
+          }
+        });
+      });
+    });
   },
 
   updateAdminSettings() {
