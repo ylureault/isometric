@@ -1,6 +1,7 @@
 // Jest tests for room-manager — covers all Gherkin scenarios for server-side logic
 
 const RoomManager = require('../server/room-manager');
+const CONSTANTS = require('../shared/constants');
 
 // Fresh instance for each test
 let rm;
@@ -18,7 +19,7 @@ describe('EPIC 1 — Création d\'une room', () => {
     test('Création avec paramètres par défaut → grille 20x20', () => {
       const room = rm.createRoom('r1', { name: 'Séminaire Q2' });
       expect(room).not.toBeNull();
-      expect(room.gridSize).toBe(20);
+      expect(room.gridSize).toBe(CONSTANTS.GRID_DEFAULT);
       expect(room.name).toBe('Séminaire Q2');
     });
 
@@ -49,9 +50,9 @@ describe('EPIC 1 — Création d\'une room', () => {
       expect(room.gridSize).toBe(20);
     });
 
-    test('Grille au-dessus du maximum → réinitialisée à 200', () => {
+    test('Grille au-dessus du maximum → réinitialisée à 100', () => {
       const room = rm.createRoom('r1', { name: 'Test', gridSize: 250 });
-      expect(room.gridSize).toBe(200);
+      expect(room.gridSize).toBe(100);
     });
 
     test('Choix de l\'environnement "open-space"', () => {
@@ -458,7 +459,7 @@ describe('EPIC 10 — Personnalisation de la room en live', () => {
       const r1 = rm.resizeGrid('r1', 's1', 5);
       expect(r1.newSize).toBe(20);
       const r2 = rm.resizeGrid('r1', 's1', 999);
-      expect(r2.newSize).toBe(200);
+      expect(r2.newSize).toBe(100);
     });
   });
 

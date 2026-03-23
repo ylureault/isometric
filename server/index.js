@@ -510,7 +510,7 @@ io.on('connection', (socket) => {
 
   socket.on('reaction', (data) => {
     if (!currentRoomId) return;
-    io.to(currentRoomId).emit('reaction', {
+    socket.to(currentRoomId).emit('reaction', {
       socketId: socket.id,
       emoji: data.emoji,
     });
@@ -553,6 +553,26 @@ io.on('connection', (socket) => {
   });
 
   // ===== SPOTLIGHT =====
+
+  // Admin broadcast: hold Space to talk to everyone
+  socket.on('admin-broadcast-start', () => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p || !p.isAdmin) return;
+    socket.to(currentRoomId).emit('admin-broadcast-start', {
+      socketId: socket.id,
+      pseudo: p.pseudo,
+    });
+  });
+
+  socket.on('admin-broadcast-stop', () => {
+    if (!currentRoomId) return;
+    socket.to(currentRoomId).emit('admin-broadcast-stop', {
+      socketId: socket.id,
+    });
+  });
 
   socket.on('spotlight', (data) => {
     if (!currentRoomId) return;

@@ -63,7 +63,7 @@ beforeAll((done) => {
 
     socket.on('reaction', (data) => {
       if (!currentRoomId) return;
-      io.to(currentRoomId).emit('reaction', { socketId: socket.id, emoji: data.emoji });
+      socket.to(currentRoomId).emit('reaction', { socketId: socket.id, emoji: data.emoji });
     });
 
     socket.on('toggle-hand', (data, cb) => {

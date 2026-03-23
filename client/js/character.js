@@ -13,6 +13,7 @@ const Character = {
       disconnected = false,
       isMuted = false,
       handRaised = false,
+      isBroadcasting = false,
     } = options;
 
     const pos = Board.iso(gx, gy, isOnStage ? 6 : 0);
@@ -193,7 +194,7 @@ const Character = {
       labelY -= 16;
     }
 
-    if (isOnStage) {
+    if (isOnStage || isBroadcasting) {
       this.drawBroadcastIndicator(ctx, sx, labelY);
     }
   },

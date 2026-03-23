@@ -86,13 +86,13 @@ const UI = {
 
   // ===== HUD =====
 
-  updateHUD(roomName, playerX, playerY, participantCount) {
+  updateHUD(roomName, playerX, playerY, participantCount, zoom) {
     const el1 = document.getElementById('hud-room-name');
     const el2 = document.getElementById('hud-coords');
     const el3 = document.getElementById('hud-participants');
     if (el1) el1.textContent = roomName || 'Room';
-    if (el2) el2.textContent = `Position: ${Math.floor(playerX)}, ${Math.floor(playerY)}`;
-    if (el3) el3.textContent = `Participants: ${participantCount}`;
+    if (el2) el2.textContent = `${Math.floor(playerX)}, ${Math.floor(playerY)}  ·  x${(zoom || 1).toFixed(1)}`;
+    if (el3) el3.textContent = `${participantCount} participant${participantCount > 1 ? 's' : ''}`;
   },
 
   // ===== TOOLBAR =====
@@ -134,11 +134,17 @@ const UI = {
       }
     });
 
-    // Reaction buttons
+    // Reaction buttons — use mousedown to avoid click bubbling issues
     document.querySelectorAll('.reaction-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
         const emoji = btn.dataset.emoji;
-        if (emoji) Engine.sendReaction(emoji);
+        if (emoji) {
+          Engine.sendReaction(emoji);
+          btn.style.transform = 'scale(1.4)';
+          setTimeout(() => { btn.style.transform = ''; }, 150);
+        }
       });
     });
 

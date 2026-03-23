@@ -85,13 +85,14 @@ body {
 .toolbar-btn-danger:hover { background: rgba(255,107,107,0.2); }
 .toolbar-volume { width: 80px; }
 .toolbar-volume input[type="range"] { width: 100%; accent-color: #7eb8da; }
-.reaction-bar { display: flex; gap: 4px; }
+.reaction-bar { display: flex; gap: 4px; position: relative; z-index: 35; }
 .reaction-btn {
-  width: 32px; height: 32px; border: none; border-radius: 6px;
-  background: rgba(126,184,218,0.05); cursor: pointer; font-size: 14px;
-  transition: transform 0.1s;
+  width: 36px; height: 36px; border: 1px solid rgba(126,184,218,0.15); border-radius: 8px;
+  background: rgba(126,184,218,0.06); cursor: pointer; font-size: 16px;
+  transition: transform 0.15s, background 0.15s; user-select: none;
 }
-.reaction-btn:hover { transform: scale(1.2); background: rgba(126,184,218,0.15); }
+.reaction-btn:hover { transform: scale(1.25); background: rgba(126,184,218,0.2); border-color: rgba(126,184,218,0.4); }
+.reaction-btn:active { transform: scale(1.4); }
 
 /* ===== Context Menu ===== */
 .context-menu {

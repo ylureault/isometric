@@ -1,4 +1,4 @@
-// Board: isometric grid rendering, furniture, and collision detection
+// Board: isometric grid rendering, furniture, collision, zones
 
 const Board = {
   gridSize: 20,
@@ -7,7 +7,7 @@ const Board = {
   floorColor1: '#3a4a5c',
   floorColor2: '#344458',
   furniture: [],
-  collisionMap: null, // 2D boolean array for solid tiles
+  collisionMap: null,
 
   init(gridSize, envType) {
     this.gridSize = gridSize;
@@ -48,20 +48,16 @@ const Board = {
     return gx >= 0 && gx < this.gridSize && gy >= 0 && gy < this.gridSize;
   },
 
-  // Check if a position is on the stage
   isOnStage(gx, gy) {
     for (const item of this.furniture) {
       const def = Environments.furnitureTypes[item.type];
       if (!def || !def.isStage) continue;
       if (gx >= item.x && gx < item.x + def.width &&
-          gy >= item.y && gy < item.y + def.height) {
-        return true;
-      }
+          gy >= item.y && gy < item.y + def.height) return true;
     }
     return false;
   },
 
-  // Isometric projection: world (x, y, z) -> screen (sx, sy)
   iso(x, y, z = 0) {
     const angle = Math.PI / 6;
     const sx = (x - y) * this.tileWidth * Math.cos(angle);
@@ -69,27 +65,31 @@ const Board = {
     return { x: sx, y: sy };
   },
 
-  // Screen to grid (approximate inverse)
-  screenToGrid(sx, sy, offsetX, offsetY) {
-    const rx = sx - offsetX;
-    const ry = sy - offsetY;
+  screenToGrid(sx, sy, offsetX, offsetY, zoom) {
+    const z = zoom || 1;
+    const rx = (sx - offsetX) / z;
+    const ry = (sy - offsetY) / z;
     const angle = Math.PI / 6;
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
-    const tw = this.tileWidth * cosA;
-    const th = this.tileHeight * sinA;
+    const tw = this.tileWidth * Math.cos(angle);
+    const th = this.tileHeight * Math.sin(angle);
     const gx = (rx / tw + ry / th) / 2;
     const gy = (ry / th - rx / tw) / 2;
     return { x: gx, y: gy };
   },
 
-  drawGrid(ctx, offsetX, offsetY, playerX, playerY) {
+  drawGrid(ctx, offsetX, offsetY, playerX, playerY, zoom) {
+    // Draw zone carpets/markers first (below tiles)
+    for (const item of this.furniture) {
+      const def = Environments.furnitureTypes[item.type];
+      if (def && def.isZone) this.drawZoneMarker(ctx, item, def, offsetX, offsetY);
+      if (def && def.isCarpet) this.drawCarpet(ctx, item, def, offsetX, offsetY);
+    }
+
     for (let y = 0; y < this.gridSize; y++) {
       for (let x = 0; x < this.gridSize; x++) {
         this.drawTile(ctx, x, y, offsetX, offsetY, playerX, playerY);
       }
     }
-    // Draw grid edges (depth effect)
     this.drawEdges(ctx, offsetX, offsetY);
   },
 
@@ -97,130 +97,110 @@ const Board = {
     const pos = this.iso(x, y);
     const sx = pos.x + offsetX;
     const sy = pos.y + offsetY;
-
     const tw = this.tileWidth * Math.cos(Math.PI / 6);
     const th = this.tileHeight;
 
-    // Checkerboard pattern
     const isEven = (x + y) % 2 === 0;
     let baseColor = isEven ? this.floorColor1 : this.floorColor2;
 
-    // Proximity highlight near player
+    // Subtle proximity glow
     if (playerX !== undefined && playerY !== undefined) {
-      const dist = Math.sqrt((x - playerX) ** 2 + (y - playerY) ** 2);
-      if (dist < 3) {
-        const intensity = 1 - dist / 3;
-        baseColor = this.lightenColor(baseColor, intensity * 0.15);
+      const dist = Math.sqrt((x + 0.5 - playerX) ** 2 + (y + 0.5 - playerY) ** 2);
+      if (dist < 2.5) {
+        const intensity = 1 - dist / 2.5;
+        baseColor = this.lightenColor(baseColor, intensity * 0.12);
       }
     }
 
-    // Check if this tile is a stage
     if (this.isOnStage(x, y)) {
-      baseColor = this.lightenColor('#7A5E48', 0.1);
+      baseColor = this.lightenColor('#7A5E48', 0.08);
     }
 
-    // Draw diamond tile
     ctx.beginPath();
-    ctx.moveTo(sx, sy - th / 2);          // top
-    ctx.lineTo(sx + tw / 2, sy);           // right
-    ctx.lineTo(sx, sy + th / 2);           // bottom
-    ctx.lineTo(sx - tw / 2, sy);           // left
+    ctx.moveTo(sx, sy - th / 2);
+    ctx.lineTo(sx + tw / 2, sy);
+    ctx.lineTo(sx, sy + th / 2);
+    ctx.lineTo(sx - tw / 2, sy);
     ctx.closePath();
-
     ctx.fillStyle = baseColor;
     ctx.fill();
 
-    // Subtle grid lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    // Very subtle inner highlight on top-left edge
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - th / 2);
+    ctx.lineTo(sx + tw / 2, sy);
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - th / 2);
+    ctx.lineTo(sx - tw / 2, sy);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 0.5;
     ctx.stroke();
   },
 
   drawEdges(ctx, offsetX, offsetY) {
     const gs = this.gridSize;
-    const edgeDepth = 8;
+    const edgeDepth = 10;
+    const tw = this.tileWidth * Math.cos(Math.PI / 6);
 
-    // Right edge
+    // Bottom-right edge
     for (let x = 0; x < gs; x++) {
       const top = this.iso(x, gs);
-      const topNext = this.iso(x + 1, gs);
-      const tw = this.tileWidth * Math.cos(Math.PI / 6);
-
       ctx.beginPath();
       ctx.moveTo(top.x + offsetX, top.y + offsetY);
       ctx.lineTo(top.x + offsetX + tw / 2, top.y + offsetY + this.tileHeight / 2);
       ctx.lineTo(top.x + offsetX + tw / 2, top.y + offsetY + this.tileHeight / 2 + edgeDepth);
       ctx.lineTo(top.x + offsetX, top.y + offsetY + edgeDepth);
       ctx.closePath();
-
-      const gradient = ctx.createLinearGradient(
-        top.x + offsetX, top.y + offsetY,
-        top.x + offsetX, top.y + offsetY + edgeDepth
-      );
-      gradient.addColorStop(0, 'rgba(40,50,60,0.8)');
-      gradient.addColorStop(1, 'rgba(10,10,26,0.9)');
-      ctx.fillStyle = gradient;
+      const g1 = ctx.createLinearGradient(top.x + offsetX, top.y + offsetY, top.x + offsetX, top.y + offsetY + edgeDepth);
+      g1.addColorStop(0, '#2a3444');
+      g1.addColorStop(1, '#0a0a1a');
+      ctx.fillStyle = g1;
       ctx.fill();
     }
 
-    // Bottom edge
+    // Bottom-left edge
     for (let y = 0; y < gs; y++) {
       const top = this.iso(gs, y);
-      const tw = this.tileWidth * Math.cos(Math.PI / 6);
-
       ctx.beginPath();
       ctx.moveTo(top.x + offsetX, top.y + offsetY);
       ctx.lineTo(top.x + offsetX - tw / 2, top.y + offsetY + this.tileHeight / 2);
       ctx.lineTo(top.x + offsetX - tw / 2, top.y + offsetY + this.tileHeight / 2 + edgeDepth);
       ctx.lineTo(top.x + offsetX, top.y + offsetY + edgeDepth);
       ctx.closePath();
-
-      const gradient = ctx.createLinearGradient(
-        top.x + offsetX, top.y + offsetY,
-        top.x + offsetX, top.y + offsetY + edgeDepth
-      );
-      gradient.addColorStop(0, 'rgba(30,40,50,0.8)');
-      gradient.addColorStop(1, 'rgba(10,10,26,0.9)');
-      ctx.fillStyle = gradient;
+      const g2 = ctx.createLinearGradient(top.x + offsetX, top.y + offsetY, top.x + offsetX, top.y + offsetY + edgeDepth);
+      g2.addColorStop(0, '#1e2838');
+      g2.addColorStop(1, '#0a0a1a');
+      ctx.fillStyle = g2;
       ctx.fill();
     }
   },
 
-  // Get all drawable entities (furniture) sorted by depth for rendering
   getSortedFurniture() {
-    return [...this.furniture].sort((a, b) => {
-      const da = a.x + a.y;
-      const db = b.x + b.y;
-      return da - db;
-    });
+    return [...this.furniture].sort((a, b) => (a.x + a.y) - (b.x + b.y));
   },
 
   drawFurnitureItem(ctx, item, offsetX, offsetY) {
     const def = Environments.furnitureTypes[item.type];
     if (!def) return;
+    if (def.isStage) return this.drawStage(ctx, item, def, offsetX, offsetY);
+    if (def.isPlant) return this.drawPlant(ctx, item, def, offsetX, offsetY);
+    if (def.isScreen) return this.drawScreen(ctx, item, def, offsetX, offsetY);
+    if (def.isWhiteboard) return this.drawWhiteboardObj(ctx, item, def, offsetX, offsetY);
+    if (def.isRound) return this.drawRoundTable(ctx, item, def, offsetX, offsetY);
+    if (def.isZone || def.isCarpet) return; // drawn under tiles
+    this.drawGenericFurniture(ctx, item, def, offsetX, offsetY);
+  },
 
-    if (def.isStage) {
-      this.drawStage(ctx, item, def, offsetX, offsetY);
-      return;
-    }
-
-    if (def.isPlant) {
-      this.drawPlant(ctx, item, def, offsetX, offsetY);
-      return;
-    }
-
-    if (def.isScreen) {
-      this.drawScreen(ctx, item, def, offsetX, offsetY);
-      return;
-    }
-
-    // Generic furniture: extruded isometric box
+  drawGenericFurniture(ctx, item, def, ox, oy) {
     const cx = item.x + def.width / 2;
     const cy = item.y + def.height / 2;
     const pos = this.iso(cx, cy);
-    const sx = pos.x + offsetX;
-    const sy = pos.y + offsetY;
-
+    const sx = pos.x + ox;
+    const sy = pos.y + oy;
     const tw = this.tileWidth * Math.cos(Math.PI / 6);
     const w = tw * def.width * 0.4;
     const d = this.tileHeight * def.height * 0.4;
@@ -228,11 +208,11 @@ const Board = {
 
     // Shadow
     ctx.beginPath();
-    ctx.ellipse(sx, sy + 2, w * 0.6, d * 0.4, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.ellipse(sx, sy + 3, w * 0.55, d * 0.35, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fill();
 
-    // Top face
+    // Top
     ctx.beginPath();
     ctx.moveTo(sx, sy - h - d * 0.5);
     ctx.lineTo(sx + w * 0.5, sy - h);
@@ -241,8 +221,11 @@ const Board = {
     ctx.closePath();
     ctx.fillStyle = def.topColor;
     ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
 
-    // Right face
+    // Right
     ctx.beginPath();
     ctx.moveTo(sx + w * 0.5, sy - h);
     ctx.lineTo(sx, sy - h + d * 0.5);
@@ -252,7 +235,7 @@ const Board = {
     ctx.fillStyle = this.darkenColor(def.color, 0.2);
     ctx.fill();
 
-    // Left face
+    // Left
     ctx.beginPath();
     ctx.moveTo(sx - w * 0.5, sy - h);
     ctx.lineTo(sx, sy - h + d * 0.5);
@@ -263,33 +246,63 @@ const Board = {
     ctx.fill();
   },
 
-  drawStage(ctx, item, def, offsetX, offsetY) {
+  drawRoundTable(ctx, item, def, ox, oy) {
+    const cx = item.x + def.width / 2;
+    const cy = item.y + def.height / 2;
+    const pos = this.iso(cx, cy);
+    const sx = pos.x + ox;
+    const sy = pos.y + oy;
     const h = def.drawHeight;
-    // Draw elevated platform
+    const r = 14;
+
+    // Shadow
+    ctx.beginPath();
+    ctx.ellipse(sx, sy + 3, r, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fill();
+
+    // Leg
+    ctx.fillStyle = '#5A3E1E';
+    ctx.fillRect(sx - 2, sy - h + 3, 4, h - 3);
+
+    // Top
+    ctx.beginPath();
+    ctx.ellipse(sx, sy - h, r, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = def.topColor;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  },
+
+  drawStage(ctx, item, def, ox, oy) {
+    const h = def.drawHeight;
+    const tw = this.tileWidth * Math.cos(Math.PI / 6);
+    const th = this.tileHeight;
+
     for (let dy = 0; dy < def.height; dy++) {
       for (let dx = 0; dx < def.width; dx++) {
         const x = item.x + dx;
         const y = item.y + dy;
         const pos = this.iso(x, y, h);
-        const sx = pos.x + offsetX;
-        const sy = pos.y + offsetY;
-        const tw = this.tileWidth * Math.cos(Math.PI / 6);
-        const th = this.tileHeight;
+        const sx = pos.x + ox;
+        const sy = pos.y + oy;
 
-        // Elevated tile
+        // Stage tile
         ctx.beginPath();
         ctx.moveTo(sx, sy - th / 2);
         ctx.lineTo(sx + tw / 2, sy);
         ctx.lineTo(sx, sy + th / 2);
         ctx.lineTo(sx - tw / 2, sy);
         ctx.closePath();
-        ctx.fillStyle = '#9A7E68';
+        const stageColor = (dx + dy) % 2 === 0 ? '#9A7E68' : '#8A6E58';
+        ctx.fillStyle = stageColor;
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
         ctx.lineWidth = 0.5;
         ctx.stroke();
 
-        // Front edge of stage tile
+        // Front edges
         if (dy === def.height - 1) {
           ctx.beginPath();
           ctx.moveTo(sx - tw / 2, sy);
@@ -309,8 +322,6 @@ const Board = {
           ctx.fillStyle = '#5A3E28';
           ctx.fill();
         }
-
-        // Right edge
         if (dx === def.width - 1) {
           ctx.beginPath();
           ctx.moveTo(sx + tw / 2, sy);
@@ -323,105 +334,221 @@ const Board = {
         }
       }
     }
+
+    // Stage spotlights (decorative circles above)
+    const centerPos = this.iso(item.x + def.width / 2, item.y + 0.5, h + 2);
+    const csx = centerPos.x + ox;
+    const csy = centerPos.y + oy;
+    const spotGrad = ctx.createRadialGradient(csx, csy - 20, 0, csx, csy - 20, 40);
+    spotGrad.addColorStop(0, 'rgba(255, 220, 150, 0.06)');
+    spotGrad.addColorStop(1, 'rgba(255, 220, 150, 0)');
+    ctx.fillStyle = spotGrad;
+    ctx.fillRect(csx - 40, csy - 60, 80, 80);
   },
 
-  drawPlant(ctx, item, def, offsetX, offsetY) {
+  drawPlant(ctx, item, def, ox, oy) {
     const pos = this.iso(item.x + 0.5, item.y + 0.5);
-    const sx = pos.x + offsetX;
-    const sy = pos.y + offsetY;
+    const sx = pos.x + ox;
+    const sy = pos.y + oy;
+    const isPalm = def.isPalm;
+    const trunkH = isPalm ? 20 : 0;
+
+    // Shadow
+    ctx.beginPath();
+    ctx.ellipse(sx, sy + 2, 6, 3, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fill();
 
     // Pot
     ctx.beginPath();
-    ctx.moveTo(sx - 5, sy - 4);
-    ctx.lineTo(sx + 5, sy - 4);
-    ctx.lineTo(sx + 4, sy + 4);
-    ctx.lineTo(sx - 4, sy + 4);
+    ctx.moveTo(sx - 5, sy - 3);
+    ctx.lineTo(sx + 5, sy - 3);
+    ctx.lineTo(sx + 4, sy + 3);
+    ctx.lineTo(sx - 4, sy + 3);
     ctx.closePath();
-    ctx.fillStyle = '#8B4513';
+    ctx.fillStyle = '#A0522D';
     ctx.fill();
+    ctx.strokeStyle = '#8B4513';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
 
-    // Foliage (3 circles)
-    ctx.fillStyle = def.topColor;
-    ctx.beginPath();
-    ctx.arc(sx, sy - 14, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(sx - 5, sy - 10, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(sx + 5, sy - 10, 5, 0, Math.PI * 2);
-    ctx.fill();
+    if (isPalm) {
+      // Trunk
+      ctx.beginPath();
+      ctx.moveTo(sx - 2, sy - 3);
+      ctx.lineTo(sx + 2, sy - 3);
+      ctx.lineTo(sx + 1.5, sy - 3 - trunkH);
+      ctx.lineTo(sx - 1.5, sy - 3 - trunkH);
+      ctx.closePath();
+      ctx.fillStyle = '#8B7355';
+      ctx.fill();
 
-    // Darker details
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    ctx.arc(sx - 2, sy - 12, 3, 0, Math.PI * 2);
-    ctx.fill();
+      // Palm leaves
+      const ly = sy - 3 - trunkH;
+      for (let a = 0; a < 6; a++) {
+        const angle = (a / 6) * Math.PI * 2;
+        const lx = sx + Math.cos(angle) * 12;
+        const lly = ly + Math.sin(angle) * 6 - 4;
+        ctx.beginPath();
+        ctx.moveTo(sx, ly - 2);
+        ctx.quadraticCurveTo(sx + Math.cos(angle) * 6, ly + Math.sin(angle) * 3 - 6, lx, lly);
+        ctx.strokeStyle = a % 2 === 0 ? '#2D7A27' : '#3A8A32';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
+      // Center
+      ctx.beginPath();
+      ctx.arc(sx, ly - 3, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#3A7A32';
+      ctx.fill();
+    } else {
+      // Bush foliage
+      ctx.fillStyle = def.topColor;
+      ctx.beginPath(); ctx.arc(sx, sy - 14, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx - 5, sy - 10, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + 5, sy - 10, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = def.color;
+      ctx.beginPath(); ctx.arc(sx - 2, sy - 13, 3, 0, Math.PI * 2); ctx.fill();
+    }
   },
 
-  drawScreen(ctx, item, def, offsetX, offsetY) {
+  drawScreen(ctx, item, def, ox, oy) {
     const cx = item.x + def.width / 2;
     const cy = item.y + def.height / 2;
     const pos = this.iso(cx, cy);
-    const sx = pos.x + offsetX;
-    const sy = pos.y + offsetY;
+    const sx = pos.x + ox;
+    const sy = pos.y + oy;
 
     // Stand
-    ctx.fillStyle = '#333';
-    ctx.fillRect(sx - 2, sy - def.drawHeight, 4, def.drawHeight);
+    ctx.fillStyle = '#444';
+    ctx.fillRect(sx - 1.5, sy - def.drawHeight, 3, def.drawHeight);
 
-    // Screen panel
-    const sw = 30;
-    const sh = 20;
-    ctx.fillStyle = '#1a1a2e';
+    // Screen
+    const sw = 32;
+    const sh = 22;
+    ctx.fillStyle = '#111';
+    ctx.fillRect(sx - sw / 2 - 1, sy - def.drawHeight - sh - 1, sw + 2, sh + 2);
+    ctx.fillStyle = '#1a2a3a';
     ctx.fillRect(sx - sw / 2, sy - def.drawHeight - sh, sw, sh);
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(sx - sw / 2, sy - def.drawHeight - sh, sw, sh);
 
-    // Screen glow
-    ctx.fillStyle = 'rgba(100, 140, 200, 0.15)';
-    ctx.fillRect(sx - sw / 2 + 2, sy - def.drawHeight - sh + 2, sw - 4, sh - 4);
+    // Screen reflection
+    const grad = ctx.createLinearGradient(sx - sw / 2, sy - def.drawHeight - sh, sx - sw / 2, sy - def.drawHeight);
+    grad.addColorStop(0, 'rgba(100, 160, 220, 0.12)');
+    grad.addColorStop(0.5, 'rgba(100, 160, 220, 0.03)');
+    grad.addColorStop(1, 'rgba(100, 160, 220, 0.08)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(sx - sw / 2, sy - def.drawHeight - sh, sw, sh);
   },
 
-  // Minimap rendering
-  drawMinimap(ctx, width, height, playerX, playerY) {
-    const scale = Math.min(width, height) / this.gridSize;
+  drawWhiteboardObj(ctx, item, def, ox, oy) {
+    const cx = item.x + def.width / 2;
+    const cy = item.y + def.height / 2;
+    const pos = this.iso(cx, cy);
+    const sx = pos.x + ox;
+    const sy = pos.y + oy;
 
-    // Background
-    ctx.fillStyle = '#0a0a1a';
-    ctx.fillRect(0, 0, width, height);
+    // Stand
+    ctx.fillStyle = '#888';
+    ctx.fillRect(sx - 1, sy - def.drawHeight, 2, def.drawHeight);
 
-    // Grid tiles
-    for (let y = 0; y < this.gridSize; y++) {
-      for (let x = 0; x < this.gridSize; x++) {
-        const isEven = (x + y) % 2 === 0;
-        ctx.fillStyle = isEven ? this.floorColor1 : this.floorColor2;
-        ctx.fillRect(x * scale, y * scale, scale, scale);
+    // Board
+    const bw = 36;
+    const bh = 24;
+    ctx.fillStyle = '#e8e8e8';
+    ctx.fillRect(sx - bw / 2, sy - def.drawHeight - bh, bw, bh);
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx - bw / 2, sy - def.drawHeight - bh, bw, bh);
+
+    // Some marker scribbles
+    ctx.strokeStyle = 'rgba(200, 60, 60, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(sx - 10, sy - def.drawHeight - bh + 6);
+    ctx.quadraticCurveTo(sx, sy - def.drawHeight - bh + 4, sx + 10, sy - def.drawHeight - bh + 8);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(60, 60, 200, 0.3)';
+    ctx.beginPath();
+    ctx.moveTo(sx - 8, sy - def.drawHeight - bh + 14);
+    ctx.lineTo(sx + 8, sy - def.drawHeight - bh + 14);
+    ctx.stroke();
+  },
+
+  drawZoneMarker(ctx, item, def, ox, oy) {
+    const tw = this.tileWidth * Math.cos(Math.PI / 6);
+    const th = this.tileHeight;
+    const w = def.width;
+    const h = def.height;
+
+    // Draw zone area with subtle highlight
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        const pos = this.iso(item.x + dx, item.y + dy);
+        const sx = pos.x + ox;
+        const sy = pos.y + oy;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - th / 2);
+        ctx.lineTo(sx + tw / 2, sy);
+        ctx.lineTo(sx, sy + th / 2);
+        ctx.lineTo(sx - tw / 2, sy);
+        ctx.closePath();
+        ctx.fillStyle = def.color;
+        ctx.fill();
       }
     }
 
-    // Furniture
-    for (const item of this.furniture) {
-      const def = Environments.furnitureTypes[item.type];
-      if (!def) continue;
-      ctx.fillStyle = def.isStage ? '#9A7E68' : def.color;
-      ctx.fillRect(item.x * scale, item.y * scale, def.width * scale, def.height * scale);
+    // Zone label
+    if (item.zone) {
+      const labelPos = this.iso(item.x + w / 2, item.y + h / 2);
+      const lsx = labelPos.x + ox;
+      const lsy = labelPos.y + oy;
+
+      ctx.font = 'bold 11px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Number circle
+      ctx.beginPath();
+      ctx.arc(lsx, lsy - 8, 10, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(126, 184, 218, 0.25)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(126, 184, 218, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = '#7eb8da';
+      ctx.fillText(item.zone, lsx, lsy - 8);
+
+      if (item.zoneName) {
+        ctx.font = '9px "Segoe UI", sans-serif';
+        ctx.fillStyle = 'rgba(126, 184, 218, 0.6)';
+        ctx.fillText(item.zoneName, lsx, lsy + 6);
+      }
     }
-
-    // Player
-    ctx.fillStyle = '#FF6B6B';
-    ctx.beginPath();
-    ctx.arc(playerX * scale, playerY * scale, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Border
-    ctx.strokeStyle = 'rgba(126, 184, 218, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, width, height);
   },
 
-  // Color utilities
+  drawCarpet(ctx, item, def, ox, oy) {
+    const tw = this.tileWidth * Math.cos(Math.PI / 6);
+    const th = this.tileHeight;
+    for (let dy = 0; dy < def.height; dy++) {
+      for (let dx = 0; dx < def.width; dx++) {
+        const pos = this.iso(item.x + dx, item.y + dy);
+        const sx = pos.x + ox;
+        const sy = pos.y + oy;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - th / 2);
+        ctx.lineTo(sx + tw / 2, sy);
+        ctx.lineTo(sx, sy + th / 2);
+        ctx.lineTo(sx - tw / 2, sy);
+        ctx.closePath();
+        ctx.fillStyle = (dx + dy) % 2 === 0
+          ? 'rgba(139, 69, 19, 0.15)'
+          : 'rgba(160, 82, 45, 0.12)';
+        ctx.fill();
+      }
+    }
+  },
+
   lightenColor(hex, amount) {
     const num = parseInt(hex.replace('#', ''), 16);
     const r = Math.min(255, ((num >> 16) & 0xFF) + Math.floor(255 * amount));
