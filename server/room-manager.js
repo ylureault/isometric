@@ -1,6 +1,7 @@
 // Room Manager: complete server-side room state management
 
 const CONSTANTS = require('../shared/constants');
+const Environments = require('../client/js/environments');
 
 class RoomManager {
   constructor() {
@@ -214,7 +215,9 @@ class RoomManager {
           const x = center + dx;
           const y = center + dy;
           if (x >= 1 && x < room.gridSize - 1 && y >= 1 && y < room.gridSize - 1) {
-            if (!occupied.has(`${x},${y}`)) return { x: x + 0.5, y: y + 0.5 };
+            if (!occupied.has(`${x},${y}`) && !Environments.isSolidAt(room.environment, room.gridSize, x, y)) {
+              return { x: x + 0.5, y: y + 0.5 };
+            }
           }
         }
       }

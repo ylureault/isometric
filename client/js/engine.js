@@ -286,8 +286,10 @@ var Engine = {
       var speed = CONSTANTS.MOVE_SPEED * 60;
       var nx = this.player.x + dx * speed * dt;
       var ny = this.player.y + dy * speed * dt;
-      if (!Board.isSolid(nx, this.player.y) && Board.isInBounds(nx, this.player.y)) this.player.x = nx;
-      if (!Board.isSolid(this.player.x, ny) && Board.isInBounds(this.player.x, ny)) this.player.y = ny;
+      // Allow movement out of solid tiles (spawned inside furniture)
+      var stuckInSolid = Board.isSolid(this.player.x, this.player.y);
+      if (stuckInSolid || (!Board.isSolid(nx, this.player.y) && Board.isInBounds(nx, this.player.y))) this.player.x = nx;
+      if (stuckInSolid || (!Board.isSolid(this.player.x, ny) && Board.isInBounds(this.player.x, ny))) this.player.y = ny;
       this.player.x = Math.max(0.5, Math.min(Board.gridSize - 0.5, this.player.x));
       this.player.y = Math.max(0.5, Math.min(Board.gridSize - 0.5, this.player.y));
       this.player.direction = { dx: dx, dy: dy };

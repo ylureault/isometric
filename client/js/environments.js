@@ -94,21 +94,26 @@ const Environments = {
       floorColor2: '#365048',
       furniture: (gs) => {
         const items = [];
+        const cx = Math.floor(gs / 2);
         for (let i = 0; i < 2; i++) {
-          const bx = 3 + i * 8; const by = 3;
-          items.push({ type: 'desk', x: bx, y: by });
-          items.push({ type: 'desk', x: bx + 2, y: by });
-          items.push({ type: 'chair', x: bx, y: by + 2 });
-          items.push({ type: 'chair', x: bx + 2, y: by + 2 });
+          const bx = 3 + i * Math.max(6, Math.floor(gs / 3)); const by = 3;
+          if (bx + 3 < gs - 1) {
+            items.push({ type: 'desk', x: bx, y: by });
+            items.push({ type: 'desk', x: bx + 2, y: by });
+            items.push({ type: 'chair', x: bx, y: by + 2 });
+            items.push({ type: 'chair', x: bx + 2, y: by + 2 });
+          }
         }
-        items.push({ type: 'couch', x: 2, y: gs - 5 });
-        items.push({ type: 'couch', x: 5, y: gs - 5 });
-        items.push({ type: 'coffeeTable', x: 4, y: gs - 4 });
+        // Lounge area — placed far from center
+        items.push({ type: 'couch', x: 2, y: gs - 3 });
+        items.push({ type: 'couch', x: 5, y: gs - 3 });
+        items.push({ type: 'coffeeTable', x: 4, y: gs - 2 });
         items.push({ type: 'plant', x: 1, y: 1 });
         items.push({ type: 'palmTree', x: gs - 2, y: gs - 2 });
-        items.push({ type: 'plant', x: Math.floor(gs / 2), y: 1 });
-        items.push({ type: 'plant', x: 1, y: Math.floor(gs / 2) });
-        items.push({ type: 'stage', x: Math.floor(gs / 2) - 2, y: Math.floor(gs / 2) - 1 });
+        items.push({ type: 'plant', x: cx, y: 1 });
+        items.push({ type: 'plant', x: 1, y: cx });
+        // Stage below center
+        items.push({ type: 'stage', x: cx - 2, y: cx + 2 });
         return items;
       },
     },
@@ -119,14 +124,15 @@ const Environments = {
       furniture: (gs) => {
         const items = [];
         const cx = Math.floor(gs / 2);
-        items.push({ type: 'largeTable', x: cx - 2, y: cx - 1 });
+        // Table placed BELOW center so spawn point (cx, cx) is clear
+        items.push({ type: 'largeTable', x: cx - 2, y: cx + 2 });
         for (let i = 0; i < 4; i++) {
-          items.push({ type: 'chair', x: cx - 2 + i, y: cx - 2 });
-          items.push({ type: 'chair', x: cx - 2 + i, y: cx + 2 });
+          items.push({ type: 'chair', x: cx - 2 + i, y: cx + 1 });
+          items.push({ type: 'chair', x: cx - 2 + i, y: cx + 4 });
         }
         items.push({ type: 'screen', x: cx - 1, y: 1 });
         items.push({ type: 'stage', x: cx - 2, y: 2 });
-        items.push({ type: 'whiteboard', x: cx + 3, y: cx - 1 });
+        items.push({ type: 'whiteboard', x: cx + 3, y: cx + 2 });
         items.push({ type: 'plant', x: 1, y: 1 });
         items.push({ type: 'plant', x: gs - 2, y: 1 });
         items.push({ type: 'plant', x: 1, y: gs - 2 });
@@ -191,4 +197,20 @@ const Environments = {
   getPreset(envType) {
     return this.presets[envType] || this.presets['bureau'];
   },
+
+  isSolidAt(envType, gridSize, gx, gy) {
+    const furniture = this.getFurniture(envType, gridSize);
+    const ix = Math.floor(gx);
+    const iy = Math.floor(gy);
+    for (const item of furniture) {
+      const def = this.furnitureTypes[item.type];
+      if (!def || !def.solid) continue;
+      if (ix >= item.x && ix < item.x + def.width && iy >= item.y && iy < item.y + def.height) return true;
+    }
+    return false;
+  },
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = Environments;
+}
