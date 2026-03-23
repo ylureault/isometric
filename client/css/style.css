@@ -439,6 +439,98 @@ body {
 .postit-color-btn:hover { transform: scale(1.15); }
 .postit-color-btn.active { border-color: #333; }
 
+/* Dark Board enhancements */
+.darkboard-popup { background: #1a1a2e; }
+.darkboard-header { background: #16213e; }
+.darkboard-header h3 { color: #e0e0e0; }
+.darkboard-canvas {
+  background: #1a1a2e !important;
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(255,255,255,0.03) 30px, rgba(255,255,255,0.03) 31px),
+                    repeating-linear-gradient(90deg, transparent, transparent 30px, rgba(255,255,255,0.03) 30px, rgba(255,255,255,0.03) 31px) !important;
+}
+.darkboard-canvas #darkboard-circles-canvas {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 1; pointer-events: none;
+}
+.darkboard-canvas .postit-board-bg { z-index: 2; position: relative; }
+.darkboard-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.darkboard-actions { display: flex; gap: 4px; }
+.darkboard-tool-btn.active { background: #4D96FF !important; color: #fff !important; }
+.darkboard-footer {
+  padding: 8px 16px; background: rgba(77,150,255,0.1);
+  color: #4D96FF; font-size: 0.8rem; text-align: center;
+}
+.postit-vote-badge {
+  position: absolute; top: -8px; left: -8px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: #e74c3c; color: #fff; font-size: 11px; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.postit-voted { animation: postit-vote-pulse 0.3s ease; }
+@keyframes postit-vote-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.vote-mode .postit-note { cursor: pointer !important; }
+.vote-mode .postit-note:hover { box-shadow: 0 0 12px rgba(77,150,255,0.5); }
+.vote-mode .postit-note textarea { pointer-events: none; }
+
+/* ===== Timer on-screen ===== */
+.timer-display-global {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.85); color: #fff; padding: 20px 40px;
+  border-radius: 16px; font-size: 48px; font-weight: bold;
+  font-family: 'Segoe UI', monospace; z-index: 60;
+  pointer-events: none; text-align: center;
+  border: 2px solid rgba(255,255,255,0.1);
+  backdrop-filter: blur(8px);
+}
+.timer-display-global .timer-label {
+  font-size: 14px; color: #aaa; font-weight: normal; margin-bottom: 4px;
+}
+.timer-display-global.timer-warning { color: #f39c12; border-color: rgba(243,156,18,0.3); }
+.timer-display-global.timer-critical { color: #e74c3c; border-color: rgba(231,76,60,0.3); animation: timer-blink 1s ease infinite; }
+@keyframes timer-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* ===== Collaboration Space Overlay ===== */
+.collab-space-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85); z-index: 70; display: flex;
+  flex-direction: column;
+}
+.collab-space-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 20px; background: rgba(0,0,0,0.5);
+}
+.collab-space-header h3 { color: #fff; margin: 0; }
+.collab-space-grid {
+  flex: 1; display: grid; gap: 8px; padding: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  overflow: auto;
+}
+.collab-screen-tile {
+  background: #111; border: 2px solid #333; border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 200px; position: relative;
+}
+.collab-screen-tile video { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
+.collab-screen-tile .screen-label {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.7); color: #fff; padding: 2px 10px; border-radius: 10px;
+  font-size: 0.75rem;
+}
+.collab-screen-empty {
+  color: #555; font-size: 0.9rem; text-align: center;
+}
+.collab-screen-empty button { margin-top: 8px; }
+
+/* ===== Sub-rooms ===== */
+.room-portal {
+  position: absolute; cursor: pointer;
+}
+
 /* ===== Shortcuts Modal ===== */
 .shortcuts-modal {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;

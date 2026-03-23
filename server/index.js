@@ -239,6 +239,15 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Speaking indicator
+  socket.on('speaking-changed', (data) => {
+    if (!currentRoomId) return;
+    socket.to(currentRoomId).emit('participant-speaking-changed', {
+      socketId: socket.id,
+      speaking: !!data.speaking,
+    });
+  });
+
   // ===== TABLES =====
 
   socket.on('create-table', (data, callback) => {
@@ -513,6 +522,173 @@ io.on('connection', (socket) => {
     if (result.error) return callback(result);
     io.to(currentRoomId).emit('timer-paused', { timerId: data.timerId, paused: result.timer.paused });
     callback(result);
+  });
+
+  // ===== COLLABORATION SPACES =====
+
+  socket.on('join-collab-space', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p) return;
+
+    if (!room.collabSpaces) room.collabSpaces = new Map();
+    var spaceId = data.spaceId;
+    if (!room.collabSpaces.has(spaceId)) {
+      room.collabSpaces.set(spaceId, { users: new Set(), screens: new Map() });
+    }
+    var space = room.collabSpaces.get(spaceId);
+    space.users.add(socket.id);
+
+    io.to(currentRoomId).emit('collab-space-updated', {
+      spaceId: spaceId,
+      users: Array.from(space.users),
+      screens: Array.from(space.screens.keys()),
+    });
+  });
+
+  socket.on('leave-collab-space', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room || !room.collabSpaces) return;
+    var space = room.collabSpaces.get(data.spaceId);
+    if (!space) return;
+    space.users.delete(socket.id);
+    space.screens.delete(socket.id);
+
+    io.to(currentRoomId).emit('collab-space-updated', {
+      spaceId: data.spaceId,
+      users: Array.from(space.users),
+      screens: Array.from(space.screens.keys()),
+    });
+  });
+
+  socket.on('collab-screen-share-start', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room || !room.collabSpaces) return;
+    var space = room.collabSpaces.get(data.spaceId);
+    if (!space) return;
+    const p = room.participants.get(socket.id);
+    space.screens.set(socket.id, { pseudo: p ? p.pseudo : 'Anonyme' });
+    socket.to(currentRoomId).emit('collab-screen-started', {
+      spaceId: data.spaceId,
+      socketId: socket.id,
+      pseudo: p ? p.pseudo : 'Anonyme',
+    });
+  });
+
+  socket.on('collab-screen-share-stop', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room || !room.collabSpaces) return;
+    var space = room.collabSpaces.get(data.spaceId);
+    if (space) space.screens.delete(socket.id);
+    socket.to(currentRoomId).emit('collab-screen-stopped', {
+      spaceId: data.spaceId,
+      socketId: socket.id,
+    });
+  });
+
+  // WebRTC signaling for collab space screens
+  socket.on('collab-rtc-offer', (data) => {
+    if (!currentRoomId) return;
+    io.to(data.targetSocketId).emit('collab-rtc-offer', {
+      fromSocketId: socket.id,
+      spaceId: data.spaceId,
+      offer: data.offer,
+    });
+  });
+
+  socket.on('collab-rtc-answer', (data) => {
+    if (!currentRoomId) return;
+    io.to(data.targetSocketId).emit('collab-rtc-answer', {
+      fromSocketId: socket.id,
+      spaceId: data.spaceId,
+      answer: data.answer,
+    });
+  });
+
+  socket.on('collab-rtc-ice', (data) => {
+    if (!currentRoomId) return;
+    io.to(data.targetSocketId).emit('collab-rtc-ice', {
+      fromSocketId: socket.id,
+      spaceId: data.spaceId,
+      candidate: data.candidate,
+    });
+  });
+
+  // ===== SUB-ROOMS =====
+
+  socket.on('create-sub-room', (data, callback) => {
+    if (!currentRoomId) return callback({ error: 'not_in_room' });
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return callback({ error: 'room_not_found' });
+    const p = room.participants.get(socket.id);
+    if (!p || !p.isAdmin) return callback({ error: 'not_admin' });
+
+    if (!room.subRooms) room.subRooms = new Map();
+    const subRoomId = 'sub_' + Date.now().toString(36);
+    const subRoom = {
+      id: subRoomId,
+      name: data.name || 'Sous-salle',
+      x: data.x || 0,
+      y: data.y || 0,
+      width: data.width || 3,
+      height: data.height || 3,
+      participants: new Set(),
+    };
+    room.subRooms.set(subRoomId, subRoom);
+
+    io.to(currentRoomId).emit('sub-room-created', {
+      id: subRoomId,
+      name: subRoom.name,
+      x: subRoom.x,
+      y: subRoom.y,
+      width: subRoom.width,
+      height: subRoom.height,
+    });
+    callback({ success: true, subRoom: { id: subRoomId, name: subRoom.name, x: subRoom.x, y: subRoom.y, width: subRoom.width, height: subRoom.height } });
+  });
+
+  socket.on('delete-sub-room', (data, callback) => {
+    if (!currentRoomId) return callback({ error: 'not_in_room' });
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room || !room.subRooms) return callback({ error: 'not_found' });
+    const p = room.participants.get(socket.id);
+    if (!p || !p.isAdmin) return callback({ error: 'not_admin' });
+    room.subRooms.delete(data.subRoomId);
+    io.to(currentRoomId).emit('sub-room-deleted', { subRoomId: data.subRoomId });
+    callback({ success: true });
+  });
+
+  socket.on('join-sub-room', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room || !room.subRooms) return;
+    var sr = room.subRooms.get(data.subRoomId);
+    if (sr) {
+      sr.participants.add(socket.id);
+      io.to(currentRoomId).emit('sub-room-updated', {
+        subRoomId: data.subRoomId,
+        participants: Array.from(sr.participants),
+      });
+    }
+  });
+
+  socket.on('leave-sub-room', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room || !room.subRooms) return;
+    var sr = room.subRooms.get(data.subRoomId);
+    if (sr) {
+      sr.participants.delete(socket.id);
+      io.to(currentRoomId).emit('sub-room-updated', {
+        subRoomId: data.subRoomId,
+        participants: Array.from(sr.participants),
+      });
+    }
   });
 
   // ===== CHAT =====

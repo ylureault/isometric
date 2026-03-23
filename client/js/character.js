@@ -13,10 +13,13 @@ const Character = {
       handRaised = false,
       isBroadcasting = false,
       isOnStage = false,
+      isSpeaking = false,
       disconnected = false,
     } = opts || {};
 
-    const pos = Board.iso(gx, gy);
+    // Elevate character when on stage
+    var elevation = Board.getElevationAt(Math.floor(gx), Math.floor(gy));
+    const pos = Board.iso(gx, gy, elevation);
     const sx = pos.x + offsetX;
     const sy = pos.y + offsetY;
     const S = 0.7;
@@ -73,6 +76,32 @@ const Character = {
       ctx.moveTo(sx + 10 * S, baseY - 40 * S);
       ctx.lineTo(sx + 14 * S, baseY - 36 * S);
       ctx.stroke();
+    }
+
+    // Speaking indicator — animated sound waves above head
+    if (isSpeaking && !isMuted) {
+      var spkX = sx;
+      var spkY = baseY - 48 * S;
+      var time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+      // Pulsing sound waves
+      for (var wi = 0; wi < 3; wi++) {
+        var waveR = (4 + wi * 4) * S;
+        var waveAlpha = 0.6 - wi * 0.18;
+        var pulse = Math.sin(time * 6 + wi * 0.8) * 0.3 + 0.7;
+        ctx.beginPath();
+        ctx.arc(spkX, spkY, waveR * pulse, -Math.PI * 0.8, -Math.PI * 0.2);
+        ctx.strokeStyle = 'rgba(46,204,113,' + (waveAlpha * pulse) + ')';
+        ctx.lineWidth = 1.5 * S;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(spkX, spkY, waveR * pulse, Math.PI * 0.2, Math.PI * 0.8);
+        ctx.stroke();
+      }
+      // Green dot center
+      ctx.beginPath();
+      ctx.arc(spkX, spkY, 2.5 * S, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(46,204,113,0.9)';
+      ctx.fill();
     }
 
     // Pseudo label

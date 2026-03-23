@@ -22,6 +22,7 @@ var Engine = {
   lastTime: 0, started: false,
   reactions: [], confetti: [], spotlight: null,
   tables: new Map(),
+  subRooms: new Map(),
   // Camera drag state
   isDragging: false, dragStart: { x: 0, y: 0 }, cameraStart: { x: 0, y: 0 },
   // View mode: 'iso' or 'topdown'
@@ -136,6 +137,20 @@ var Engine = {
     s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); });
     s.on('admin-broadcast-start', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = true; UI.showNotification(d.pseudo + ' parle à tous'); });
     s.on('admin-broadcast-stop', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = false; });
+    s.on('participant-speaking-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isSpeaking = d.speaking; });
+
+    // Sub-rooms
+    s.on('sub-room-created', function(d) { if (!self.subRooms) self.subRooms = new Map(); self.subRooms.set(d.id, d); });
+    s.on('sub-room-deleted', function(d) { if (self.subRooms) self.subRooms.delete(d.subRoomId); });
+    s.on('sub-room-updated', function(d) { if (self.subRooms) { var sr = self.subRooms.get(d.subRoomId); if (sr) sr.participants = d.participants; } });
+
+    // Collab spaces
+    s.on('collab-space-updated', function(d) { UI.updateCollabSpaceUsers(d); });
+    s.on('collab-screen-started', function(d) { UI.onCollabScreenStarted(d); });
+    s.on('collab-screen-stopped', function(d) { UI.onCollabScreenStopped(d); });
+    s.on('collab-rtc-offer', function(d) { UI.handleCollabRtcOffer(d); });
+    s.on('collab-rtc-answer', function(d) { UI.handleCollabRtcAnswer(d); });
+    s.on('collab-rtc-ice', function(d) { UI.handleCollabRtcIce(d); });
   },
 
   parseRoomConfig: function() {
@@ -321,6 +336,40 @@ var Engine = {
     var clickY = Math.floor(gp.y);
     var px = this.player.x;
     var py = this.player.y;
+
+    // First check sub-rooms (portals)
+    if (this.subRooms) {
+      for (var [srId, sr] of this.subRooms) {
+        var srw = sr.width || 3;
+        var srh = sr.height || 3;
+        if (clickX >= sr.x && clickX < sr.x + srw && clickY >= sr.y && clickY < sr.y + srh) {
+          var srDist = Math.sqrt((px - (sr.x + srw/2)) * (px - (sr.x + srw/2)) + (py - (sr.y + srh/2)) * (py - (sr.y + srh/2)));
+          if (srDist < srw + 2) {
+            // Open sub-room in new tab
+            var subUrl = '/client/room.html?room=' + this.roomConfig.roomId + '_' + srId + '&name=' + encodeURIComponent(sr.name) + '&env=' + this.roomConfig.environment + '&size=15';
+            window.open(subUrl, '_blank');
+            return;
+          }
+        }
+      }
+    }
+
+    // First check collaboration spaces
+    for (var ci = 0; ci < Board.furniture.length; ci++) {
+      var citem = Board.furniture[ci];
+      var cdef = Environments.furnitureTypes[citem.type];
+      if (!cdef || !cdef.isCollabSpace) continue;
+      var cw = citem.width || cdef.width;
+      var ch = citem.height || cdef.height;
+      if (clickX >= citem.x && clickX < citem.x + cw && clickY >= citem.y && clickY < citem.y + ch) {
+        var dist = Math.sqrt((px - (citem.x + cw/2)) * (px - (citem.x + cw/2)) + (py - (citem.y + ch/2)) * (py - (citem.y + ch/2)));
+        if (dist < cw + 2) {
+          var spaceId = 'collab_' + citem.x + '_' + citem.y;
+          UI.openCollabSpace(spaceId);
+          return;
+        }
+      }
+    }
 
     // First check interactive wall objects (whiteboard, post-it board)
     // These are on walls (y=0 or x=0) so we need proximity-based detection
@@ -658,6 +707,7 @@ var Engine = {
           pseudo: this.player.pseudo, isOnStage: onS, isAdmin: this.player.isAdmin,
           isMuted: this.player.isMuted, handRaised: this.player.handRaised,
           isBroadcasting: this.player.isBroadcasting,
+          isSpeaking: Audio.isSpeaking(),
         });
       } else if (e.type === 'r') {
         var p = e.p;
@@ -670,10 +720,14 @@ var Engine = {
           isOnStage: Board.isOnStage(Math.floor(p.renderX), Math.floor(p.renderY)),
           isAdmin: p.isAdmin, disconnected: p.disconnected, isMuted: p.isMuted,
           handRaised: p.handRaised, isBroadcasting: p.isBroadcasting,
+          isSpeaking: p.isSpeaking,
         });
         ctx.restore();
       }
     }
+
+    // Sub-rooms (portals)
+    this.drawSubRooms(ctx);
 
     // Proximity radius (gradient)
     this.drawProximityRadius(ctx);
@@ -823,6 +877,41 @@ var Engine = {
       ctx.fillText(r.emoji, sx, sy);
       ctx.restore();
     }
+  },
+
+  drawSubRooms: function(ctx) {
+    var self = this;
+    if (!this.subRooms) return;
+    this.subRooms.forEach(function(sr) {
+      var w = sr.width || 3;
+      var h = sr.height || 3;
+      // Draw portal overlay on the floor
+      for (var dy = 0; dy < h; dy++) {
+        for (var dx = 0; dx < w; dx++) {
+          Board.drawIsoPoly(ctx,
+            [[sr.x+dx, sr.y+dy, 0.3],[sr.x+dx+1, sr.y+dy, 0.3],[sr.x+dx+1, sr.y+dy+1, 0.3],[sr.x+dx, sr.y+dy+1, 0.3]],
+            'rgba(155,89,182,0.08)', null, 0
+          );
+        }
+      }
+      // Border
+      Board.drawIsoLine(ctx, [sr.x, sr.y, 0.4], [sr.x+w, sr.y, 0.4], 'rgba(155,89,182,0.5)', 2);
+      Board.drawIsoLine(ctx, [sr.x+w, sr.y, 0.4], [sr.x+w, sr.y+h, 0.4], 'rgba(155,89,182,0.5)', 2);
+      Board.drawIsoLine(ctx, [sr.x+w, sr.y+h, 0.4], [sr.x, sr.y+h, 0.4], 'rgba(155,89,182,0.5)', 2);
+      Board.drawIsoLine(ctx, [sr.x, sr.y+h, 0.4], [sr.x, sr.y, 0.4], 'rgba(155,89,182,0.5)', 2);
+      // Label
+      var lp = Board.iso(sr.x + w/2, sr.y + h/2, 1);
+      ctx.font = 'bold 10px "Segoe UI", sans-serif';
+      ctx.fillStyle = 'rgba(155,89,182,0.8)';
+      ctx.textAlign = 'center';
+      ctx.fillText('🚪 ' + (sr.name || 'Sous-salle'), lp.x, lp.y - 6);
+      var count = sr.participants ? sr.participants.length : 0;
+      if (count > 0) {
+        ctx.font = '8px "Segoe UI", sans-serif';
+        ctx.fillStyle = 'rgba(155,89,182,0.6)';
+        ctx.fillText(count + ' personne' + (count > 1 ? 's' : ''), lp.x, lp.y + 6);
+      }
+    });
   },
 
   drawConfetti: function(ctx) {

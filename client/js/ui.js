@@ -433,12 +433,14 @@ const UI = {
       desk: '🪑', chair: '💺', plant: '🌿', palmTree: '🌴', partition: '🔲',
       largeTable: '📐', roundTable: '⭕', screen: '🖥️', couch: '🛋️',
       coffeeTable: '☕', bookshelf: '📚', whiteboard: '📋', postItBoard: '📌',
+      smallStage: '🎭', podium: '🎤', projector: '📽️', waterCooler: '🚰',
+      filingCabinet: '🗄️', standingDesk: '🖥️', lamp: '💡',
     };
 
     var html = '';
     for (var type in Environments.furnitureTypes) {
       var def = Environments.furnitureTypes[type];
-      if (def.isZone || def.isCarpet || def.isStage) continue;
+      if (def.isZone) continue;
       var icon = icons[type] || '📦';
       html += '<button class="catalog-item" data-type="' + type + '">' + icon + ' ' + def.name + '</button>';
     }
@@ -606,7 +608,7 @@ const UI = {
     if (container) container.style.display = 'none';
   },
 
-  // ===== POST-IT BOARD POP-IN =====
+  // ===== POST-IT DARK BOARD POP-IN =====
 
   openPostItBoard: function(boardId, furnitureItem) {
     var self = this;
@@ -617,13 +619,69 @@ const UI = {
     var board = document.getElementById('postit-board-bg');
     board.innerHTML = '';
 
+    var circlesCanvas = document.getElementById('darkboard-circles-canvas');
+    var circlesCtx = circlesCanvas.getContext('2d');
+    var footer = document.getElementById('darkboard-footer');
+
     var currentColor = '#FFE066';
     var postits = [];
+    var circles = []; // { id, cx, cy, rx, ry, color }
+    var votes = {}; // postitId -> { count, voters: Set }
+    var myVotes = 0;
+    var maxVotes = 3;
+    var dotVotingMode = false;
+    var circleMode = false;
     var dragState = null;
+    var circleDrawState = null;
+
+    function resizeCirclesCanvas() {
+      var rect = board.parentElement.getBoundingClientRect();
+      circlesCanvas.width = rect.width;
+      circlesCanvas.height = rect.height;
+      redrawCircles();
+    }
+    setTimeout(resizeCirclesCanvas, 50);
+
+    function redrawCircles() {
+      circlesCtx.clearRect(0, 0, circlesCanvas.width, circlesCanvas.height);
+      for (var i = 0; i < circles.length; i++) {
+        var c = circles[i];
+        circlesCtx.beginPath();
+        circlesCtx.ellipse(c.cx, c.cy, Math.abs(c.rx), Math.abs(c.ry), 0, 0, Math.PI * 2);
+        circlesCtx.strokeStyle = c.color || 'rgba(255,255,255,0.6)';
+        circlesCtx.lineWidth = 2.5;
+        circlesCtx.setLineDash([8, 4]);
+        circlesCtx.stroke();
+        circlesCtx.setLineDash([]);
+        if (c.label) {
+          circlesCtx.font = 'bold 13px "Segoe UI", sans-serif';
+          circlesCtx.fillStyle = c.color || 'rgba(255,255,255,0.7)';
+          circlesCtx.textAlign = 'center';
+          circlesCtx.fillText(c.label, c.cx, c.cy - Math.abs(c.ry) - 6);
+        }
+      }
+      // Draw in-progress circle
+      if (circleDrawState) {
+        var dx = circleDrawState.endX - circleDrawState.startX;
+        var dy = circleDrawState.endY - circleDrawState.startY;
+        circlesCtx.beginPath();
+        circlesCtx.ellipse(
+          circleDrawState.startX + dx / 2,
+          circleDrawState.startY + dy / 2,
+          Math.abs(dx / 2), Math.abs(dy / 2), 0, 0, Math.PI * 2
+        );
+        circlesCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+        circlesCtx.lineWidth = 2;
+        circlesCtx.setLineDash([6, 3]);
+        circlesCtx.stroke();
+        circlesCtx.setLineDash([]);
+      }
+    }
 
     function createPostItEl(postit) {
       var el = document.createElement('div');
       el.className = 'postit-note';
+      el.dataset.postitId = postit.id;
       el.style.background = postit.color || currentColor;
       el.style.left = postit.x + 'px';
       el.style.top = postit.y + 'px';
@@ -635,7 +693,7 @@ const UI = {
         postit.text = textarea.value;
         Network.socket.emit('wb-postit', {
           whiteboardId: boardId,
-          postitData: { id: postit.id, text: textarea.value, x: postit.x, y: postit.y, color: postit.color, pseudo: Engine.player.pseudo },
+          postitData: { id: postit.id, text: textarea.value, x: postit.x, y: postit.y, color: postit.color, pseudo: postit.pseudo || Engine.player.pseudo, votes: postit.votes || 0 },
         });
       });
       textarea.addEventListener('keydown', function(e) { e.stopPropagation(); });
@@ -653,51 +711,146 @@ const UI = {
       author.className = 'postit-author';
       author.textContent = postit.pseudo || Engine.player.pseudo;
 
+      // Vote badge
+      var voteBadge = document.createElement('div');
+      voteBadge.className = 'postit-vote-badge';
+      voteBadge.textContent = postit.votes || 0;
+      voteBadge.style.display = (postit.votes > 0) ? 'flex' : 'none';
+
       el.appendChild(deleteBtn);
       el.appendChild(textarea);
       el.appendChild(author);
+      el.appendChild(voteBadge);
 
-      // Drag to move
+      // Drag to move (unless in vote mode)
       el.addEventListener('mousedown', function(e) {
+        if (dotVotingMode) return;
+        if (circleMode) return;
         if (e.target === textarea || e.target === deleteBtn) return;
         dragState = { el: el, postit: postit, startX: e.clientX, startY: e.clientY, origX: postit.x, origY: postit.y };
         e.preventDefault();
+      });
+
+      // Dot voting click
+      el.addEventListener('click', function(e) {
+        if (!dotVotingMode) return;
+        if (e.target === deleteBtn) return;
+        e.stopPropagation();
+        if (myVotes >= maxVotes) {
+          self.showNotification('Vous avez utilisé vos ' + maxVotes + ' votes !');
+          return;
+        }
+        myVotes++;
+        postit.votes = (postit.votes || 0) + 1;
+        voteBadge.textContent = postit.votes;
+        voteBadge.style.display = 'flex';
+        // Animate
+        el.classList.add('postit-voted');
+        setTimeout(function() { el.classList.remove('postit-voted'); }, 300);
+        // Broadcast
+        Network.socket.emit('wb-postit', {
+          whiteboardId: boardId,
+          postitData: { id: postit.id, text: postit.text, x: postit.x, y: postit.y, color: postit.color, pseudo: postit.pseudo, votes: postit.votes },
+        });
+        updateVotesInfo();
       });
 
       board.appendChild(el);
       return el;
     }
 
-    function onMouseMove(e) {
-      if (!dragState) return;
-      var dx = e.clientX - dragState.startX;
-      var dy = e.clientY - dragState.startY;
-      dragState.postit.x = Math.max(0, dragState.origX + dx);
-      dragState.postit.y = Math.max(0, dragState.origY + dy);
-      dragState.el.style.left = dragState.postit.x + 'px';
-      dragState.el.style.top = dragState.postit.y + 'px';
+    function updateVotesInfo() {
+      var info = document.getElementById('darkboard-votes-info');
+      if (info) info.textContent = 'Dot Voting — ' + myVotes + '/' + maxVotes + ' votes utilisés';
     }
 
-    function onMouseUp() {
+    function findPostitEl(postitId) {
+      return board.querySelector('[data-postit-id="' + postitId + '"]');
+    }
+
+    function onMouseMove(e) {
       if (dragState) {
-        // Send position update
+        var dx = e.clientX - dragState.startX;
+        var dy = e.clientY - dragState.startY;
+        dragState.postit.x = Math.max(0, dragState.origX + dx);
+        dragState.postit.y = Math.max(0, dragState.origY + dy);
+        dragState.el.style.left = dragState.postit.x + 'px';
+        dragState.el.style.top = dragState.postit.y + 'px';
+      }
+      if (circleDrawState) {
+        circleDrawState.endX = e.offsetX || (e.clientX - circlesCanvas.getBoundingClientRect().left);
+        circleDrawState.endY = e.offsetY || (e.clientY - circlesCanvas.getBoundingClientRect().top);
+        redrawCircles();
+      }
+    }
+
+    function onMouseUp(e) {
+      if (dragState) {
         Network.socket.emit('wb-postit', {
           whiteboardId: boardId,
-          postitData: { id: dragState.postit.id, text: dragState.postit.text, x: dragState.postit.x, y: dragState.postit.y, color: dragState.postit.color, pseudo: dragState.postit.pseudo },
+          postitData: { id: dragState.postit.id, text: dragState.postit.text, x: dragState.postit.x, y: dragState.postit.y, color: dragState.postit.color, pseudo: dragState.postit.pseudo, votes: dragState.postit.votes || 0 },
         });
         dragState = null;
+      }
+      if (circleDrawState) {
+        var dx = circleDrawState.endX - circleDrawState.startX;
+        var dy = circleDrawState.endY - circleDrawState.startY;
+        if (Math.abs(dx) > 20 && Math.abs(dy) > 20) {
+          var label = prompt('Nom du groupe (optionnel):') || '';
+          var circle = {
+            id: 'circle_' + Date.now(),
+            cx: circleDrawState.startX + dx / 2,
+            cy: circleDrawState.startY + dy / 2,
+            rx: Math.abs(dx / 2),
+            ry: Math.abs(dy / 2),
+            color: 'rgba(255,255,255,0.5)',
+            label: label,
+          };
+          circles.push(circle);
+          // Broadcast circle via wb-stroke (reuse channel)
+          Network.socket.emit('wb-stroke', {
+            whiteboardId: boardId,
+            strokeData: { type: 'circle', circle: circle },
+          });
+        }
+        circleDrawState = null;
+        redrawCircles();
       }
     }
 
     overlay.addEventListener('mousemove', onMouseMove);
     overlay.addEventListener('mouseup', onMouseUp);
 
-    // Load existing postits
+    // Circle drawing on the canvas
+    circlesCanvas.addEventListener('mousedown', function(e) {
+      if (!circleMode) return;
+      var rect = circlesCanvas.getBoundingClientRect();
+      circleDrawState = {
+        startX: e.clientX - rect.left,
+        startY: e.clientY - rect.top,
+        endX: e.clientX - rect.left,
+        endY: e.clientY - rect.top,
+      };
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    // Load existing
     Network.socket.emit('wb-open', { whiteboardId: boardId }, function(resp) {
-      if (resp && resp.success && resp.postits) {
-        for (var i = 0; i < resp.postits.length; i++) {
-          postits.push(resp.postits[i]);
-          createPostItEl(resp.postits[i]);
+      if (resp && resp.success) {
+        if (resp.postits) {
+          for (var i = 0; i < resp.postits.length; i++) {
+            postits.push(resp.postits[i]);
+            createPostItEl(resp.postits[i]);
+          }
+        }
+        if (resp.strokes) {
+          for (var j = 0; j < resp.strokes.length; j++) {
+            if (resp.strokes[j].type === 'circle' && resp.strokes[j].circle) {
+              circles.push(resp.strokes[j].circle);
+            }
+          }
+          redrawCircles();
         }
       }
     });
@@ -706,19 +859,22 @@ const UI = {
     function onRemotePostit(data) {
       if (data.whiteboardId !== boardId) return;
       var pd = data.postitData;
-      // Update existing or add new
       var existing = postits.find(function(p) { return p.id === pd.id; });
       if (existing) {
         existing.text = pd.text;
         existing.x = pd.x;
         existing.y = pd.y;
-        // Update DOM
-        var els = board.querySelectorAll('.postit-note');
-        for (var i = 0; i < els.length; i++) {
-          if (parseInt(els[i].style.left) === existing.x || els[i].querySelector('textarea').value === existing.text) {
-            els[i].style.left = pd.x + 'px';
-            els[i].style.top = pd.y + 'px';
-            els[i].querySelector('textarea').value = pd.text;
+        existing.votes = pd.votes || 0;
+        var el = findPostitEl(pd.id);
+        if (el) {
+          el.style.left = pd.x + 'px';
+          el.style.top = pd.y + 'px';
+          var ta = el.querySelector('textarea');
+          if (ta && ta !== document.activeElement) ta.value = pd.text;
+          var badge = el.querySelector('.postit-vote-badge');
+          if (badge) {
+            badge.textContent = existing.votes;
+            badge.style.display = existing.votes > 0 ? 'flex' : 'none';
           }
         }
       } else {
@@ -727,6 +883,16 @@ const UI = {
       }
     }
     Network.socket.on('wb-postit', onRemotePostit);
+
+    // Listen for remote circles
+    function onRemoteStroke(data) {
+      if (data.whiteboardId !== boardId) return;
+      if (data.strokeData && data.strokeData.type === 'circle' && data.strokeData.circle) {
+        circles.push(data.strokeData.circle);
+        redrawCircles();
+      }
+    }
+    Network.socket.on('wb-stroke', onRemoteStroke);
 
     // Color buttons
     var colorBtns = overlay.querySelectorAll('.postit-color-btn');
@@ -749,10 +915,45 @@ const UI = {
         y: 30 + Math.random() * 300,
         color: currentColor,
         pseudo: Engine.player.pseudo,
+        votes: 0,
       };
       postits.push(postit);
       createPostItEl(postit);
       Network.socket.emit('wb-postit', { whiteboardId: boardId, postitData: postit });
+    };
+
+    // Circle tool toggle
+    var circleBtn = document.getElementById('postit-circle-tool');
+    if (circleBtn) circleBtn.onclick = function() {
+      circleMode = !circleMode;
+      circleBtn.classList.toggle('active', circleMode);
+      if (circleMode) {
+        circlesCanvas.style.pointerEvents = 'auto';
+        dotVotingMode = false;
+        var voteBtn = document.getElementById('postit-vote-toggle');
+        if (voteBtn) voteBtn.classList.remove('active');
+        footer.style.display = 'none';
+      } else {
+        circlesCanvas.style.pointerEvents = 'none';
+      }
+    };
+    circlesCanvas.style.pointerEvents = 'none';
+
+    // Dot voting toggle
+    var voteToggle = document.getElementById('postit-vote-toggle');
+    if (voteToggle) voteToggle.onclick = function() {
+      dotVotingMode = !dotVotingMode;
+      voteToggle.classList.toggle('active', dotVotingMode);
+      footer.style.display = dotVotingMode ? 'block' : 'none';
+      if (dotVotingMode) {
+        circleMode = false;
+        if (circleBtn) circleBtn.classList.remove('active');
+        circlesCanvas.style.pointerEvents = 'none';
+        board.classList.add('vote-mode');
+        updateVotesInfo();
+      } else {
+        board.classList.remove('vote-mode');
+      }
     };
 
     // Close
@@ -761,7 +962,10 @@ const UI = {
       overlay.removeEventListener('mousemove', onMouseMove);
       overlay.removeEventListener('mouseup', onMouseUp);
       Network.socket.off('wb-postit', onRemotePostit);
+      Network.socket.off('wb-stroke', onRemoteStroke);
       Network.socket.emit('wb-close', { whiteboardId: boardId });
+      footer.style.display = 'none';
+      board.classList.remove('vote-mode');
     }
 
     var closeBtn = document.getElementById('postit-close');
@@ -965,6 +1169,241 @@ const UI = {
     clearCanvas();
   },
 
+  // ===== COLLABORATION SPACE =====
+
+  activeCollabSpace: null,
+  collabConnections: new Map(), // socketId -> { connection, videoElement }
+  collabLocalStream: null,
+
+  openCollabSpace: function(spaceId) {
+    var self = this;
+    var overlay = document.getElementById('collab-space-overlay');
+    if (!overlay) return;
+    this.activeCollabSpace = spaceId;
+    overlay.style.display = 'flex';
+
+    var grid = document.getElementById('collab-space-grid');
+    grid.innerHTML = '<div class="collab-screen-tile collab-screen-empty"><p>Aucun partage d\'écran</p><p style="font-size:0.75rem;color:#666;">Cliquez sur "Partager mon écran"</p></div>';
+
+    Network.socket.emit('join-collab-space', { spaceId: spaceId });
+
+    var shareBtn = document.getElementById('collab-share-screen-btn');
+    if (shareBtn) shareBtn.onclick = function() {
+      if (self.collabLocalStream) {
+        self.stopCollabScreenShare();
+      } else {
+        self.startCollabScreenShare(spaceId);
+      }
+    };
+
+    var closeBtn = document.getElementById('collab-space-close');
+    if (closeBtn) closeBtn.onclick = function() { self.closeCollabSpace(spaceId); };
+
+    function onEsc(e) {
+      if (e.code === 'Escape') { self.closeCollabSpace(spaceId); window.removeEventListener('keydown', onEsc); }
+    }
+    window.addEventListener('keydown', onEsc);
+  },
+
+  closeCollabSpace: function(spaceId) {
+    var overlay = document.getElementById('collab-space-overlay');
+    if (overlay) overlay.style.display = 'none';
+    this.stopCollabScreenShare();
+    // Close all incoming connections
+    for (var [sid, conn] of this.collabConnections) {
+      if (conn.connection) conn.connection.close();
+    }
+    this.collabConnections.clear();
+    Network.socket.emit('leave-collab-space', { spaceId: spaceId });
+    this.activeCollabSpace = null;
+  },
+
+  async startCollabScreenShare(spaceId) {
+    try {
+      this.collabLocalStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false });
+      this.collabLocalStream.getVideoTracks()[0].onended = () => { this.stopCollabScreenShare(); };
+
+      // Add own video tile
+      this.addCollabScreenTile(Network.mySocketId, Engine.player.pseudo, this.collabLocalStream);
+
+      Network.socket.emit('collab-screen-share-start', { spaceId: spaceId });
+
+      // Send to all users in the space
+      for (var [sid] of Network.remotePlayers) {
+        this.sendCollabStream(spaceId, sid);
+      }
+
+      var btn = document.getElementById('collab-share-screen-btn');
+      if (btn) { btn.textContent = '⏹ Arrêter le partage'; btn.style.background = '#e74c3c'; }
+    } catch (e) {
+      console.warn('Collab screen share failed:', e.message);
+    }
+  },
+
+  stopCollabScreenShare: function() {
+    if (this.collabLocalStream) {
+      this.collabLocalStream.getTracks().forEach(function(t) { t.stop(); });
+      this.collabLocalStream = null;
+    }
+    // Remove own tile
+    var ownTile = document.getElementById('collab-tile-' + Network.mySocketId);
+    if (ownTile) ownTile.remove();
+    this.checkEmptyCollabGrid();
+
+    if (this.activeCollabSpace) {
+      Network.socket.emit('collab-screen-share-stop', { spaceId: this.activeCollabSpace });
+    }
+    var btn = document.getElementById('collab-share-screen-btn');
+    if (btn) { btn.textContent = '📺 Partager mon écran'; btn.style.background = ''; }
+  },
+
+  addCollabScreenTile: function(socketId, pseudo, stream) {
+    var grid = document.getElementById('collab-space-grid');
+    if (!grid) return;
+    // Remove empty placeholder
+    var empty = grid.querySelector('.collab-screen-empty');
+    if (empty) empty.remove();
+
+    // Check if tile already exists
+    if (document.getElementById('collab-tile-' + socketId)) return;
+
+    var tile = document.createElement('div');
+    tile.className = 'collab-screen-tile';
+    tile.id = 'collab-tile-' + socketId;
+
+    var video = document.createElement('video');
+    video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+    if (stream) video.srcObject = stream;
+
+    var label = document.createElement('div');
+    label.className = 'screen-label';
+    label.textContent = pseudo || 'Anonyme';
+
+    tile.appendChild(video);
+    tile.appendChild(label);
+    grid.appendChild(tile);
+    return video;
+  },
+
+  checkEmptyCollabGrid: function() {
+    var grid = document.getElementById('collab-space-grid');
+    if (!grid) return;
+    if (grid.querySelectorAll('.collab-screen-tile:not(.collab-screen-empty)').length === 0) {
+      grid.innerHTML = '<div class="collab-screen-tile collab-screen-empty"><p>Aucun partage d\'écran</p><p style="font-size:0.75rem;color:#666;">Cliquez sur "Partager mon écran"</p></div>';
+    }
+  },
+
+  async sendCollabStream(spaceId, targetSocketId) {
+    if (!this.collabLocalStream) return;
+    var config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    var connection = new RTCPeerConnection(config);
+
+    this.collabLocalStream.getTracks().forEach(function(track) {
+      connection.addTrack(track);
+    });
+
+    connection.onicecandidate = function(e) {
+      if (e.candidate) {
+        Network.socket.emit('collab-rtc-ice', { targetSocketId: targetSocketId, spaceId: spaceId, candidate: e.candidate });
+      }
+    };
+
+    try {
+      var offer = await connection.createOffer();
+      await connection.setLocalDescription(offer);
+      Network.socket.emit('collab-rtc-offer', { targetSocketId: targetSocketId, spaceId: spaceId, offer: connection.localDescription });
+      this.collabConnections.set('out_' + targetSocketId, { connection: connection });
+    } catch (e) {
+      console.error('Collab RTC offer error:', e);
+    }
+  },
+
+  async handleCollabRtcOffer(data) {
+    if (!this.activeCollabSpace || this.activeCollabSpace !== data.spaceId) return;
+    var config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    var connection = new RTCPeerConnection(config);
+    var self = this;
+
+    connection.ontrack = function(event) {
+      var rp = Network.remotePlayers.get(data.fromSocketId);
+      var pseudo = rp ? rp.pseudo : 'Anonyme';
+      var video = self.addCollabScreenTile(data.fromSocketId, pseudo, null);
+      if (video) video.srcObject = event.streams[0];
+    };
+
+    connection.onicecandidate = function(e) {
+      if (e.candidate) {
+        Network.socket.emit('collab-rtc-ice', { targetSocketId: data.fromSocketId, spaceId: data.spaceId, candidate: e.candidate });
+      }
+    };
+
+    try {
+      await connection.setRemoteDescription(new RTCSessionDescription(data.offer));
+      var answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
+      Network.socket.emit('collab-rtc-answer', { targetSocketId: data.fromSocketId, spaceId: data.spaceId, answer: connection.localDescription });
+      this.collabConnections.set('in_' + data.fromSocketId, { connection: connection });
+    } catch (e) {
+      console.error('Collab RTC answer error:', e);
+    }
+  },
+
+  async handleCollabRtcAnswer(data) {
+    var conn = this.collabConnections.get('out_' + data.fromSocketId);
+    if (!conn) return;
+    try {
+      await conn.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    } catch (e) {
+      console.error('Collab RTC answer set error:', e);
+    }
+  },
+
+  async handleCollabRtcIce(data) {
+    var conn = this.collabConnections.get('out_' + data.fromSocketId) || this.collabConnections.get('in_' + data.fromSocketId);
+    if (!conn) return;
+    try {
+      await conn.connection.addIceCandidate(new RTCIceCandidate(data.candidate));
+    } catch (e) { /* ignore */ }
+  },
+
+  updateCollabSpaceUsers: function(data) {
+    if (!this.activeCollabSpace || this.activeCollabSpace !== data.spaceId) return;
+    var el = document.getElementById('collab-space-users');
+    if (el) el.textContent = data.users.length + ' utilisateur(s)';
+  },
+
+  onCollabScreenStarted: function(data) {
+    if (!this.activeCollabSpace || this.activeCollabSpace !== data.spaceId) return;
+    // The sender will send us an RTC offer
+  },
+
+  onCollabScreenStopped: function(data) {
+    if (!this.activeCollabSpace || this.activeCollabSpace !== data.spaceId) return;
+    var tile = document.getElementById('collab-tile-' + data.socketId);
+    if (tile) tile.remove();
+    var conn = this.collabConnections.get('in_' + data.socketId);
+    if (conn && conn.connection) conn.connection.close();
+    this.collabConnections.delete('in_' + data.socketId);
+    this.checkEmptyCollabGrid();
+  },
+
+  // ===== SUB-ROOMS =====
+
+  openSubRoomDialog: function() {
+    var name = prompt('Nom de la sous-salle:');
+    if (!name) return;
+    var px = Math.floor(Engine.player.x) + 2;
+    var py = Math.floor(Engine.player.y);
+    Network.socket.emit('create-sub-room', { name: name, x: px, y: py, width: 3, height: 3 }, function(r) {
+      if (r && r.success) {
+        Engine.subRooms.set(r.subRoom.id, r.subRoom);
+        UI.showNotification('Sous-salle "' + name + '" créée');
+      }
+    });
+  },
+
   // ===== EDIT MODE TOOLBAR =====
 
   showEditToolbar(show) {
@@ -991,7 +1430,7 @@ const UI = {
     var html = '<option value="">-- Choisir un mobilier --</option>';
     for (var type in Environments.furnitureTypes) {
       var def = Environments.furnitureTypes[type];
-      if (def.isZone || def.isCarpet || def.isStage) continue;
+      if (def.isZone) continue;
       html += '<option value="' + type + '">' + def.name + ' (' + (def.width || 1) + 'x' + (def.height || 1) + ')</option>';
     }
     select.innerHTML = html;
@@ -1046,20 +1485,31 @@ const UI = {
 
   showTimer(timer) {
     const el = document.getElementById('timer-display');
-    if (!el) return;
-    el.style.display = 'block';
+    const globalEl = document.getElementById('timer-display-global');
+    if (el) el.style.display = 'block';
+    if (globalEl) globalEl.style.display = 'block';
     this.activeTimer = timer;
     this.updateTimerDisplay();
   },
 
   updateTimerDisplay() {
     const el = document.getElementById('timer-display');
-    if (!el || !this.activeTimer) return;
+    const globalEl = document.getElementById('timer-display-global');
+    const globalTime = document.getElementById('timer-global-time');
+    const globalLabel = document.getElementById('timer-global-label');
+    if (!this.activeTimer) return;
 
     const t = this.activeTimer;
     if (!t.running) {
-      el.innerHTML = '<span class="timer-text">Terminé !</span>';
-      setTimeout(() => { el.style.display = 'none'; }, 5000);
+      if (el) {
+        el.innerHTML = '<span class="timer-text">Terminé !</span>';
+        setTimeout(() => { el.style.display = 'none'; }, 5000);
+      }
+      if (globalEl) {
+        globalEl.classList.remove('timer-warning', 'timer-critical');
+        if (globalTime) globalTime.textContent = 'Terminé !';
+        setTimeout(() => { globalEl.style.display = 'none'; }, 5000);
+      }
       return;
     }
 
@@ -1067,12 +1517,26 @@ const UI = {
     const remaining = Math.max(0, t.duration - elapsed);
     const mins = Math.floor(remaining / 60);
     const secs = Math.floor(remaining % 60);
+    const timeStr = mins + ':' + secs.toString().padStart(2, '0');
 
-    el.innerHTML = `<span class="timer-text">${t.paused ? 'EN PAUSE — ' : ''}${mins}:${secs.toString().padStart(2, '0')}</span>`;
+    if (el) {
+      el.innerHTML = '<span class="timer-text">' + (t.paused ? 'EN PAUSE — ' : '') + timeStr + '</span>';
+    }
+
+    if (globalEl && globalTime) {
+      globalTime.textContent = (t.paused ? '⏸ ' : '') + timeStr;
+      globalEl.classList.remove('timer-warning', 'timer-critical');
+      if (remaining <= 10) {
+        globalEl.classList.add('timer-critical');
+      } else if (remaining <= 30) {
+        globalEl.classList.add('timer-warning');
+      }
+    }
 
     if (remaining <= 0) {
       t.running = false;
-      el.innerHTML = '<span class="timer-text timer-ended">Terminé !</span>';
+      if (el) el.innerHTML = '<span class="timer-text timer-ended">Terminé !</span>';
+      if (globalTime) globalTime.textContent = 'Terminé !';
     }
   },
 };

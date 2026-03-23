@@ -346,9 +346,51 @@ const Audio = {
     }
   },
 
+  // Audio level analysis for speaking detection
+  _analyser: null,
+  _analyserData: null,
+  _speakingThreshold: 0.015,
+  _isSpeakingState: false,
+  _speakingLastEmit: 0,
+
+  setupAnalyser() {
+    if (this._analyser || !this.audioContext || !this.localStream) return;
+    try {
+      var source = this.audioContext.createMediaStreamSource(this.localStream);
+      this._analyser = this.audioContext.createAnalyser();
+      this._analyser.fftSize = 256;
+      this._analyserData = new Float32Array(this._analyser.fftSize);
+      source.connect(this._analyser);
+    } catch (e) { /* ignore */ }
+  },
+
+  getAudioLevel() {
+    if (!this._analyser || !this._analyserData) return 0;
+    this._analyser.getFloatTimeDomainData(this._analyserData);
+    var sum = 0;
+    for (var i = 0; i < this._analyserData.length; i++) {
+      sum += this._analyserData[i] * this._analyserData[i];
+    }
+    return Math.sqrt(sum / this._analyserData.length);
+  },
+
   isSpeaking() {
     if (!this.localStream || this.isMuted || !this.audioContext) return false;
-    return false;
+    this.setupAnalyser();
+    var level = this.getAudioLevel();
+    var speaking = level > this._speakingThreshold;
+
+    // Emit speaking state to server (throttled to 4 times/sec)
+    var now = Date.now();
+    if (speaking !== this._isSpeakingState && now - this._speakingLastEmit > 250) {
+      this._isSpeakingState = speaking;
+      this._speakingLastEmit = now;
+      if (Network.socket) {
+        Network.socket.emit('speaking-changed', { speaking: speaking });
+      }
+    }
+
+    return speaking;
   },
 
   async getDevices() {

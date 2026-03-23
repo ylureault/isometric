@@ -155,6 +155,10 @@
       </div>
       <div id="tables-list" style="margin-bottom:12px;"></div>
 
+      <h4 style="margin-top:12px;">Sous-salles</h4>
+      <button class="btn btn-primary btn-sm" onclick="UI.openSubRoomDialog();">+ Créer une sous-salle</button>
+      <div id="sub-rooms-list" style="margin-bottom:12px;margin-top:4px;"></div>
+
       <h4>Ajouter du mobilier</h4>
       <p style="font-size:0.75rem;color:#999;margin-bottom:8px;">Le mobilier sera placé devant votre personnage</p>
       <div class="furniture-catalog" id="furniture-catalog"></div>
@@ -212,8 +216,13 @@
   <!-- Vote popup -->
   <div class="vote-popup" id="vote-popup" style="display: none;"></div>
 
-  <!-- Timer display -->
+  <!-- Timer display (small HUD) -->
   <div class="timer-display" id="timer-display" style="display: none;"></div>
+  <!-- Timer display (global overlay - visible to all) -->
+  <div class="timer-display-global" id="timer-display-global" style="display: none;">
+    <div class="timer-label" id="timer-global-label">Timer</div>
+    <span id="timer-global-time">00:00</span>
+  </div>
 
   <!-- Minimap -->
   <div class="minimap-container" id="minimap-container" style="display: none;">
@@ -233,26 +242,34 @@
     </div>
   </div>
 
-  <!-- Post-it Board Pop-in -->
+  <!-- Post-it Board Pop-in (Dark Board) -->
   <div class="whiteboard-overlay" id="postit-overlay" style="display: none;">
-    <div class="whiteboard-popup">
-      <div class="whiteboard-header">
-        <h3>Tableau Post-it collaboratif</h3>
-        <div class="whiteboard-tools">
+    <div class="whiteboard-popup darkboard-popup">
+      <div class="whiteboard-header darkboard-header">
+        <h3>Dark Board — Post-it collaboratif</h3>
+        <div class="whiteboard-tools darkboard-tools">
           <div class="wb-colors">
-            <button class="postit-color-btn active" data-color="#FFE066" style="background:#FFE066;"></button>
-            <button class="postit-color-btn" data-color="#FF6B6B" style="background:#FF6B6B;"></button>
-            <button class="postit-color-btn" data-color="#6BCB77" style="background:#6BCB77;"></button>
-            <button class="postit-color-btn" data-color="#4D96FF" style="background:#4D96FF;"></button>
-            <button class="postit-color-btn" data-color="#FF78C4" style="background:#FF78C4;"></button>
-            <button class="postit-color-btn" data-color="#FFB347" style="background:#FFB347;"></button>
+            <button class="postit-color-btn active" data-color="#FFE066" style="background:#FFE066;" title="Jaune"></button>
+            <button class="postit-color-btn" data-color="#FF6B6B" style="background:#FF6B6B;" title="Rouge"></button>
+            <button class="postit-color-btn" data-color="#6BCB77" style="background:#6BCB77;" title="Vert"></button>
+            <button class="postit-color-btn" data-color="#4D96FF" style="background:#4D96FF;" title="Bleu"></button>
+            <button class="postit-color-btn" data-color="#FF78C4" style="background:#FF78C4;" title="Rose"></button>
+            <button class="postit-color-btn" data-color="#FFB347" style="background:#FFB347;" title="Orange"></button>
           </div>
-          <button class="btn btn-primary btn-sm" id="postit-add">+ Ajouter un post-it</button>
+          <div class="darkboard-actions">
+            <button class="btn btn-primary btn-sm" id="postit-add">+ Post-it</button>
+            <button class="btn btn-secondary btn-sm darkboard-tool-btn" id="postit-circle-tool" title="Entourer un groupe">⭕ Entourer</button>
+            <button class="btn btn-secondary btn-sm darkboard-tool-btn" id="postit-vote-toggle" title="Mode dot voting">🗳️ Dot Voting</button>
+          </div>
         </div>
         <button class="whiteboard-close-btn" id="postit-close">✕</button>
       </div>
-      <div class="postit-canvas" id="postit-canvas">
+      <div class="postit-canvas darkboard-canvas" id="postit-canvas">
+        <canvas id="darkboard-circles-canvas"></canvas>
         <div class="postit-board-bg" id="postit-board-bg"></div>
+      </div>
+      <div class="darkboard-footer" id="darkboard-footer" style="display:none;">
+        <span class="darkboard-votes-info" id="darkboard-votes-info">Mode Dot Voting actif — Cliquez sur un post-it pour voter (3 votes max)</span>
       </div>
     </div>
   </div>
@@ -284,6 +301,24 @@
       </div>
       <div class="whiteboard-canvas-container">
         <canvas id="whiteboard-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collaboration Space Overlay -->
+  <div class="collab-space-overlay" id="collab-space-overlay" style="display: none;">
+    <div class="collab-space-header">
+      <h3 id="collab-space-title">Espace Collaboratif</h3>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="collab-space-users" style="color:#aaa;font-size:0.8rem;"></span>
+        <button class="btn btn-primary btn-sm" id="collab-share-screen-btn">📺 Partager mon écran</button>
+        <button class="whiteboard-close-btn" id="collab-space-close">✕</button>
+      </div>
+    </div>
+    <div class="collab-space-grid" id="collab-space-grid">
+      <div class="collab-screen-tile collab-screen-empty">
+        <p>Aucun partage d'écran actif</p>
+        <p style="font-size:0.75rem;color:#666;">Cliquez sur "Partager mon écran" pour commencer</p>
       </div>
     </div>
   </div>

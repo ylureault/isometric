@@ -61,6 +61,19 @@ const Board = {
     return false;
   },
 
+  // Get the z elevation at a grid position (for stages)
+  getElevationAt(gx, gy) {
+    for (var i = 0; i < this.furniture.length; i++) {
+      var item = this.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def || !def.isStage) continue;
+      if (gx >= item.x && gx < item.x + def.width && gy >= item.y && gy < item.y + def.height) {
+        return def.drawHeight;
+      }
+    }
+    return 0;
+  },
+
   iso(x, y, z) {
     z = z || 0;
     return {
@@ -221,7 +234,13 @@ const Board = {
     if (def.isWhiteboard) return this.drawWhiteboard(ctx, item, def);
     if (def.isPostItBoard) return this.drawPostItBoard(ctx, item, def);
     if (def.isZone) return this.drawZoneOverlay(ctx, item, def);
+    if (def.isCollabSpace) return this.drawCollabSpace(ctx, item, def);
     if (def.isPartition) return this.drawPartition(ctx, item, def);
+    if (def.isPodium) return this.drawPodium(ctx, item, def);
+    if (def.isProjector) return this.drawProjector(ctx, item, def);
+    if (def.isWaterCooler) return this.drawWaterCooler(ctx, item, def);
+    if (def.isLamp) return this.drawLamp(ctx, item, def);
+    if (def.isStandingDesk) return this.drawStandingDesk(ctx, item, def);
     if (item.type === 'desk') return this.drawDesk(ctx, item, def);
     if (item.type === 'chair') return this.drawChair(ctx, item, def);
     if (item.type === 'couch') return this.drawCouch(ctx, item, def);
@@ -611,6 +630,120 @@ const Board = {
         ctx.fillText(item.zoneName, lp.x, lp.y + 10);
       }
     }
+  },
+
+  drawPodium(ctx, item, def) {
+    var x = item.x, y = item.y;
+    // Base
+    this.drawIsoBox(ctx, x+0.1, y+0.1, 0, 0.8, 0.8, 14, def.topColor, this.darken(def.color, 0.1), def.color, 'rgba(0,0,0,0.08)');
+    // Slanted top surface
+    this.drawIsoBox(ctx, x+0.05, y+0.05, 14, 0.9, 0.9, 2, def.topColor, this.darken(def.color, 0.1), def.color, 'rgba(0,0,0,0.06)');
+    // Front panel (darker)
+    this.drawIsoPoly(ctx, [[x+0.1,y+0.9,14],[x+0.9,y+0.9,14],[x+0.9,y+0.9,4],[x+0.1,y+0.9,4]], this.darken(def.color, 0.2), 'rgba(0,0,0,0.06)', 0.3);
+  },
+
+  drawProjector(ctx, item, def) {
+    var x = item.x + 0.5, y = item.y + 0.5;
+    // Tripod legs
+    var base = this.iso(x, y, 0);
+    for (var a = 0; a < 3; a++) {
+      var angle = a * Math.PI * 2 / 3 - Math.PI / 2;
+      var lx = base.x + Math.cos(angle) * 6;
+      var ly = base.y + Math.sin(angle) * 3;
+      ctx.beginPath();
+      ctx.moveTo(base.x, base.y - 20);
+      ctx.lineTo(lx, ly);
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    // Body
+    this.drawIsoBox(ctx, x-0.15, y-0.15, 18, 0.3, 0.3, 4, '#444', '#333', '#3a3a3a', null);
+    // Lens
+    var lpos = this.iso(x, y, 22);
+    ctx.beginPath();
+    ctx.arc(lpos.x, lpos.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#88aaff';
+    ctx.fill();
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  },
+
+  drawWaterCooler(ctx, item, def) {
+    var x = item.x + 0.5, y = item.y + 0.5;
+    // Base cabinet
+    this.drawIsoBox(ctx, x-0.25, y-0.25, 0, 0.5, 0.5, 10, '#e0e0e0', '#ccc', '#d5d5d5', 'rgba(0,0,0,0.06)');
+    // Water tank (blue tinted)
+    this.drawIsoBox(ctx, x-0.18, y-0.18, 10, 0.36, 0.36, 8, 'rgba(173,216,230,0.7)', 'rgba(135,206,235,0.5)', 'rgba(150,210,240,0.6)', 'rgba(0,0,0,0.08)');
+    // Cap
+    this.drawIsoBox(ctx, x-0.12, y-0.12, 18, 0.24, 0.24, 1, '#ddd', '#ccc', '#d5d5d5', null);
+  },
+
+  drawLamp(ctx, item, def) {
+    var x = item.x + 0.5, y = item.y + 0.5;
+    // Base disc
+    this.drawIsoBox(ctx, x-0.2, y-0.2, 0, 0.4, 0.4, 0.8, '#aaa', '#999', '#a0a0a0', null);
+    // Pole
+    this.drawIsoBox(ctx, x-0.04, y-0.04, 0.8, 0.08, 0.08, 24, '#bbb', '#aaa', '#b0b0b0', null);
+    // Lamp shade
+    var top = this.iso(x, y, 25);
+    ctx.beginPath();
+    ctx.ellipse(top.x, top.y, 8, 4, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#f5e6c8';
+    ctx.fill();
+    ctx.strokeStyle = '#d4c5a8';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Glow
+    ctx.beginPath();
+    ctx.ellipse(top.x, top.y + 3, 12, 6, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,240,200,0.08)';
+    ctx.fill();
+  },
+
+  drawStandingDesk(ctx, item, def) {
+    var x = item.x, y = item.y;
+    var w = def.width, d = def.height;
+    var legH = 16;
+    // Tall legs
+    this.drawIsoBox(ctx, x+0.1, y+0.05, 0, 0.08, 0.06, legH, '#2a2a2a', '#1a1a1a', '#222', null);
+    this.drawIsoBox(ctx, x+w-0.18, y+0.05, 0, 0.08, 0.06, legH, '#2a2a2a', '#1a1a1a', '#222', null);
+    this.drawIsoBox(ctx, x+0.1, y+d-0.11, 0, 0.08, 0.06, legH, '#2a2a2a', '#1a1a1a', '#222', null);
+    this.drawIsoBox(ctx, x+w-0.18, y+d-0.11, 0, 0.08, 0.06, legH, '#2a2a2a', '#1a1a1a', '#222', null);
+    // Table top
+    this.drawIsoBox(ctx, x, y, legH, w, d, 1.5, def.topColor, this.darken(def.color, 0.1), def.color, 'rgba(0,0,0,0.08)');
+    // Monitor on top
+    var mx = x + 0.3, my = y + 0.1;
+    this.drawIsoPoly(ctx, [[mx,my,legH+1.5],[mx+0.6,my,legH+1.5],[mx+0.6,my,legH+9],[mx,my,legH+9]], '#2a2a2a', '#1a1a1a', 0.5);
+    this.drawIsoPoly(ctx, [[mx+0.04,my,legH+2],[mx+0.56,my,legH+2],[mx+0.56,my,legH+8.5],[mx+0.04,my,legH+8.5]], '#4488cc', '#336699', 0.3);
+  },
+
+  drawCollabSpace(ctx, item, def) {
+    var w = item.width || def.width;
+    var h = item.height || def.height;
+    // Subtle green-tinted overlay
+    for (var dy = 0; dy < h; dy++) {
+      for (var dx = 0; dx < w; dx++) {
+        this.drawIsoPoly(ctx,
+          [[item.x+dx, item.y+dy, 0.2],[item.x+dx+1, item.y+dy, 0.2],[item.x+dx+1, item.y+dy+1, 0.2],[item.x+dx, item.y+dy+1, 0.2]],
+          'rgba(46,204,113,0.06)', null, 0
+        );
+      }
+    }
+    // Border dashes
+    this.drawIsoLine(ctx, [item.x, item.y, 0.3], [item.x+w, item.y, 0.3], 'rgba(46,204,113,0.3)', 1.5);
+    this.drawIsoLine(ctx, [item.x+w, item.y, 0.3], [item.x+w, item.y+h, 0.3], 'rgba(46,204,113,0.3)', 1.5);
+    this.drawIsoLine(ctx, [item.x+w, item.y+h, 0.3], [item.x, item.y+h, 0.3], 'rgba(46,204,113,0.3)', 1.5);
+    this.drawIsoLine(ctx, [item.x, item.y+h, 0.3], [item.x, item.y, 0.3], 'rgba(46,204,113,0.3)', 1.5);
+    // Label
+    var lp = this.iso(item.x + w/2, item.y + h/2, 1);
+    ctx.font = 'bold 10px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(46,204,113,0.6)';
+    ctx.textAlign = 'center';
+    ctx.fillText('Espace Collaboratif', lp.x, lp.y - 4);
+    ctx.font = '8px "Segoe UI", sans-serif';
+    ctx.fillText('Cliquer pour rejoindre', lp.x, lp.y + 8);
   },
 
   // ===== UTILITIES =====

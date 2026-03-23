@@ -66,6 +66,42 @@ const Environments = {
       name: 'Zone', width: 4, height: 4, solid: false,
       color: 'rgba(100,160,200,0.12)', topColor: 'rgba(100,160,200,0.2)', drawHeight: 0, isZone: true,
     },
+    smallStage: {
+      name: 'Petite estrade', width: 3, height: 2, solid: false,
+      color: '#B08050', topColor: '#C89868', drawHeight: 6, isStage: true,
+    },
+    podium: {
+      name: 'Pupitre', width: 1, height: 1, solid: true,
+      color: '#8B6B3E', topColor: '#A0804A', drawHeight: 18, isPodium: true,
+    },
+    projector: {
+      name: 'Projecteur', width: 1, height: 1, solid: true,
+      color: '#333', topColor: '#444', drawHeight: 28, isProjector: true,
+    },
+    waterCooler: {
+      name: 'Fontaine à eau', width: 1, height: 1, solid: true,
+      color: '#87CEEB', topColor: '#ADD8E6', drawHeight: 16, isWaterCooler: true,
+    },
+    filingCabinet: {
+      name: 'Classeur', width: 1, height: 1, solid: true,
+      color: '#808080', topColor: '#909090', drawHeight: 20,
+    },
+    standingDesk: {
+      name: 'Bureau debout', width: 2, height: 1, solid: true,
+      color: '#C8A96E', topColor: '#DFC088', drawHeight: 18, isStandingDesk: true,
+    },
+    collabSpace: {
+      name: 'Espace collab', width: 4, height: 4, solid: false,
+      color: 'rgba(46,204,113,0.12)', topColor: 'rgba(46,204,113,0.2)', drawHeight: 0, isCollabSpace: true,
+    },
+    largeCarpet: {
+      name: 'Grand tapis', width: 5, height: 5, solid: false,
+      color: '#b08080', topColor: '#c09090', drawHeight: 0, isCarpet: true,
+    },
+    lamp: {
+      name: 'Lampadaire', width: 1, height: 1, solid: true,
+      color: '#C0C0C0', topColor: '#D0D0D0', drawHeight: 28, isLamp: true,
+    },
   },
 
   presets: {
