@@ -45,9 +45,9 @@ describe('EPIC 1 — Création d\'une room', () => {
       expect(room.gridSize).toBe(60);
     });
 
-    test('Grille en dessous du minimum → réinitialisée à 20', () => {
-      const room = rm.createRoom('r1', { name: 'Test', gridSize: 10 });
-      expect(room.gridSize).toBe(20);
+    test('Grille en dessous du minimum → réinitialisée au min', () => {
+      const room = rm.createRoom('r1', { name: 'Test', gridSize: 3 });
+      expect(room.gridSize).toBe(CONSTANTS.GRID_MIN);
     });
 
     test('Grille au-dessus du maximum → réinitialisée à 100', () => {
@@ -456,8 +456,8 @@ describe('EPIC 10 — Personnalisation de la room en live', () => {
     test('Grille clamped à min/max', () => {
       rm.createRoom('r1', { name: 'Test' });
       rm.joinRoom('r1', 's1', { pseudo: 'Admin', colors: {}, isCreator: true });
-      const r1 = rm.resizeGrid('r1', 's1', 5);
-      expect(r1.newSize).toBe(20);
+      const r1 = rm.resizeGrid('r1', 's1', 2);
+      expect(r1.newSize).toBe(CONSTANTS.GRID_MIN);
       const r2 = rm.resizeGrid('r1', 's1', 999);
       expect(r2.newSize).toBe(100);
     });

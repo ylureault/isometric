@@ -1,16 +1,14 @@
-// Engine: main game loop, input, camera, zoom, rendering, reactions, effects
+// Engine: game loop, input, camera, zoom, rendering
 
-const Engine = {
-  canvas: null,
-  ctx: null,
-  minimapCanvas: null,
-  minimapCtx: null,
+var Engine = {
+  canvas: null, ctx: null,
+  minimapCanvas: null, minimapCtx: null,
 
   player: {
     x: 10, y: 10,
     direction: { dx: 0, dy: 1 },
     walkPhase: 0, isWalking: false,
-    pseudo: '', colors: { ...CONSTANTS.DEFAULT_COLORS },
+    pseudo: '', colors: null,
     role: 'participant', isAdmin: false,
     isMuted: true, tableId: null, handRaised: false,
     isBroadcasting: false,
@@ -19,21 +17,13 @@ const Engine = {
   camera: { x: 0, y: 0 },
   zoom: CONSTANTS.ZOOM_DEFAULT,
   keys: {},
-
-  roomConfig: {
-    name: 'Room', environment: 'bureau',
-    gridSize: 25, roomId: null, isCreator: false,
-  },
-
-  stars: [],
-  lastTime: 0,
-  started: false,
-  reactions: [],
-  confetti: [],
-  spotlight: null,
+  roomConfig: { name: 'Room', environment: 'bureau', gridSize: 20, roomId: null, isCreator: false },
+  stars: [], lastTime: 0, started: false,
+  reactions: [], confetti: [], spotlight: null,
   tables: new Map(),
 
-  init() {
+  init: function() {
+    this.player.colors = Object.assign({}, CONSTANTS.DEFAULT_COLORS);
     this.canvas = document.getElementById('game-canvas');
     this.ctx = this.canvas.getContext('2d');
     this.minimapCanvas = document.getElementById('minimap-canvas');
@@ -41,120 +31,88 @@ const Engine = {
 
     this.parseRoomConfig();
     this.resize();
-    this.generateStars();
+    this.genStars();
 
-    window.addEventListener('resize', () => this.resize());
-    window.addEventListener('keydown', (e) => this.onKeyDown(e));
-    window.addEventListener('keyup', (e) => this.onKeyUp(e));
-    window.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
-    window.addEventListener('beforeunload', () => { Network.leaveRoom(); Audio.destroy(); });
-    window.addEventListener('contextmenu', (e) => { e.preventDefault(); this.onRightClick(e); });
-    this.canvas.addEventListener('click', (e) => { UI.hideContextMenu(); });
+    var self = this;
+    window.addEventListener('resize', function() { self.resize(); });
+    window.addEventListener('keydown', function(e) { self.onKeyDown(e); });
+    window.addEventListener('keyup', function(e) { self.onKeyUp(e); });
+    window.addEventListener('wheel', function(e) { self.onWheel(e); }, { passive: false });
+    window.addEventListener('beforeunload', function() { Network.leaveRoom(); });
+    window.addEventListener('contextmenu', function(e) { e.preventDefault(); self.onRightClick(e); });
+    this.canvas.addEventListener('click', function() { UI.hideContextMenu(); });
 
     Network.init();
     Audio.init();
     UI.initToolbar();
 
-    Network.onParticipantJoined = (d) => UI.showNotification(`${d.pseudo} a rejoint`);
-    Network.onParticipantLeft = (d) => UI.showNotification(`${d.pseudo} a quitté`);
-    Network.onParticipantDisconnected = (d) => UI.showNotification(`${d.pseudo} déconnecté`);
-    Network.onReconnecting = () => UI.showReconnecting(true);
-    Network.onReconnected = () => { UI.showReconnecting(false); UI.showNotification('Reconnecté !'); };
+    Network.onParticipantJoined = function(d) { UI.showNotification(d.pseudo + ' a rejoint'); };
+    Network.onParticipantLeft = function(d) { UI.showNotification(d.pseudo + ' a quitté'); };
+    Network.onParticipantDisconnected = function(d) { UI.showNotification(d.pseudo + ' déconnecté'); };
+    Network.onReconnecting = function() { UI.showReconnecting(true); };
+    Network.onReconnected = function() { UI.showReconnecting(false); UI.showNotification('Reconnecté !'); };
 
     this.setupNetworkEvents();
     this.checkRoom();
   },
 
-  setupNetworkEvents() {
-    const s = Network.socket;
-    s.on('rtc-offer', (d) => Audio.handleOffer(d.fromSocketId, d.offer));
-    s.on('rtc-answer', (d) => Audio.handleAnswer(d.fromSocketId, d.answer));
-    s.on('rtc-ice-candidate', (d) => Audio.handleIceCandidate(d.fromSocketId, d.candidate));
-    s.on('screen-rtc-offer', (d) => ScreenShare.handleScreenOffer(d.fromSocketId, d.offer));
-    s.on('screen-rtc-answer', (d) => ScreenShare.handleScreenAnswer(d.fromSocketId, d.answer));
-    s.on('screen-rtc-ice-candidate', (d) => ScreenShare.handleScreenIceCandidate(d.fromSocketId, d.candidate));
-    s.on('screen-share-started', (d) => {
-      ScreenShare.activeGlobalShare = { socketId: d.socketId, pseudo: d.pseudo };
-      UI.showNotification(`${d.pseudo} partage son écran`);
+  setupNetworkEvents: function() {
+    var self = this;
+    var s = Network.socket;
+
+    // WebRTC
+    s.on('rtc-offer', function(d) { Audio.handleOffer(d.fromSocketId, d.offer); });
+    s.on('rtc-answer', function(d) { Audio.handleAnswer(d.fromSocketId, d.answer); });
+    s.on('rtc-ice-candidate', function(d) { Audio.handleIceCandidate(d.fromSocketId, d.candidate); });
+    s.on('screen-rtc-offer', function(d) { ScreenShare.handleScreenOffer(d.fromSocketId, d.offer); });
+    s.on('screen-rtc-answer', function(d) { ScreenShare.handleScreenAnswer(d.fromSocketId, d.answer); });
+    s.on('screen-rtc-ice-candidate', function(d) { ScreenShare.handleScreenIceCandidate(d.fromSocketId, d.candidate); });
+    s.on('screen-share-started', function(d) { ScreenShare.activeGlobalShare = { socketId: d.socketId, pseudo: d.pseudo }; UI.showNotification(d.pseudo + ' partage son écran'); });
+    s.on('screen-share-stopped', function(d) { ScreenShare.removeShare(d.socketId); });
+    s.on('role-changed', function(d) {
+      if (d.socketId === Network.mySocketId) { self.player.isAdmin = d.isAdmin; UI.updateAdminUI(d.isAdmin); }
+      var rp = Network.remotePlayers.get(d.socketId); if (rp) rp.isAdmin = d.isAdmin;
     });
-    s.on('screen-share-stopped', (d) => {
-      ScreenShare.removeShare(d.socketId);
-      UI.showNotification('Partage terminé');
+    s.on('kicked', function(d) { alert(d.reason || 'Exclu'); window.location.href = '/client/index.html'; });
+    s.on('participant-kicked', function(d) { Network.remotePlayers.delete(d.socketId); });
+    s.on('room-closed', function(d) { alert('Room fermée'); window.location.href = '/client/index.html'; });
+    s.on('participant-mute-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isMuted = d.muted; });
+    s.on('table-created', function(t) { self.tables.set(t.id, t); });
+    s.on('table-deleted', function(d) { self.tables.delete(d.tableId); });
+    s.on('table-renamed', function(d) { var t = self.tables.get(d.tableId); if (t) t.name = d.name; });
+    s.on('table-moved', function(d) { var t = self.tables.get(d.tableId); if (t) { t.x = d.x; t.y = d.y; } });
+    s.on('participant-table-changed', function(d) {
+      var r = Network.remotePlayers.get(d.socketId); if (r) r.tableId = d.tableId;
+      if (d.socketId === Network.mySocketId) self.player.tableId = d.tableId;
     });
-    s.on('role-changed', (d) => {
-      if (d.socketId === Network.mySocketId) {
-        this.player.isAdmin = d.isAdmin;
-        UI.updateAdminUI(d.isAdmin);
-        UI.showNotification(d.isAdmin ? 'Vous êtes admin !' : 'Rôle admin retiré');
-      }
-      const rp = Network.remotePlayers.get(d.socketId);
-      if (rp) rp.isAdmin = d.isAdmin;
+    s.on('theme-changed', function(t) { if (t.floorColor1) Board.floorColor1 = t.floorColor1; if (t.floorColor2) Board.floorColor2 = t.floorColor2; });
+    s.on('environment-changed', function(d) { self.roomConfig.environment = d.environment; Board.init(self.roomConfig.gridSize, d.environment); });
+    s.on('grid-resized', function(d) { self.roomConfig.gridSize = d.size; Board.init(d.size, self.roomConfig.environment); self.player.x = Math.min(self.player.x, d.size - 1); self.player.y = Math.min(self.player.y, d.size - 1); });
+    s.on('reaction', function(d) {
+      var r = Network.remotePlayers.get(d.socketId);
+      if (r) self.addReaction(d.emoji, r.renderX, r.renderY);
     });
-    s.on('kicked', (d) => { alert(d.reason || 'Exclu'); window.location.href = '/client/index.html'; });
-    s.on('participant-kicked', (d) => { UI.showNotification(`${d.pseudo} exclu`); Network.remotePlayers.delete(d.socketId); });
-    s.on('room-closed', (d) => { alert(d.reason || 'Room fermée'); window.location.href = '/client/index.html'; });
-    s.on('participant-mute-changed', (d) => { const r = Network.remotePlayers.get(d.socketId); if (r) r.isMuted = d.muted; });
-    s.on('table-created', (t) => this.tables.set(t.id, t));
-    s.on('table-deleted', (d) => this.tables.delete(d.tableId));
-    s.on('table-renamed', (d) => { const t = this.tables.get(d.tableId); if (t) t.name = d.name; });
-    s.on('table-moved', (d) => { const t = this.tables.get(d.tableId); if (t) { t.x = d.x; t.y = d.y; } });
-    s.on('participant-table-changed', (d) => {
-      const r = Network.remotePlayers.get(d.socketId); if (r) r.tableId = d.tableId;
-      if (d.socketId === Network.mySocketId) this.player.tableId = d.tableId;
+    s.on('hand-toggled', function(d) {
+      var r = Network.remotePlayers.get(d.socketId); if (r) r.handRaised = d.handRaised;
+      if (d.socketId === Network.mySocketId) self.player.handRaised = d.handRaised;
     });
-    s.on('theme-changed', (t) => { if (t.floorColor1) Board.floorColor1 = t.floorColor1; if (t.floorColor2) Board.floorColor2 = t.floorColor2; });
-    s.on('environment-changed', (d) => {
-      this.roomConfig.environment = d.environment;
-      Board.init(this.roomConfig.gridSize, d.environment);
-      UI.showNotification(`Environnement: ${d.environment}`);
-    });
-    s.on('grid-resized', (d) => {
-      this.roomConfig.gridSize = d.size;
-      Board.init(d.size, this.roomConfig.environment);
-      this.player.x = Math.min(this.player.x, d.size - 1);
-      this.player.y = Math.min(this.player.y, d.size - 1);
-      UI.showNotification(`Grille: ${d.size}x${d.size}`);
-    });
-    // Reactions from others only (local already added in sendReaction)
-    s.on('reaction', (d) => {
-      const r = Network.remotePlayers.get(d.socketId);
-      if (r) this.addReaction(d.emoji, r.renderX, r.renderY);
-    });
-    s.on('hand-toggled', (d) => {
-      const r = Network.remotePlayers.get(d.socketId); if (r) r.handRaised = d.handRaised;
-      if (d.socketId === Network.mySocketId) this.player.handRaised = d.handRaised;
-    });
-    s.on('all-hands-lowered', () => {
-      this.player.handRaised = false;
-      for (const [, r] of Network.remotePlayers) r.handRaised = false;
-    });
-    s.on('effect-triggered', (d) => {
-      if (d.type === 'confetti') this.triggerConfetti();
-      if (d.type === 'applause') this.triggerApplause();
-    });
-    s.on('spotlight-changed', (d) => { this.spotlight = d.active ? d.targetSocketId : null; });
-    s.on('vote-created', (v) => UI.showVotePopup(v));
-    s.on('vote-updated', (v) => UI.updateVotePopup(v));
-    s.on('vote-ended', (v) => { UI.updateVotePopup(v); setTimeout(() => UI.hideVotePopup(), 5000); });
-    s.on('timer-created', (t) => UI.showTimer(t));
-    s.on('timer-ended', () => UI.showNotification('Timer terminé !'));
-    s.on('timer-paused', (d) => { if (UI.activeTimer) UI.activeTimer.paused = d.paused; });
-    s.on('furniture-added', (i) => { Board.furniture.push(i); Board.buildCollisionMap(); });
-    s.on('furniture-removed', (d) => { Board.furniture = Board.furniture.filter(f => f.id !== d.furnitureId); Board.buildCollisionMap(); });
-    // Admin broadcast
-    s.on('admin-broadcast-start', (d) => {
-      const r = Network.remotePlayers.get(d.socketId);
-      if (r) r.isBroadcasting = true;
-      UI.showNotification(`${d.pseudo} parle à tout le monde`);
-    });
-    s.on('admin-broadcast-stop', (d) => {
-      const r = Network.remotePlayers.get(d.socketId);
-      if (r) r.isBroadcasting = false;
-    });
+    s.on('all-hands-lowered', function() { self.player.handRaised = false; Network.remotePlayers.forEach(function(r) { r.handRaised = false; }); });
+    s.on('effect-triggered', function(d) { if (d.type === 'confetti') self.triggerConfetti(); if (d.type === 'applause') self.triggerApplause(); });
+    s.on('spotlight-changed', function(d) { self.spotlight = d.active ? d.targetSocketId : null; });
+    s.on('vote-created', function(v) { UI.showVotePopup(v); });
+    s.on('vote-updated', function(v) { UI.updateVotePopup(v); });
+    s.on('vote-ended', function(v) { UI.updateVotePopup(v); setTimeout(function() { UI.hideVotePopup(); }, 5000); });
+    s.on('timer-created', function(t) { UI.showTimer(t); });
+    s.on('timer-ended', function() { UI.showNotification('Timer terminé !'); });
+    s.on('timer-paused', function(d) { if (UI.activeTimer) UI.activeTimer.paused = d.paused; });
+    s.on('furniture-added', function(i) { Board.furniture.push(i); Board.buildCollisionMap(); });
+    s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); });
+    s.on('admin-broadcast-start', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = true; UI.showNotification(d.pseudo + ' parle à tous'); });
+    s.on('admin-broadcast-stop', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = false; });
   },
 
-  parseRoomConfig() {
-    const p = new URLSearchParams(window.location.search);
+  parseRoomConfig: function() {
+    var p = new URLSearchParams(window.location.search);
     this.roomConfig.roomId = p.get('room');
     this.roomConfig.name = p.get('name') || 'Room';
     this.roomConfig.environment = p.get('env') || 'open-space';
@@ -162,110 +120,101 @@ const Engine = {
     this.roomConfig.isCreator = p.get('creator') === 'true';
   },
 
-  async checkRoom() {
+  checkRoom: function() {
+    var self = this;
     if (!this.roomConfig.roomId) { UI.showError('Aucun ID de room'); return; }
     if (!this.roomConfig.isCreator) {
-      try {
-        const resp = await fetch(`/api/rooms/${this.roomConfig.roomId}`);
-        if (resp.ok) {
-          const info = await resp.json();
-          this.roomConfig.name = info.name;
-          this.roomConfig.environment = info.environment;
-          this.roomConfig.gridSize = info.gridSize;
-          if (info.participantCount >= info.maxParticipants) { UI.showError('Room pleine'); return; }
-          UI.showRoomInfo(info);
-        } else { UI.showError('Room introuvable'); return; }
-      } catch (e) { /* proceed */ }
+      fetch('/api/rooms/' + this.roomConfig.roomId).then(function(resp) {
+        if (!resp.ok) { UI.showError('Room introuvable'); return; }
+        return resp.json();
+      }).then(function(info) {
+        if (!info) return;
+        self.roomConfig.name = info.name;
+        self.roomConfig.environment = info.environment;
+        self.roomConfig.gridSize = info.gridSize;
+        if (info.participantCount >= info.maxParticipants) { UI.showError('Room pleine'); return; }
+        self.initBoard();
+      }).catch(function() { self.initBoard(); });
+    } else {
+      this.initBoard();
     }
-    Board.init(this.roomConfig.gridSize, this.roomConfig.environment);
-    UI.initAvatarConfig(async (config) => {
-      this.player.pseudo = config.pseudo;
-      this.player.colors = config.colors;
-      const mic = await Audio.requestMicrophone();
-      this.player.isMuted = !mic;
-      UI.updateMuteButton(this.player.isMuted);
-      this.joinRoom();
-    });
-    document.getElementById('hud-room-name').textContent = this.roomConfig.name;
   },
 
-  joinRoom() {
+  initBoard: function() {
+    var self = this;
+    Board.init(this.roomConfig.gridSize, this.roomConfig.environment);
+    document.getElementById('hud-room-name').textContent = this.roomConfig.name;
+    UI.initAvatarConfig(function(config) {
+      self.player.pseudo = config.pseudo;
+      self.player.colors = config.colors;
+      Audio.requestMicrophone().then(function(mic) {
+        self.player.isMuted = !mic;
+        UI.updateMuteButton(self.player.isMuted);
+        self.joinRoom();
+      });
+    });
+  },
+
+  joinRoom: function() {
+    var self = this;
     Network.joinRoom(this.roomConfig.roomId, {
       pseudo: this.player.pseudo, colors: this.player.colors,
       isCreator: this.roomConfig.isCreator, roomName: this.roomConfig.name,
       environment: this.roomConfig.environment, gridSize: this.roomConfig.gridSize,
-    }, (r) => {
-      if (r.error) {
-        const m = { room_not_found: 'Room introuvable', room_full: 'Room pleine', room_closed: 'Room fermée' };
-        UI.showError(m[r.error] || 'Erreur'); return;
-      }
-      this.player.x = r.you.x; this.player.y = r.you.y;
-      this.player.role = r.you.role; this.player.isAdmin = r.you.isAdmin;
-      this.roomConfig.name = r.room.name;
-      this.roomConfig.environment = r.room.environment;
-      this.roomConfig.gridSize = r.room.gridSize;
-      document.getElementById('hud-room-name').textContent = this.roomConfig.name;
-      if (!this.roomConfig.isCreator) Board.init(r.room.gridSize, r.room.environment);
-      if (r.tables) for (const t of r.tables) this.tables.set(t.id, t);
-      UI.showCopyLink(this.roomConfig.roomId);
-      UI.updateAdminUI(this.player.isAdmin);
-      this.start();
+    }, function(r) {
+      if (r.error) { UI.showError(r.error); return; }
+      self.player.x = r.you.x; self.player.y = r.you.y;
+      self.player.role = r.you.role; self.player.isAdmin = r.you.isAdmin;
+      self.roomConfig.name = r.room.name;
+      self.roomConfig.environment = r.room.environment;
+      self.roomConfig.gridSize = r.room.gridSize;
+      document.getElementById('hud-room-name').textContent = r.room.name;
+      if (!self.roomConfig.isCreator) Board.init(r.room.gridSize, r.room.environment);
+      if (r.tables) r.tables.forEach(function(t) { self.tables.set(t.id, t); });
+      UI.showCopyLink(self.roomConfig.roomId);
+      UI.updateAdminUI(self.player.isAdmin);
+      // Set camera immediately to player
+      var ps = Board.iso(self.player.x, self.player.y);
+      self.camera.x = self.canvas.width / 2 - ps.x * self.zoom;
+      self.camera.y = self.canvas.height / 2 - ps.y * self.zoom;
+      self.start();
     });
   },
 
-  resize() {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
-  },
+  resize: function() { this.canvas.width = window.innerWidth; this.canvas.height = window.innerHeight; },
 
-  generateStars() {
+  genStars: function() {
     this.stars = [];
-    for (let i = 0; i < 120; i++) {
-      this.stars.push({
-        x: Math.random(), y: Math.random(),
-        size: Math.random() * 1.5 + 0.3,
-        alpha: Math.random() * 0.4 + 0.1,
-        speed: Math.random() * 2 + 0.5,
-      });
+    for (var i = 0; i < 100; i++) {
+      this.stars.push({ x: Math.random(), y: Math.random(), s: Math.random() * 1.5 + 0.3, a: Math.random() * 0.3 + 0.1, sp: Math.random() * 2 + 0.5 });
     }
   },
 
-  onWheel(e) {
+  onWheel: function(e) {
     if (!this.started) return;
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -CONSTANTS.ZOOM_STEP : CONSTANTS.ZOOM_STEP;
-    this.zoom = Math.max(CONSTANTS.ZOOM_MIN, Math.min(CONSTANTS.ZOOM_MAX, this.zoom + delta));
+    var d = e.deltaY > 0 ? -CONSTANTS.ZOOM_STEP : CONSTANTS.ZOOM_STEP;
+    this.zoom = Math.max(CONSTANTS.ZOOM_MIN, Math.min(CONSTANTS.ZOOM_MAX, this.zoom + d));
   },
 
-  onKeyDown(e) {
+  onKeyDown: function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     this.keys[e.code] = true;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-
-    // Shortcuts
-    if (e.code === 'KeyM') { const m = Audio.toggleMute(); this.player.isMuted = m; UI.updateMuteButton(m); }
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].indexOf(e.code) >= 0) e.preventDefault();
+    if (e.code === 'KeyM') { var m = Audio.toggleMute(); this.player.isMuted = m; UI.updateMuteButton(m); }
     if (e.code === 'KeyH') Network.socket.emit('toggle-hand', {});
-    if (e.code === 'Tab') { e.preventDefault(); const mc = document.getElementById('minimap-container'); if (mc) mc.style.display = mc.style.display === 'none' ? 'block' : 'none'; }
+    if (e.code === 'Tab') { e.preventDefault(); var mc = document.getElementById('minimap-container'); if (mc) mc.style.display = mc.style.display === 'none' ? 'block' : 'none'; }
     if (e.key === '?') UI.toggleShortcutsModal();
-    if (e.code === 'Escape') {
-      UI.hideContextMenu();
-      if (UI.shortcutsModalOpen) UI.toggleShortcutsModal();
-      if (UI.adminPanelOpen) UI.toggleAdminPanel();
-      const vp = document.getElementById('vote-popup'); if (vp) vp.style.display = 'none';
-    }
-
-    // Admin broadcast: hold Space to talk to everyone
+    if (e.code === 'Escape') { UI.hideContextMenu(); if (UI.shortcutsModalOpen) UI.toggleShortcutsModal(); if (UI.adminPanelOpen) UI.toggleAdminPanel(); }
     if (e.code === 'Space' && this.player.isAdmin && !this.player.isBroadcasting) {
       this.player.isBroadcasting = true;
       Network.socket.emit('admin-broadcast-start');
     }
-
-    // Reactions 1-6
-    const rMap = { 'Digit1': '👍', 'Digit2': '👏', 'Digit3': '❓', 'Digit4': '💡', 'Digit5': '❤️', 'Digit6': '😂' };
+    var rMap = { 'Digit1': '👍', 'Digit2': '👏', 'Digit3': '❓', 'Digit4': '💡', 'Digit5': '❤️', 'Digit6': '😂' };
     if (rMap[e.code]) this.sendReaction(rMap[e.code]);
   },
 
-  onKeyUp(e) {
+  onKeyUp: function(e) {
     this.keys[e.code] = false;
     if (e.code === 'Space' && this.player.isBroadcasting) {
       this.player.isBroadcasting = false;
@@ -273,74 +222,75 @@ const Engine = {
     }
   },
 
-  onRightClick(e) {
+  onRightClick: function(e) {
     if (!this.started) return;
-    const gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
-    for (const [sid, rp] of Network.remotePlayers) {
-      const dist = Math.sqrt((gp.x - rp.renderX) ** 2 + (gp.y - rp.renderY) ** 2);
-      if (dist < 1.5) { UI.showContextMenu(e.clientX, e.clientY, sid, rp); return; }
-    }
+    var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
+    Network.remotePlayers.forEach(function(rp, sid) {
+      var dist = Math.sqrt((gp.x - rp.renderX) * (gp.x - rp.renderX) + (gp.y - rp.renderY) * (gp.y - rp.renderY));
+      if (dist < 1.5) UI.showContextMenu(e.clientX, e.clientY, sid, rp);
+    });
   },
 
-  sendReaction(emoji) {
-    Network.socket.emit('reaction', { emoji });
+  sendReaction: function(emoji) {
+    Network.socket.emit('reaction', { emoji: emoji });
     this.addReaction(emoji, this.player.x, this.player.y);
   },
 
-  addReaction(emoji, x, y) {
-    this.reactions.push({ emoji, x, y, opacity: 1.2, offsetY: 0, scale: 0.5, createdAt: Date.now() });
+  addReaction: function(emoji, x, y) {
+    this.reactions.push({ emoji: emoji, x: x, y: y, opacity: 1.5, offsetY: 0, scale: 0.3, t: 0 });
   },
 
-  triggerConfetti() {
-    for (let i = 0; i < 120; i++) {
+  triggerConfetti: function() {
+    for (var i = 0; i < 100; i++) {
       this.confetti.push({
-        x: Math.random() * this.canvas.width, y: -Math.random() * 300,
-        vx: (Math.random() - 0.5) * 5, vy: Math.random() * 4 + 2,
-        color: ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF78C4', '#A78BFA'][Math.floor(Math.random() * 6)],
-        size: Math.random() * 8 + 3, rotation: Math.random() * Math.PI, opacity: 1,
+        x: Math.random() * this.canvas.width, y: -Math.random() * 200,
+        vx: (Math.random() - 0.5) * 5, vy: Math.random() * 3 + 2,
+        color: ['#FF6B6B','#FFD93D','#6BCB77','#4D96FF','#FF78C4'][Math.floor(Math.random() * 5)],
+        size: Math.random() * 6 + 3, rot: Math.random() * 6, opacity: 1,
       });
     }
   },
 
-  triggerApplause() {
-    for (const [, r] of Network.remotePlayers) this.addReaction('👏', r.renderX, r.renderY);
+  triggerApplause: function() {
+    var self = this;
+    Network.remotePlayers.forEach(function(r) { self.addReaction('👏', r.renderX, r.renderY); });
     this.addReaction('👏', this.player.x, this.player.y);
   },
 
-  start() {
+  start: function() {
     if (this.started) return;
     this.started = true;
     this.lastTime = performance.now();
-    this.loop(this.lastTime);
-    setInterval(() => { if (UI.activeTimer) UI.updateTimerDisplay(); }, 1000);
+    var self = this;
+    function loop(ts) {
+      var dt = Math.min((ts - self.lastTime) / 1000, 0.1);
+      self.lastTime = ts;
+      self.update(dt);
+      self.render(ts);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+    setInterval(function() { if (UI.activeTimer) UI.updateTimerDisplay(); }, 1000);
   },
 
-  loop(ts) {
-    const dt = Math.min((ts - this.lastTime) / 1000, 0.1);
-    this.lastTime = ts;
-    this.update(dt);
-    this.render(ts);
-    requestAnimationFrame((t) => this.loop(t));
-  },
-
-  update(dt) {
-    let dx = 0, dy = 0;
+  update: function(dt) {
+    var dx = 0, dy = 0;
     if (this.keys['ArrowUp'] || this.keys['KeyW'] || this.keys['KeyZ']) dy = -1;
     if (this.keys['ArrowDown'] || this.keys['KeyS']) dy = 1;
     if (this.keys['ArrowLeft'] || this.keys['KeyA'] || this.keys['KeyQ']) dx = -1;
     if (this.keys['ArrowRight'] || this.keys['KeyD']) dx = 1;
 
     if (dx !== 0 || dy !== 0) {
-      const len = Math.sqrt(dx * dx + dy * dy);
+      var len = Math.sqrt(dx * dx + dy * dy);
       dx /= len; dy /= len;
-      const speed = CONSTANTS.MOVE_SPEED * 60;
-      const nx = this.player.x + dx * speed * dt;
-      const ny = this.player.y + dy * speed * dt;
+      var speed = CONSTANTS.MOVE_SPEED * 60;
+      var nx = this.player.x + dx * speed * dt;
+      var ny = this.player.y + dy * speed * dt;
       if (!Board.isSolid(nx, this.player.y) && Board.isInBounds(nx, this.player.y)) this.player.x = nx;
       if (!Board.isSolid(this.player.x, ny) && Board.isInBounds(this.player.x, ny)) this.player.y = ny;
       this.player.x = Math.max(0.5, Math.min(Board.gridSize - 0.5, this.player.x));
       this.player.y = Math.max(0.5, Math.min(Board.gridSize - 0.5, this.player.y));
-      this.player.direction = { dx, dy };
+      this.player.direction = { dx: dx, dy: dy };
       this.player.isWalking = true;
       this.player.walkPhase += CONSTANTS.ANIMATION_SPEED * 60 * dt;
     } else {
@@ -351,69 +301,103 @@ const Engine = {
     Network.updateRemotePlayers(dt);
     Audio.updateProximity(this.player, Network.remotePlayers, CONSTANTS.AUDIO_RADIUS);
 
-    // Camera follow
-    const ps = Board.iso(this.player.x, this.player.y);
-    const tcx = this.canvas.width / 2 - ps.x * this.zoom;
-    const tcy = this.canvas.height / 2 - ps.y * this.zoom;
-    this.camera.x += (tcx - this.camera.x) * 0.08;
-    this.camera.y += (tcy - this.camera.y) * 0.08;
+    // Camera follow with zoom
+    var ps = Board.iso(this.player.x, this.player.y);
+    var tcx = this.canvas.width / 2 - ps.x * this.zoom;
+    var tcy = this.canvas.height / 2 - ps.y * this.zoom;
+    this.camera.x += (tcx - this.camera.x) * 0.12;
+    this.camera.y += (tcy - this.camera.y) * 0.12;
 
     // Update reactions
-    this.reactions = this.reactions.filter(r => {
-      r.offsetY -= dt * 40;
-      r.opacity -= dt * 0.45;
-      r.scale = Math.min(1, r.scale + dt * 3);
-      return r.opacity > 0;
-    });
+    var newReactions = [];
+    for (var i = 0; i < this.reactions.length; i++) {
+      var r = this.reactions[i];
+      r.t += dt;
+      r.offsetY -= dt * 35;
+      r.opacity -= dt * 0.5;
+      r.scale = Math.min(1, r.scale + dt * 4);
+      if (r.opacity > 0) newReactions.push(r);
+    }
+    this.reactions = newReactions;
 
     // Update confetti
-    this.confetti = this.confetti.filter(c => {
-      c.x += c.vx; c.y += c.vy; c.vy += 0.05;
-      c.rotation += 0.05; c.opacity -= 0.004;
-      return c.opacity > 0 && c.y < this.canvas.height + 50;
-    });
+    var newConf = [];
+    for (var j = 0; j < this.confetti.length; j++) {
+      var c = this.confetti[j];
+      c.x += c.vx; c.y += c.vy; c.vy += 0.06; c.rot += 0.05; c.opacity -= 0.004;
+      if (c.opacity > 0 && c.y < this.canvas.height + 50) newConf.push(c);
+    }
+    this.confetti = newConf;
 
     UI.updateHUD(this.roomConfig.name, this.player.x, this.player.y, Network.getParticipantCount(), this.zoom);
   },
 
-  render(ts) {
-    const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+  render: function(ts) {
+    var ctx = this.ctx;
+    var w = this.canvas.width;
+    var h = this.canvas.height;
 
-    ctx.fillStyle = '#080818';
+    // Background
+    ctx.fillStyle = '#080816';
     ctx.fillRect(0, 0, w, h);
 
-    this.drawStars(ctx, w, h, ts);
-    this.drawBoardGlow(ctx, w, h);
+    // Stars
+    for (var i = 0; i < this.stars.length; i++) {
+      var st = this.stars[i];
+      var a = st.a * (0.5 + 0.5 * Math.sin(ts / 1000 * st.sp));
+      ctx.beginPath();
+      ctx.arc(st.x * w, st.y * h * 0.5, st.s, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(180,200,240,' + a + ')';
+      ctx.fill();
+    }
 
-    // Apply zoom
+    // Board glow
+    var cs = Board.iso(Board.gridSize / 2, Board.gridSize / 2);
+    var gx = cs.x * this.zoom + this.camera.x;
+    var gy = cs.y * this.zoom + this.camera.y;
+    var grad = ctx.createRadialGradient(gx, gy, 30, gx, gy, 500);
+    grad.addColorStop(0, 'rgba(126,184,218,0.03)');
+    grad.addColorStop(1, 'rgba(126,184,218,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Apply zoom transform
     ctx.save();
     ctx.translate(this.camera.x, this.camera.y);
     ctx.scale(this.zoom, this.zoom);
 
-    Board.drawGrid(ctx, 0, 0, this.player.x, this.player.y, this.zoom);
+    // Draw grid
+    Board.drawGrid(ctx, 0, 0, this.player.x, this.player.y);
 
-    // Collect & sort entities
-    const ents = [];
-    for (const item of Board.furniture) {
-      const def = Environments.furnitureTypes[item.type];
-      if (def && (def.isZone || def.isCarpet)) continue; // already drawn under grid
-      ents.push({ type: 'furn', item, sk: item.x + item.y + (def ? (def.width + def.height) / 2 : 0) });
+    // Collect entities for depth sort
+    var entities = [];
+    var furn = Board.furniture;
+    for (var fi = 0; fi < furn.length; fi++) {
+      var item = furn[fi];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      var sk = item.x + item.y + ((def.width || 1) + (def.height || 1)) / 2;
+      entities.push({ type: 'f', item: item, sk: sk });
     }
-    for (const [, t] of this.tables) ents.push({ type: 'table', t, sk: t.x + t.y + (t.width + t.height) / 2 });
-    ents.push({ type: 'local', sk: this.player.x + this.player.y });
-    for (const [sid, p] of Network.remotePlayers) {
-      if (p.opacity <= 0) continue;
-      ents.push({ type: 'remote', p, sid, sk: p.renderX + p.renderY });
-    }
-    ents.sort((a, b) => a.sk - b.sk);
+    this.tables.forEach(function(t) {
+      entities.push({ type: 't', t: t, sk: t.x + t.y + (t.width + t.height) / 2 });
+    });
+    entities.push({ type: 'me', sk: this.player.x + this.player.y });
+    var self = this;
+    Network.remotePlayers.forEach(function(p, sid) {
+      if (p.opacity <= 0) return;
+      entities.push({ type: 'r', p: p, sid: sid, sk: p.renderX + p.renderY });
+    });
+    entities.sort(function(a, b) { return a.sk - b.sk; });
 
-    for (const e of ents) {
-      if (e.type === 'furn') Board.drawFurnitureItem(ctx, e.item, 0, 0);
-      else if (e.type === 'table') this.drawTable(ctx, e.t, 0, 0);
-      else if (e.type === 'local') {
-        const onS = Board.isOnStage(Math.floor(this.player.x), Math.floor(this.player.y));
+    for (var ei = 0; ei < entities.length; ei++) {
+      var e = entities[ei];
+      if (e.type === 'f') {
+        Board.drawFurnitureItem(ctx, e.item, 0, 0);
+      } else if (e.type === 't') {
+        this.drawTable(ctx, e.t);
+      } else if (e.type === 'me') {
+        var onS = Board.isOnStage(Math.floor(this.player.x), Math.floor(this.player.y));
         Character.draw(ctx, this.player.x, this.player.y, 0, 0, {
           colors: this.player.colors, direction: this.player.direction,
           walkPhase: this.player.walkPhase, isWalking: this.player.isWalking,
@@ -421,24 +405,23 @@ const Engine = {
           isMuted: this.player.isMuted, handRaised: this.player.handRaised,
           isBroadcasting: this.player.isBroadcasting,
         });
-      } else if (e.type === 'remote') {
-        const p = e.p;
-        const onS = Board.isOnStage(Math.floor(p.renderX), Math.floor(p.renderY));
+      } else if (e.type === 'r') {
+        var p = e.p;
         ctx.save();
         ctx.globalAlpha = p.opacity;
-        if (this.spotlight && this.spotlight !== e.sid) ctx.globalAlpha *= 0.4;
+        if (self.spotlight && self.spotlight !== e.sid) ctx.globalAlpha *= 0.4;
         Character.draw(ctx, p.renderX, p.renderY, 0, 0, {
-          colors: p.colors, direction: p.direction,
-          walkPhase: p.walkPhase, isWalking: p.isWalking,
-          pseudo: p.pseudo, isOnStage: onS, isAdmin: p.isAdmin,
-          disconnected: p.disconnected, isMuted: p.isMuted,
+          colors: p.colors, direction: p.direction, walkPhase: p.walkPhase,
+          isWalking: p.isWalking, pseudo: p.pseudo,
+          isOnStage: Board.isOnStage(Math.floor(p.renderX), Math.floor(p.renderY)),
+          isAdmin: p.isAdmin, disconnected: p.disconnected, isMuted: p.isMuted,
           handRaised: p.handRaised, isBroadcasting: p.isBroadcasting,
         });
         ctx.restore();
       }
     }
 
-    // Proximity radius gradient
+    // Proximity radius (gradient)
     this.drawProximityRadius(ctx);
 
     // Reactions
@@ -453,113 +436,79 @@ const Engine = {
     this.drawMinimap();
   },
 
-  drawTable(ctx, table, ox, oy) {
-    const cx = table.x + table.width / 2;
-    const cy = table.y + table.height / 2;
-    const pos = Board.iso(cx, cy);
-    const sx = pos.x + ox;
-    const sy = pos.y + oy;
-    const tw = Board.tileWidth * Math.cos(Math.PI / 6);
-    const W = tw * table.width * 0.4;
-    const D = Board.tileHeight * table.height * 0.4;
-    const H = 10;
+  drawTable: function(ctx, table) {
+    var cx = table.x + table.width / 2;
+    var cy = table.y + table.height / 2;
+    var pos = Board.iso(cx, cy);
+    var sx = pos.x, sy = pos.y;
+    var tw = Board.tileWidth / 2;
+    var W = tw * table.width * 0.4;
+    var D = (Board.tileHeight / 2) * table.height * 0.4;
+    var H = 12;
 
-    // Shadow
     ctx.beginPath();
-    ctx.ellipse(sx, sy + 3, W * 0.55, D * 0.35, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + 4, W * 0.5, D * 0.3, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fill();
 
-    // Top
     ctx.beginPath();
-    ctx.moveTo(sx, sy - H - D * 0.5);
-    ctx.lineTo(sx + W * 0.5, sy - H);
-    ctx.lineTo(sx, sy - H + D * 0.5);
-    ctx.lineTo(sx - W * 0.5, sy - H);
+    ctx.moveTo(sx, sy - H - D); ctx.lineTo(sx + W, sy - H);
+    ctx.lineTo(sx, sy - H + D); ctx.lineTo(sx - W, sy - H);
     ctx.closePath();
-    ctx.fillStyle = '#8B6B3E';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
+    ctx.fillStyle = '#8B6B3E'; ctx.fill();
 
-    // Right side
     ctx.beginPath();
-    ctx.moveTo(sx + W * 0.5, sy - H);
-    ctx.lineTo(sx, sy - H + D * 0.5);
-    ctx.lineTo(sx, sy + D * 0.5);
-    ctx.lineTo(sx + W * 0.5, sy);
+    ctx.moveTo(sx + W, sy - H); ctx.lineTo(sx, sy - H + D);
+    ctx.lineTo(sx, sy + D); ctx.lineTo(sx + W, sy);
     ctx.closePath();
-    ctx.fillStyle = '#5A3E28';
-    ctx.fill();
+    ctx.fillStyle = '#5A3E28'; ctx.fill();
 
-    // Left side
     ctx.beginPath();
-    ctx.moveTo(sx - W * 0.5, sy - H);
-    ctx.lineTo(sx, sy - H + D * 0.5);
-    ctx.lineTo(sx, sy + D * 0.5);
-    ctx.lineTo(sx - W * 0.5, sy);
+    ctx.moveTo(sx - W, sy - H); ctx.lineTo(sx, sy - H + D);
+    ctx.lineTo(sx, sy + D); ctx.lineTo(sx - W, sy);
     ctx.closePath();
-    ctx.fillStyle = '#6B4F2E';
-    ctx.fill();
+    ctx.fillStyle = '#6B4F2E'; ctx.fill();
 
-    // Label
     if (table.name) {
-      ctx.font = 'bold 9px "Segoe UI", sans-serif';
+      ctx.font = 'bold 10px "Segoe UI", sans-serif';
       ctx.fillStyle = '#FFD700';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(table.name, sx, sy - H - D * 0.5 - 10);
-    }
-    if (table.participantCount > 0) {
-      ctx.font = '8px "Segoe UI", sans-serif';
-      ctx.fillStyle = '#aaa';
-      ctx.fillText(`${table.participantCount} pers.`, sx, sy - H - D * 0.5 - 2);
+      ctx.fillText(table.name, sx, sy - H - D - 8);
     }
   },
 
-  drawProximityRadius(ctx) {
-    const pos = Board.iso(this.player.x, this.player.y);
-    const sx = pos.x;
-    const sy = pos.y;
-    const tw = Board.tileWidth * Math.cos(Math.PI / 6);
-    const rx = CONSTANTS.AUDIO_RADIUS * tw * 0.5;
-    const ry = CONSTANTS.AUDIO_RADIUS * Board.tileHeight * 0.5;
+  drawProximityRadius: function(ctx) {
+    var pos = Board.iso(this.player.x, this.player.y);
+    var rx = CONSTANTS.AUDIO_RADIUS * (Board.tileWidth / 2);
+    var ry = CONSTANTS.AUDIO_RADIUS * (Board.tileHeight / 2);
 
-    // Radial gradient ellipse
     ctx.save();
-    ctx.translate(sx, sy);
+    ctx.translate(pos.x, pos.y);
     ctx.scale(1, ry / rx);
-
-    const grad = ctx.createRadialGradient(0, 0, rx * 0.2, 0, 0, rx);
-    grad.addColorStop(0, 'rgba(126, 184, 218, 0.08)');
-    grad.addColorStop(0.5, 'rgba(126, 184, 218, 0.04)');
-    grad.addColorStop(0.85, 'rgba(126, 184, 218, 0.02)');
-    grad.addColorStop(1, 'rgba(126, 184, 218, 0)');
-
+    var g = ctx.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx);
+    g.addColorStop(0, 'rgba(126,184,218,0.07)');
+    g.addColorStop(0.6, 'rgba(126,184,218,0.03)');
+    g.addColorStop(1, 'rgba(126,184,218,0)');
     ctx.beginPath();
     ctx.arc(0, 0, rx, 0, Math.PI * 2);
-    ctx.fillStyle = grad;
+    ctx.fillStyle = g;
     ctx.fill();
-
-    // Soft outer ring
-    ctx.beginPath();
-    ctx.arc(0, 0, rx, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(126, 184, 218, 0.12)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(126,184,218,0.1)';
+    ctx.lineWidth = 1;
     ctx.stroke();
-
     ctx.restore();
   },
 
-  drawReactions(ctx) {
-    for (const r of this.reactions) {
-      const pos = Board.iso(r.x, r.y);
-      const sx = pos.x;
-      const sy = pos.y + r.offsetY - 45;
+  drawReactions: function(ctx) {
+    for (var i = 0; i < this.reactions.length; i++) {
+      var r = this.reactions[i];
+      var pos = Board.iso(r.x, r.y);
+      var sx = pos.x;
+      var sy = pos.y + r.offsetY - 50;
       ctx.save();
       ctx.globalAlpha = Math.min(1, r.opacity);
-      ctx.font = `${Math.floor(24 * r.scale)}px sans-serif`;
+      var fs = Math.max(12, Math.floor(28 * r.scale));
+      ctx.font = fs + 'px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(r.emoji, sx, sy);
@@ -567,70 +516,46 @@ const Engine = {
     }
   },
 
-  drawConfetti(ctx) {
-    for (const c of this.confetti) {
+  drawConfetti: function(ctx) {
+    for (var i = 0; i < this.confetti.length; i++) {
+      var c = this.confetti[i];
       ctx.save();
       ctx.globalAlpha = c.opacity;
       ctx.translate(c.x, c.y);
-      ctx.rotate(c.rotation);
+      ctx.rotate(c.rot);
       ctx.fillStyle = c.color;
       ctx.fillRect(-c.size / 2, -c.size * 0.3, c.size, c.size * 0.6);
       ctx.restore();
     }
   },
 
-  drawStars(ctx, w, h, ts) {
-    for (const s of this.stars) {
-      const a = s.alpha * (0.5 + 0.5 * Math.sin(ts / 1000 * s.speed));
-      ctx.beginPath();
-      ctx.arc(s.x * w, s.y * h * 0.5, s.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(180, 200, 240, ${a})`;
-      ctx.fill();
-    }
-  },
-
-  drawBoardGlow(ctx, w, h) {
-    const cs = Board.iso(Board.gridSize / 2, Board.gridSize / 2);
-    const gx = cs.x * this.zoom + this.camera.x;
-    const gy = cs.y * this.zoom + this.camera.y;
-    const grad = ctx.createRadialGradient(gx, gy, 30, gx, gy, 500);
-    grad.addColorStop(0, 'rgba(126, 184, 218, 0.035)');
-    grad.addColorStop(1, 'rgba(126, 184, 218, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-  },
-
-  drawMinimap() {
-    const ctx = this.minimapCtx;
-    const w = this.minimapCanvas.width;
-    const h = this.minimapCanvas.height;
-    const sc = Math.min(w, h) / Board.gridSize;
+  drawMinimap: function() {
+    var ctx = this.minimapCtx;
+    var w = this.minimapCanvas.width;
+    var h = this.minimapCanvas.height;
+    var sc = Math.min(w, h) / Board.gridSize;
 
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, 0, w, h);
-
-    for (let y = 0; y < Board.gridSize; y++) {
-      for (let x = 0; x < Board.gridSize; x++) {
+    for (var y = 0; y < Board.gridSize; y++) {
+      for (var x = 0; x < Board.gridSize; x++) {
         ctx.fillStyle = (x + y) % 2 === 0 ? Board.floorColor1 : Board.floorColor2;
         ctx.fillRect(x * sc, y * sc, sc + 0.5, sc + 0.5);
       }
     }
-
-    for (const item of Board.furniture) {
-      const def = Environments.furnitureTypes[item.type];
+    for (var fi = 0; fi < Board.furniture.length; fi++) {
+      var item = Board.furniture[fi];
+      var def = Environments.furnitureTypes[item.type];
       if (!def) continue;
       ctx.fillStyle = def.isStage ? '#9A7E68' : def.isZone ? 'rgba(126,184,218,0.2)' : def.color;
       ctx.fillRect(item.x * sc, item.y * sc, (def.width || 1) * sc, (def.height || 1) * sc);
     }
-    for (const [, t] of this.tables) {
-      ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-      ctx.fillRect(t.x * sc, t.y * sc, t.width * sc, t.height * sc);
-    }
-    for (const [, p] of Network.remotePlayers) {
-      if (p.opacity <= 0) continue;
+    var self = this;
+    Network.remotePlayers.forEach(function(p) {
+      if (p.opacity <= 0) return;
       ctx.fillStyle = p.disconnected ? 'rgba(255,255,100,0.5)' : '#6BFF6B';
       ctx.beginPath(); ctx.arc(p.renderX * sc, p.renderY * sc, 2, 0, Math.PI * 2); ctx.fill();
-    }
+    });
     ctx.fillStyle = '#6B9FFF';
     ctx.beginPath(); ctx.arc(this.player.x * sc, this.player.y * sc, 3, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(126,184,218,0.25)';
@@ -639,4 +564,4 @@ const Engine = {
   },
 };
 
-window.addEventListener('DOMContentLoaded', () => Engine.init());
+window.addEventListener('DOMContentLoaded', function() { Engine.init(); });
