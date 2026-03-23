@@ -207,8 +207,18 @@ const Character = {
     const th = 14;
 
     ctx.fillStyle = 'rgba(10, 10, 26, 0.75)';
+    var rx = sx - tw / 2, ry = sy - th / 2, rr = 4;
     ctx.beginPath();
-    ctx.roundRect(sx - tw / 2, sy - th / 2, tw, th, 4);
+    ctx.moveTo(rx + rr, ry);
+    ctx.lineTo(rx + tw - rr, ry);
+    ctx.arcTo(rx + tw, ry, rx + tw, ry + rr, rr);
+    ctx.lineTo(rx + tw, ry + th - rr);
+    ctx.arcTo(rx + tw, ry + th, rx + tw - rr, ry + th, rr);
+    ctx.lineTo(rx + rr, ry + th);
+    ctx.arcTo(rx, ry + th, rx, ry + th - rr, rr);
+    ctx.lineTo(rx, ry + rr);
+    ctx.arcTo(rx, ry, rx + rr, ry, rr);
+    ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = 'rgba(126, 184, 218, 0.3)';
     ctx.lineWidth = 0.5;
