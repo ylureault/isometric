@@ -223,6 +223,17 @@ body {
 .notification-show { opacity: 1; transform: translateY(0); }
 .notification-hide { opacity: 0; transform: translateY(-10px); }
 
+/* ===== Mic Permission Hint ===== */
+.mic-permission-hint {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  background: rgba(231,76,60,0.95); color: #fff; padding: 10px 20px;
+  border-radius: 10px; display: flex; align-items: center; gap: 10px;
+  font-size: 0.85rem; z-index: 75; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  backdrop-filter: blur(4px);
+}
+.mic-permission-hint .btn { background: #fff; color: #e74c3c; border: none; font-weight: bold; }
+.mic-permission-hint .btn:hover { background: #f5f5f5; }
+
 /* ===== Reconnecting ===== */
 .reconnecting-indicator {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);

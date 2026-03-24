@@ -145,6 +145,7 @@ const UI = {
     // Leave button
     document.getElementById('btn-leave')?.addEventListener('click', () => {
       if (confirm('Quitter la room ?')) {
+        try { localStorage.removeItem('insuffle_session'); } catch (e) {}
         Network.leaveRoom();
         Audio.destroy();
         ScreenShare.destroy();
@@ -197,6 +198,18 @@ const UI = {
     document.querySelectorAll('.admin-only').forEach(el => {
       el.style.display = isAdmin ? '' : 'none';
     });
+  },
+
+  // ===== MICROPHONE PERMISSION =====
+
+  showMicPermissionHint() {
+    var hint = document.getElementById('mic-permission-hint');
+    if (hint) hint.style.display = 'flex';
+  },
+
+  hideMicPermissionHint() {
+    var hint = document.getElementById('mic-permission-hint');
+    if (hint) hint.style.display = 'none';
   },
 
   // ===== NOTIFICATIONS =====

@@ -83,6 +83,7 @@ io.on('connection', (socket) => {
       socketId: socket.id,
       pseudo: result.participant.pseudo,
       colors: result.participant.colors,
+      accessory: result.participant.accessory || 'none',
       x: result.participant.x,
       y: result.participant.y,
       direction: result.participant.direction,

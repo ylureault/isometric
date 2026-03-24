@@ -116,6 +116,7 @@ const Network = {
       roomId,
       pseudo: config.pseudo,
       colors: config.colors,
+      accessory: config.accessory || 'none',
       isCreator: config.isCreator,
       roomName: config.roomName,
       environment: config.environment,

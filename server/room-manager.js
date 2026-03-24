@@ -62,6 +62,7 @@ class RoomManager {
       socketId,
       pseudo: data.pseudo,
       colors: data.colors,
+      accessory: data.accessory || 'none',
       x: data.x || Math.floor(room.gridSize / 2),
       y: data.y || Math.floor(room.gridSize / 2),
       direction: { dx: 0, dy: 1 },

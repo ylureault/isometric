@@ -180,15 +180,55 @@ var Engine = {
     var self = this;
     Board.init(this.roomConfig.gridSize, this.roomConfig.environment);
     document.getElementById('hud-room-name').textContent = this.roomConfig.name;
+
+    // Check for saved session (reconnect on refresh)
+    var savedSession = null;
+    try {
+      var saved = localStorage.getItem('insuffle_session');
+      if (saved) savedSession = JSON.parse(saved);
+    } catch (e) {}
+
+    // If same room and recent session (<30 min), auto-reconnect
+    if (savedSession && savedSession.roomId === this.roomConfig.roomId && (Date.now() - savedSession.time < 1800000)) {
+      self.player.pseudo = savedSession.pseudo;
+      self.player.colors = savedSession.colors;
+      self.player.accessory = savedSession.accessory || 'none';
+      // Skip avatar config, go straight to mic + join
+      document.getElementById('avatar-config').style.display = 'none';
+      document.getElementById('hud').style.display = 'flex';
+      document.getElementById('minimap-container').style.display = 'block';
+      document.getElementById('toolbar').style.display = 'flex';
+      self.requestMicAndJoin();
+      return;
+    }
+
     UI.initAvatarConfig(function(config) {
       self.player.pseudo = config.pseudo;
       self.player.colors = config.colors;
       self.player.accessory = config.accessory || 'none';
-      Audio.requestMicrophone().then(function(mic) {
-        self.player.isMuted = !mic;
-        UI.updateMuteButton(self.player.isMuted);
-        self.joinRoom();
-      });
+      // Save session for reconnect
+      try {
+        localStorage.setItem('insuffle_session', JSON.stringify({
+          roomId: self.roomConfig.roomId,
+          pseudo: config.pseudo,
+          colors: config.colors,
+          accessory: config.accessory || 'none',
+          time: Date.now(),
+        }));
+      } catch (e) {}
+      self.requestMicAndJoin();
+    });
+  },
+
+  requestMicAndJoin: function() {
+    var self = this;
+    Audio.requestMicrophone().then(function(mic) {
+      self.player.isMuted = !mic;
+      UI.updateMuteButton(self.player.isMuted);
+      if (!mic) {
+        UI.showMicPermissionHint();
+      }
+      self.joinRoom();
     });
   },
 
@@ -196,6 +236,7 @@ var Engine = {
     var self = this;
     Network.joinRoom(this.roomConfig.roomId, {
       pseudo: this.player.pseudo, colors: this.player.colors,
+      accessory: this.player.accessory || 'none',
       isCreator: this.roomConfig.isCreator, roomName: this.roomConfig.name,
       environment: this.roomConfig.environment, gridSize: this.roomConfig.gridSize,
     }, function(r) {
@@ -1004,7 +1045,7 @@ var Engine = {
       var item = Board.furniture[fi];
       var def = Environments.furnitureTypes[item.type];
       if (!def) continue;
-      ctx.fillStyle = def.isStage ? '#C8A878' : def.isZone ? 'rgba(100,160,200,0.15)' : def.color;
+      ctx.fillStyle = def.isStage ? '#C8A878' : def.isZone ? 'rgba(100,160,200,0.15)' : def.isCollabSpace ? 'rgba(46,204,113,0.15)' : def.isDoor ? 'rgba(155,89,182,0.4)' : def.color;
       ctx.fillRect(item.x * sc, item.y * sc, (def.width || 1) * sc, (def.height || 1) * sc);
     }
     var self = this;
