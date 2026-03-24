@@ -389,7 +389,7 @@ var Engine = {
     var px = this.player.x;
     var py = this.player.y;
 
-    // Check door furniture (portals to sub-rooms)
+    // Check door furniture (paired portals — teleport between doors)
     for (var di = 0; di < Board.furniture.length; di++) {
       var ditem = Board.furniture[di];
       var ddef = Environments.furnitureTypes[ditem.type];
@@ -397,28 +397,37 @@ var Engine = {
       if (clickX === ditem.x && clickY === ditem.y) {
         var doorDist = Math.sqrt((px - (ditem.x + 0.5)) * (px - (ditem.x + 0.5)) + (py - (ditem.y + 0.5)) * (py - (ditem.y + 0.5)));
         if (doorDist < 3) {
-          // If door has linked sub-room, open it
-          if (ditem.linkedSubRoomId && this.subRooms.has(ditem.linkedSubRoomId)) {
-            var linkedSr = this.subRooms.get(ditem.linkedSubRoomId);
-            var doorUrl = '/client/room.html?room=' + this.roomConfig.roomId + '_' + ditem.linkedSubRoomId + '&name=' + encodeURIComponent(linkedSr.name || 'Salle') + '&env=' + this.roomConfig.environment + '&size=15&creator=true';
-            Network.socket.emit('join-sub-room', { subRoomId: ditem.linkedSubRoomId });
-            window.open(doorUrl, '_blank');
+          // If door is linked to another door, teleport player there
+          if (ditem.linkedDoorId) {
+            var targetDoor = Board.furniture.find(function(f) { return f.id === ditem.linkedDoorId; });
+            if (targetDoor) {
+              this.player.x = targetDoor.x + 0.5;
+              this.player.y = targetDoor.y + 1.5; // appear in front of target door
+              UI.showNotification('Téléporté via ' + (ditem.doorLabel || 'portail'));
+            } else {
+              UI.showNotification('Porte de destination introuvable');
+            }
           } else if (this.player.isAdmin) {
-            // Admin can create + link a new room
-            var doorName = prompt('Nom de la salle derrière cette porte:');
-            if (doorName) {
-              var self2 = this;
-              Network.socket.emit('create-sub-room', { name: doorName, x: ditem.x, y: ditem.y, width: 3, height: 3 }, function(r) {
-                if (r && r.success) {
-                  self2.subRooms.set(r.subRoom.id, r.subRoom);
-                  ditem.linkedSubRoomId = r.subRoom.id;
-                  ditem.doorLabel = doorName;
-                  UI.showNotification('Porte liée à "' + doorName + '"');
-                }
-              });
+            // Admin links two doors together
+            var allDoors = Board.furniture.filter(function(f) {
+              var fd = Environments.furnitureTypes[f.type];
+              return fd && fd.isDoor && f.id && f.id !== ditem.id;
+            });
+            if (allDoors.length === 0) {
+              UI.showNotification('Placez une 2e porte pour créer un passage');
+            } else {
+              // Auto-link to first unlinked door, or ask
+              var unlinked = allDoors.find(function(d) { return !d.linkedDoorId; });
+              var target = unlinked || allDoors[0];
+              ditem.linkedDoorId = target.id;
+              target.linkedDoorId = ditem.id;
+              var label = prompt('Nom de ce passage (optionnel):') || 'Passage';
+              ditem.doorLabel = label;
+              target.doorLabel = label;
+              UI.showNotification('Portes liées : "' + label + '"');
             }
           } else {
-            UI.showNotification('Cette porte n\'est pas encore configurée');
+            UI.showNotification('Cette porte n\'est pas encore reliée');
           }
           return;
         }
