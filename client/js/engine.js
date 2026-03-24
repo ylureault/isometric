@@ -67,29 +67,46 @@ var Engine = {
     Audio.init();
     UI.initToolbar();
 
-    Network.onParticipantJoined = function(d) { UI.showNotification(d.pseudo + ' a rejoint'); };
-    Network.onParticipantLeft = function(d) { UI.showNotification(d.pseudo + ' a quitté'); };
-    Network.onParticipantDisconnected = function(d) { UI.showNotification(d.pseudo + ' déconnecté'); };
+    Network.onParticipantJoined = function(d) {
+      self.initSfx(); self.playSfx('join');
+      UI.showNotification(d.pseudo + ' a rejoint');
+    };
+    Network.onParticipantLeft = function(d) {
+      self.initSfx(); self.playSfx('leave');
+      UI.showNotification(d.pseudo + ' a quitté');
+    };
+    Network.onParticipantDisconnected = function(d) {
+      self.initSfx(); self.playSfx('leave');
+      UI.showNotification(d.pseudo + ' déconnecté');
+    };
     Network.onReconnecting = function() { UI.showReconnecting(true); };
     Network.onReconnected = function() {
       UI.showReconnecting(false);
       // Re-join room with same config after reconnection (new socket ID)
       if (self.roomConfig && self.roomConfig.roomId) {
-        Network.joinRoom(self.roomConfig.roomId, {
-          pseudo: self.player.pseudo,
-          colors: self.player.colors,
-          accessory: self.player.accessory || 'none',
-          isCreator: false, // on reconnect, not creator
-          roomName: self.roomConfig.name,
-          environment: self.roomConfig.environment,
-          gridSize: self.roomConfig.gridSize,
-        }, function(resp) {
-          if (resp && !resp.error) {
-            UI.showNotification('Reconnecté !');
-          } else {
-            UI.showNotification('Erreur de reconnexion');
-          }
-        });
+        var attempts = 0;
+        var maxRetries = 5;
+        function tryRejoin() {
+          Network.joinRoom(self.roomConfig.roomId, {
+            pseudo: self.player.pseudo,
+            colors: self.player.colors,
+            accessory: self.player.accessory || 'none',
+            isCreator: false, // on reconnect, not creator
+            roomName: self.roomConfig.name,
+            environment: self.roomConfig.environment,
+            gridSize: self.roomConfig.gridSize,
+          }, function(resp) {
+            if (resp && !resp.error) {
+              self.initSfx(); self.playSfx('join');
+              UI.showNotification('Reconnecté !');
+            } else if (++attempts < maxRetries) {
+              setTimeout(tryRejoin, 2000 * attempts);
+            } else {
+              UI.showNotification('Reconnexion échouée — rechargez la page');
+            }
+          });
+        }
+        tryRejoin();
       }
     };
 
@@ -218,8 +235,8 @@ var Engine = {
       if (saved) savedSession = JSON.parse(saved);
     } catch (e) {}
 
-    // If same room and recent session (<30 min), auto-reconnect
-    if (savedSession && savedSession.roomId === this.roomConfig.roomId && (Date.now() - savedSession.time < 1800000)) {
+    // If same room, auto-reconnect (no time limit — resume session no matter what)
+    if (savedSession && savedSession.roomId === this.roomConfig.roomId) {
       self.player.pseudo = savedSession.pseudo;
       self.player.colors = savedSession.colors;
       self.player.accessory = savedSession.accessory || 'none';
@@ -715,6 +732,24 @@ var Engine = {
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.2);
+      } else if (type === 'join') {
+        // Two-note chime: C5 then E5
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523, ctx.currentTime);
+        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.3);
+      } else if (type === 'leave') {
+        // Descending tone: E5 then C4
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659, ctx.currentTime);
+        osc.frequency.setValueAtTime(262, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.3);
       }
     } catch(e) {}
   },

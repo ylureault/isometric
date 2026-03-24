@@ -28,8 +28,8 @@ const Network = {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 10,
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: Infinity,
     });
 
     this.setupSocketEvents();
