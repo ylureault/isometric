@@ -452,8 +452,20 @@ var Engine = {
             var targetDoor = Board.furniture.find(function(f) { return f.id === ditem.linkedDoorId; });
             if (targetDoor) {
               this._lastTeleport = Date.now();
-              this.player.x = targetDoor.x + 0.5;
-              this.player.y = targetDoor.y + 1.5; // appear in front of target door
+              // Try multiple spawn positions around the target door (avoid solid tiles)
+              var spawnOffsets = [{dx:0, dy:1.5}, {dx:0, dy:-0.5}, {dx:1.5, dy:0}, {dx:-0.5, dy:0}];
+              var spawnX = targetDoor.x + 0.5, spawnY = targetDoor.y + 1.5;
+              for (var so = 0; so < spawnOffsets.length; so++) {
+                var sx = targetDoor.x + spawnOffsets[so].dx;
+                var sy = targetDoor.y + spawnOffsets[so].dy;
+                var gsx = Math.floor(sx), gsy = Math.floor(sy);
+                if (gsx >= 0 && gsy >= 0 && gsx < Board.gridSize && gsy < Board.gridSize &&
+                    (!Board.collisionMap[gsy] || !Board.collisionMap[gsy][gsx])) {
+                  spawnX = sx + 0.5; spawnY = sy + 0.5; break;
+                }
+              }
+              this.player.x = spawnX;
+              this.player.y = spawnY;
               // Broadcast new position to all players
               Network.socket.emit('position-update', {
                 x: this.player.x, y: this.player.y,
@@ -1475,25 +1487,9 @@ var Engine = {
       var item = this.editDragging.item;
       this.editDragging = null;
       Board.buildCollisionMap();
-      // Sync move to server: remove + re-add
+      // Sync position to server (preserves all item properties including door links)
       if (item.id) {
-        var self = this;
-        Network.socket.emit('remove-furniture', { furnitureId: item.id }, function(r) {
-          if (r && r.success) {
-            Network.socket.emit('add-furniture', { type: item.type, x: item.x, y: item.y }, function(r2) {
-              if (r2 && r2.success) {
-                // Replace local item with server version
-                for (var i = 0; i < Board.furniture.length; i++) {
-                  if (Board.furniture[i] === item) {
-                    Board.furniture[i] = r2.item;
-                    break;
-                  }
-                }
-                Board.buildCollisionMap();
-              }
-            });
-          }
-        });
+        Network.socket.emit('move-furniture', { furnitureId: item.id, x: item.x, y: item.y });
       }
       return;
     }
