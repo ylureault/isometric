@@ -748,17 +748,24 @@ io.on('connection', (socket) => {
 
   // ===== CHAT =====
 
+  let lastChatTime = 0;
   socket.on('chat-message', (data) => {
     if (!currentRoomId) return;
+    // Rate limit: 1 message per 500ms
+    const now = Date.now();
+    if (now - lastChatTime < 500) return;
+    lastChatTime = now;
     const room = roomManager.getRoom(currentRoomId);
     if (!room) return;
     const p = room.participants.get(socket.id);
     if (!p) return;
+    const text = (data.text || '').toString().trim().slice(0, 200);
+    if (!text) return; // ignore empty messages
     const msg = {
       socketId: socket.id,
       pseudo: p.pseudo,
-      text: (data.text || '').slice(0, 200),
-      timestamp: Date.now(),
+      text,
+      timestamp: now,
     };
     io.to(currentRoomId).emit('chat-message', msg);
   });

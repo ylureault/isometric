@@ -218,6 +218,8 @@ const UI = {
   showNotification(text) {
     const container = document.getElementById('notifications-container');
     if (!container) return;
+    // Limit max visible notifications to 5
+    while (container.children.length >= 5) container.removeChild(container.firstChild);
     const el = document.createElement('div');
     el.className = 'notification';
     el.textContent = text;

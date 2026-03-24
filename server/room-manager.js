@@ -56,11 +56,12 @@ class RoomManager {
     if (room.closed) return { error: 'room_closed' };
     if (room.participants.size >= CONSTANTS.MAX_PARTICIPANTS) return { error: 'room_full' };
 
+    const pseudo = (data.pseudo || '').toString().trim().slice(0, 30) || 'Anonyme';
     const isCreator = data.isCreator && !room.creatorSocketId;
 
     const participant = {
       socketId,
-      pseudo: data.pseudo,
+      pseudo,
       colors: data.colors,
       accessory: data.accessory || 'none',
       x: data.x || Math.floor(room.gridSize / 2),
@@ -281,15 +282,16 @@ class RoomManager {
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
 
+    const gs = room.gridSize;
     const tableId = `table_${room.nextTableId++}`;
     const table = {
       id: tableId,
-      name: tableData.name || `Table ${room.nextTableId - 1}`,
-      x: tableData.x,
-      y: tableData.y,
-      width: tableData.width || 3,
-      height: tableData.height || 3,
-      radius: tableData.radius || 3,
+      name: (tableData.name || `Table ${room.nextTableId - 1}`).toString().slice(0, 50),
+      x: Math.max(0, Math.min(gs - 1, tableData.x || 0)),
+      y: Math.max(0, Math.min(gs - 1, tableData.y || 0)),
+      width: Math.max(1, Math.min(10, tableData.width || 3)),
+      height: Math.max(1, Math.min(10, tableData.height || 3)),
+      radius: Math.max(1, Math.min(15, tableData.radius || 3)),
       participants: new Set(),
       screenShare: null,
     };

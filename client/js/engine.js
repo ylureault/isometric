@@ -431,6 +431,10 @@ var Engine = {
     var px = this.player.x;
     var py = this.player.y;
 
+    // Teleport cooldown (prevent double-click spam)
+    if (this._lastTeleport && Date.now() - this._lastTeleport < 1000) {
+      // Skip door check during cooldown
+    } else {
     // Check door furniture (paired portals — teleport between doors)
     for (var di = 0; di < Board.furniture.length; di++) {
       var ditem = Board.furniture[di];
@@ -443,6 +447,7 @@ var Engine = {
           if (ditem.linkedDoorId) {
             var targetDoor = Board.furniture.find(function(f) { return f.id === ditem.linkedDoorId; });
             if (targetDoor) {
+              this._lastTeleport = Date.now();
               this.player.x = targetDoor.x + 0.5;
               this.player.y = targetDoor.y + 1.5; // appear in front of target door
               // Broadcast new position to all players
@@ -496,6 +501,7 @@ var Engine = {
         }
       }
     }
+    } // end teleport cooldown else
 
     // First check sub-rooms (portals)
     if (this.subRooms) {
