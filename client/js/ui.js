@@ -72,7 +72,7 @@ const UI = {
       overlay.innerHTML = `
         <div class="avatar-config-panel" style="flex-direction: column; align-items: center; text-align: center;">
           <h2 style="color: #e74c3c;">Erreur</h2>
-          <p style="color: #aaa; margin: 16px 0;">${message}</p>
+          <p style="color: #aaa; margin: 16px 0;">${this.escapeHtml(message)}</p>
           <a href="/client/index.html" class="btn btn-secondary" style="text-decoration: none;">Retour à l'accueil</a>
         </div>`;
     }
@@ -317,6 +317,8 @@ const UI = {
           item.x = nx;
           item.y = ny;
           Board.buildCollisionMap();
+          // Sync move to server and other clients
+          Network.socket.emit('move-furniture', { furnitureId: item.id, x: nx, y: ny });
           self.showNotification('Mobilier déplacé');
         } else if (action === 'duplicate') {
           Network.socket.emit('add-furniture', { type: item.type, x: item.x + 1, y: item.y + 1 }, function(r) {

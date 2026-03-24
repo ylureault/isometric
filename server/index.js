@@ -56,6 +56,15 @@ io.on('connection', (socket) => {
   // ===== JOIN / LEAVE =====
 
   socket.on('join-room', (data, callback) => {
+    // If already in a room, leave it first (prevent duplicate entries)
+    if (currentRoomId) {
+      const oldP = roomManager.leaveRoom(currentRoomId, socket.id);
+      if (oldP) {
+        socket.to(currentRoomId).emit('participant-left', { socketId: socket.id, pseudo: oldP.pseudo });
+      }
+      socket.leave(currentRoomId);
+      currentRoomId = null;
+    }
     const { roomId, pseudo, colors, isCreator } = data;
 
     let room = roomManager.getRoom(roomId);
@@ -373,6 +382,21 @@ io.on('connection', (socket) => {
     if (result.error) return callback(result);
     io.to(currentRoomId).emit('furniture-removed', { furnitureId: data.furnitureId });
     callback(result);
+  });
+
+  // Move furniture to new position
+  socket.on('move-furniture', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p || !p.isAdmin) return;
+    const item = room.furniture.find(f => f.id === data.furnitureId);
+    if (item) {
+      item.x = Math.max(0, Math.min(room.gridSize - 1, data.x));
+      item.y = Math.max(0, Math.min(room.gridSize - 1, data.y));
+      socket.to(currentRoomId).emit('furniture-moved', { furnitureId: item.id, x: item.x, y: item.y });
+    }
   });
 
   // Link two doors together (paired teleportation)

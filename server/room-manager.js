@@ -650,11 +650,12 @@ class RoomManager {
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
 
+    const duration = Math.max(5, Math.min(3600, Math.round(Number(timerData.duration) || 300)));
     const id = `timer_${room.nextTimerId++}`;
     const timer = {
       id,
-      duration: timerData.duration, // seconds
-      remaining: timerData.duration,
+      duration, // seconds (validated: 5-3600)
+      remaining: duration,
       scope: timerData.scope || 'global',
       tableId: timerData.tableId || null,
       running: true,

@@ -149,6 +149,10 @@ var Engine = {
     s.on('timer-paused', function(d) { if (UI.activeTimer) UI.activeTimer.paused = d.paused; });
     s.on('furniture-added', function(i) { Board.furniture.push(i); Board.buildCollisionMap(); });
     s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); });
+    s.on('furniture-moved', function(d) {
+      var f = Board.furniture.find(function(item) { return item.id === d.furnitureId; });
+      if (f) { f.x = d.x; f.y = d.y; Board.buildCollisionMap(); }
+    });
     s.on('doors-linked', function(d) {
       var d1 = Board.furniture.find(function(f) { return f.id === d.door1Id; });
       var d2 = Board.furniture.find(function(f) { return f.id === d.door2Id; });
