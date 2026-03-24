@@ -235,12 +235,12 @@
   </div>
 
   <!-- Reconnecting -->
-  <div class="reconnecting-indicator" id="reconnecting-indicator" style="display: none;">
+  <div class="reconnecting-indicator" id="reconnecting-indicator" role="alert" aria-live="assertive" style="display: none;">
     <div class="reconnecting-spinner"></div><span>Reconnexion en cours, veuillez patienter...</span>
   </div>
 
   <!-- Notifications -->
-  <div class="notifications-container" id="notifications-container"></div>
+  <div class="notifications-container" id="notifications-container" role="status" aria-live="polite"></div>
 
   <!-- Vote popup -->
   <div class="vote-popup" id="vote-popup" style="display: none;"></div>
@@ -424,7 +424,7 @@
   </div>
 
   <!-- Whiteboard Pop-in -->
-  <div class="whiteboard-overlay" id="whiteboard-overlay" style="display: none;">
+  <div class="whiteboard-overlay" id="whiteboard-overlay" role="dialog" aria-label="Tableau blanc" style="display: none;">
     <div class="whiteboard-popup">
       <div class="whiteboard-header">
         <h3>Tableau blanc collaboratif</h3>

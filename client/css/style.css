@@ -472,7 +472,7 @@ body {
 .room-info-display {
   background: rgba(74,111,165,0.1); border: 1px solid rgba(74,111,165,0.2);
   border-radius: 8px; padding: 8px 12px; margin-bottom: 16px;
-  font-size: 0.85rem; color: #4a6fa5; text-align: center;
+  font-size: 0.85rem; color: var(--color-primary); text-align: center;
 }
 
 /* ===== Vote Popup ===== */
@@ -594,7 +594,7 @@ body {
   border: 1px solid rgba(0,0,0,0.1); border-radius: 12px;
   padding: 8px 20px; z-index: 25; box-shadow: 0 2px 10px rgba(0,0,0,0.08);
 }
-.timer-text { color: #4a6fa5; font-size: 1.2rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.timer-text { color: var(--color-primary); font-size: 1.2rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .timer-ended { color: #e74c3c; animation: pulse 0.5s ease-in-out 3; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 
@@ -639,7 +639,7 @@ body {
   background: #fff; color: #666; cursor: pointer; font-size: 0.7rem; font-weight: 600;
 }
 .wb-width-btn:hover { background: #f0f0f0; }
-.wb-width-btn.active { background: #4a6fa5; color: #fff; border-color: #4a6fa5; }
+.wb-width-btn.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .whiteboard-close-btn {
   margin-left: auto; width: 32px; height: 32px; border: none;
   background: none; color: #999; font-size: 20px; cursor: pointer; border-radius: 6px;
@@ -1020,7 +1020,7 @@ body {
 .collab-space-overlay {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.85); z-index: 70; display: flex;
-  flex-direction: column;
+  flex-direction: column; animation: overlay-fade-in 0.25s ease-out;
 }
 .collab-space-header {
   display: flex; justify-content: space-between; align-items: center;
@@ -1081,23 +1081,28 @@ body {
 .edit-toolbar {
   position: absolute; top: 0; left: 0; right: 0; height: 50px;
   background: rgba(255,255,255,0.97); backdrop-filter: blur(12px);
-  border-bottom: 2px solid #4a6fa5;
+  border-bottom: 2px solid var(--color-primary);
   display: flex; align-items: center; justify-content: center;
-  gap: 16px; padding: 0 20px; z-index: 35;
+  gap: var(--space-md); padding: 0 20px; z-index: 35;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  animation: edit-toolbar-slide-down 0.3s ease-out;
+}
+@keyframes edit-toolbar-slide-down {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .edit-toolbar-section {
   display: flex; align-items: center; gap: 6px;
 }
 .edit-toolbar-label {
-  font-size: 0.8rem; font-weight: 600; color: #4a6fa5;
+  font-size: 0.8rem; font-weight: 600; color: var(--color-primary);
 }
 .edit-catalog-select {
   padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px;
   background: #fff; color: #333; font-size: 0.8rem; outline: none;
   min-width: 180px; cursor: pointer;
 }
-.edit-catalog-select:focus { border-color: #4a6fa5; }
+.edit-catalog-select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-light); }
 .edit-tool-btn {
   padding: 6px 14px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm);
   background: #f5f5f5; color: #555; cursor: pointer;

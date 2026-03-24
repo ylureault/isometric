@@ -40,11 +40,16 @@ const UI = {
     };
     animatePreview();
 
-    document.getElementById('btn-enter').addEventListener('click', () => {
+    var enterBtn = document.getElementById('btn-enter');
+    enterBtn.addEventListener('click', () => {
       const pseudo = document.getElementById('pseudo-input').value.trim();
       const errorEl = document.getElementById('error-pseudo');
-      if (!pseudo) { errorEl.style.display = 'block'; return; }
+      if (!pseudo) { errorEl.style.display = 'block'; document.getElementById('pseudo-input').focus(); return; }
       errorEl.style.display = 'none';
+
+      // Show loading state on button
+      enterBtn.classList.add('btn-loading');
+      enterBtn.disabled = true;
 
       if (this.previewAnimId) cancelAnimationFrame(this.previewAnimId);
       this.avatarConfig.style.display = 'none';
@@ -55,6 +60,11 @@ const UI = {
       var accessorySelect = document.getElementById('accessory-select');
       var accessory = accessorySelect ? accessorySelect.value : 'none';
       onEnter({ pseudo, colors: { ...this.currentColors }, accessory: accessory });
+    });
+
+    // Allow Enter key to submit pseudo
+    document.getElementById('pseudo-input').addEventListener('keydown', (e) => {
+      if (e.code === 'Enter') enterBtn.click();
     });
   },
 
@@ -82,8 +92,25 @@ const UI = {
     const container = document.getElementById('copy-link-container');
     if (container) {
       container.style.display = 'flex';
+      const url = `${window.location.origin}/client/room.html?room=${roomId}`;
       const urlDisplay = document.getElementById('room-url-display');
-      if (urlDisplay) urlDisplay.textContent = `${window.location.origin}/client/room.html?room=${roomId}`;
+      if (urlDisplay) urlDisplay.textContent = url;
+
+      // Wire up copy button with feedback
+      const copyBtn = document.getElementById('btn-copy-link');
+      if (copyBtn && !copyBtn._wired) {
+        copyBtn._wired = true;
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(url).then(() => {
+            copyBtn.textContent = 'Copié !';
+            copyBtn.classList.add('copied');
+            setTimeout(() => { copyBtn.textContent = 'Copier le lien'; copyBtn.classList.remove('copied'); }, 2000);
+          }).catch(() => {
+            // Fallback: select text
+            if (urlDisplay) { urlDisplay.select && urlDisplay.select(); }
+          });
+        });
+      }
     }
   },
 
@@ -93,7 +120,7 @@ const UI = {
     const el1 = document.getElementById('hud-room-name');
     const el2 = document.getElementById('hud-coords');
     const el3 = document.getElementById('hud-participants');
-    if (el1) el1.textContent = roomName || 'Room';
+    if (el1) el1.textContent = roomName || 'Salle';
     if (el2) el2.textContent = `${Math.floor(playerX)}, ${Math.floor(playerY)}  ·  x${(zoom || 1).toFixed(1)}`;
     if (el3) el3.textContent = `${participantCount} participant${participantCount > 1 ? 's' : ''}`;
   },
@@ -144,7 +171,7 @@ const UI = {
     // View toggle button
     document.getElementById('btn-view-toggle')?.addEventListener('click', () => {
       Engine.viewMode = Engine.viewMode === 'iso' ? 'topdown' : 'iso';
-      this.showNotification('Vue: ' + (Engine.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus'));
+      this.showNotification('Vue : ' + (Engine.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus'));
     });
 
     // Edit mode button (admin only)
@@ -159,7 +186,7 @@ const UI = {
 
     // Leave button
     document.getElementById('btn-leave')?.addEventListener('click', () => {
-      if (confirm('Quitter la room ?')) {
+      if (confirm('Voulez-vous vraiment quitter cette salle ?')) {
         try { localStorage.removeItem('insuffle_session'); } catch (e) {}
         Network.leaveRoom();
         Audio.destroy();
@@ -268,9 +295,9 @@ const UI = {
 
     if (isLocalAdmin && !targetIsCreator && targetSocketId !== Network.mySocketId) {
       if (!targetIsAdmin) {
-        html += `<div class="ctx-menu-item" data-action="promote">Promouvoir admin</div>`;
+        html += `<div class="ctx-menu-item" data-action="promote">Promouvoir administrateur</div>`;
       } else if (isLocalCreator) {
-        html += `<div class="ctx-menu-item" data-action="demote">Retirer le rôle admin</div>`;
+        html += `<div class="ctx-menu-item" data-action="demote">Retirer le rôle d'administrateur</div>`;
       }
       html += `<div class="ctx-menu-item ctx-menu-danger" data-action="kick">Exclure</div>`;
     }
@@ -279,7 +306,7 @@ const UI = {
       html += `<div class="ctx-menu-item" data-action="spotlight">Spotlight</div>`;
     }
 
-    html += `<div class="ctx-menu-item" data-action="profile">Voir le profil</div>`;
+    html += `<div class="ctx-menu-item" data-action="profile">Voir les informations</div>`;
 
     menu.innerHTML = html;
     menu.style.left = `${x}px`;
@@ -303,8 +330,8 @@ const UI = {
     if (!menu) return;
 
     var html = '<div class="ctx-menu-header">' + def.name + ' (' + item.x + ',' + item.y + ')</div>';
-    html += '<div class="ctx-menu-item" data-action="move-here">Déplacer devant moi</div>';
-    html += '<div class="ctx-menu-item" data-action="duplicate">Dupliquer</div>';
+    html += '<div class="ctx-menu-item" data-action="move-here">Déplacer devant mon avatar</div>';
+    html += '<div class="ctx-menu-item" data-action="duplicate">Dupliquer cet élément</div>';
     html += '<div class="ctx-menu-item ctx-menu-danger" data-action="delete">Supprimer</div>';
 
     menu.innerHTML = html;
@@ -360,18 +387,18 @@ const UI = {
     switch (action) {
       case 'promote':
         Network.socket.emit('promote-admin', { targetSocketId }, (resp) => {
-          if (resp.success) this.showNotification(`${targetData.pseudo} est maintenant administrateur`);
+          if (resp.success) this.showNotification(`${targetData.pseudo} est désormais administrateur`);
         });
         break;
       case 'demote':
         Network.socket.emit('demote-admin', { targetSocketId }, (resp) => {
-          if (resp.success) this.showNotification(`Rôle admin retiré à ${targetData.pseudo}`);
+          if (resp.success) this.showNotification(`Le rôle d'administrateur a été retiré à ${targetData.pseudo}`);
         });
         break;
       case 'kick':
-        if (confirm(`Exclure ${targetData.pseudo} de la room ?`)) {
+        if (confirm(`Voulez-vous vraiment exclure ${targetData.pseudo} de la salle ?`)) {
           Network.socket.emit('kick-participant', { targetSocketId }, (resp) => {
-            if (resp.success) this.showNotification(`${targetData.pseudo} a été exclu`);
+            if (resp.success) this.showNotification(`${targetData.pseudo} a été exclu(e) de la salle`);
           });
         }
         break;
@@ -379,7 +406,7 @@ const UI = {
         Network.socket.emit('spotlight', { targetSocketId, active: true });
         break;
       case 'profile':
-        this.showNotification(`${targetData.pseudo} — ${targetData.role}`);
+        this.showNotification(`${targetData.pseudo} — Rôle : ${targetData.role === 'creator' ? 'Créateur' : targetData.role === 'admin' ? 'Administrateur' : 'Participant'}`);
         break;
     }
   },
@@ -423,7 +450,7 @@ const UI = {
         const sid = btn.dataset.socketid;
         if (action === 'kick') {
           const p = Network.remotePlayers.get(sid);
-          if (p && confirm(`Exclure ${p.pseudo} ?`)) {
+          if (p && confirm(`Voulez-vous vraiment exclure ${p.pseudo} de la salle ?`)) {
             Network.socket.emit('kick-participant', { targetSocketId: sid }, () => {});
           }
         } else if (action === 'promote') {
@@ -493,7 +520,7 @@ const UI = {
           if (r && r.success) {
             Board.furniture.push(r.item);
             Board.buildCollisionMap();
-            self.showNotification(Environments.furnitureTypes[type].name + ' ajouté');
+            self.showNotification(Environments.furnitureTypes[type].name + ' ajouté avec succès');
             self.refreshFurnitureList();
           }
         });
@@ -512,7 +539,7 @@ const UI = {
       }, function(r) {
         if (r && r.success) {
           Engine.tables.set(r.table.id, r.table);
-          self.showNotification('Table "' + name + '" créée');
+          self.showNotification('Table de travail « ' + name + ' » créée');
           self.refreshTablesList();
         }
       });
@@ -524,6 +551,11 @@ const UI = {
     var countEl = document.getElementById('furniture-count');
     if (!list) return;
     if (countEl) countEl.textContent = '(' + Board.furniture.length + ')';
+
+    if (Board.furniture.length === 0) {
+      list.innerHTML = '<div class="empty-state"><span class="empty-state-icon">🪑</span><span class="empty-state-text">Aucun mobilier placé. Utilisez le catalogue ci-dessus pour en ajouter.</span></div>';
+      return;
+    }
 
     var html = '';
     for (var i = 0; i < Board.furniture.length; i++) {
@@ -558,11 +590,16 @@ const UI = {
     var list = document.getElementById('tables-list');
     if (!list) return;
 
+    if (Engine.tables.size === 0) {
+      list.innerHTML = '<div class="empty-state"><span class="empty-state-text">Aucune table de travail.</span></div>';
+      return;
+    }
+
     var html = '';
     Engine.tables.forEach(function(t, id) {
       html += '<div class="placed-item">';
       html += '<span style="font-size:0.8rem;">📐 ' + (t.name || 'Table') + '</span>';
-      html += '<button class="admin-action-btn danger" data-action="delete-table" data-id="' + id + '" title="Supprimer">✕</button>';
+      html += '<button class="admin-action-btn danger" data-action="delete-table" data-id="' + id + '" title="Supprimer" aria-label="Supprimer la table">✕</button>';
       html += '</div>';
     });
     list.innerHTML = html;
@@ -574,7 +611,7 @@ const UI = {
           if (r && r.success) {
             Engine.tables.delete(tid);
             UI.refreshTablesList();
-            UI.showNotification('Table supprimée');
+            UI.showNotification('Table de travail supprimée');
           }
         });
       });
@@ -598,7 +635,7 @@ const UI = {
     list.querySelectorAll('[data-action="delete-subroom"]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var srid = btn.dataset.id;
-        if (confirm('Supprimer cette sous-salle ?')) {
+        if (confirm('Voulez-vous vraiment supprimer cette sous-salle ?')) {
           Network.socket.emit('delete-sub-room', { subRoomId: srid }, function(r) {
             if (r && r.success) {
               Engine.subRooms.delete(srid);
@@ -626,11 +663,11 @@ const UI = {
       gridBtn.addEventListener('click', function() {
         var s = parseInt(document.getElementById('admin-grid-size').value);
         if (isNaN(s) || s < CONSTANTS.GRID_MIN || s > CONSTANTS.GRID_MAX) {
-          self.showNotification('Taille invalide (' + CONSTANTS.GRID_MIN + '-' + CONSTANTS.GRID_MAX + ')');
+          self.showNotification('Taille invalide. Choisissez entre ' + CONSTANTS.GRID_MIN + ' et ' + CONSTANTS.GRID_MAX + '.');
           return;
         }
         gridBtn.disabled = true;
-        gridBtn.textContent = 'Application...';
+        gridBtn.textContent = 'En cours...';
         Network.socket.emit('resize-grid', { size: s }, function(r) {
           gridBtn.disabled = false;
           gridBtn.textContent = 'Appliquer';
@@ -640,7 +677,7 @@ const UI = {
             if (status) { status.style.display = 'inline'; setTimeout(function() { status.style.display = 'none'; }, 2000); }
             self.updateAdminSettings();
           } else {
-            self.showNotification('Erreur : ' + (r && r.error || 'inconnu'));
+            self.showNotification('Une erreur est survenue : ' + (r && r.error || 'cause inconnue'));
           }
         });
       });
@@ -652,18 +689,18 @@ const UI = {
       envBtn._wired = true;
       envBtn.addEventListener('click', function() {
         var env = document.getElementById('admin-environment').value;
-        if (!confirm('Le mobilier actuel sera remplacé. Continuer ?')) return;
+        if (!confirm('Attention : le mobilier actuel sera remplacé par celui du nouvel environnement. Voulez-vous continuer ?')) return;
         envBtn.disabled = true;
-        envBtn.textContent = 'Changement...';
+        envBtn.textContent = 'En cours...';
         Network.socket.emit('change-environment', { environment: env }, function(r) {
           envBtn.disabled = false;
           envBtn.textContent = 'Changer';
           if (r && r.success) {
-            self.showNotification('Environnement changé : ' + env);
+            self.showNotification('Environnement modifié avec succès');
             self.updateAdminSettings();
             self.refreshFurnitureList();
           } else {
-            self.showNotification('Erreur : ' + (r && r.error || 'inconnu'));
+            self.showNotification('Une erreur est survenue : ' + (r && r.error || 'cause inconnue'));
           }
         });
       });
@@ -675,7 +712,22 @@ const UI = {
   toggleShortcutsModal() {
     this.shortcutsModalOpen = !this.shortcutsModalOpen;
     const modal = document.getElementById('shortcuts-modal');
-    if (modal) modal.style.display = this.shortcutsModalOpen ? 'flex' : 'none';
+    if (!modal) return;
+    modal.style.display = this.shortcutsModalOpen ? 'flex' : 'none';
+
+    if (this.shortcutsModalOpen) {
+      // Focus first focusable element inside modal
+      var firstBtn = modal.querySelector('button');
+      if (firstBtn) setTimeout(function() { firstBtn.focus(); }, 50);
+
+      // Close on overlay click (click on the backdrop, not inner)
+      modal._overlayClick = function(e) {
+        if (e.target === modal) UI.toggleShortcutsModal();
+      };
+      modal.addEventListener('click', modal._overlayClick);
+    } else {
+      if (modal._overlayClick) modal.removeEventListener('click', modal._overlayClick);
+    }
   },
 
   // ===== VOTE POPUP =====
@@ -945,12 +997,12 @@ const UI = {
       // Dot vote
       el.addEventListener('click', function(e) {
         if (!dotVotingMode) return; if (e.target === delBtn) return; e.stopPropagation();
-        if (myVotes >= maxVotes) { self.showNotification('Votes épuisés (' + maxVotes + ' max)'); return; }
+        if (myVotes >= maxVotes) { self.showNotification('Vous avez utilisé tous vos votes (' + maxVotes + ' maximum)'); return; }
         myVotes++; postit.votes = (postit.votes||0) + 1;
         badge.textContent = postit.votes; badge.style.display = 'flex';
         el.classList.add('db-postit-voted'); setTimeout(function(){el.classList.remove('db-postit-voted');}, 350);
         broadcastPostit(postit);
-        if (votesInfo) votesInfo.textContent = 'Dot Voting — ' + myVotes + '/' + maxVotes + ' votes';
+        if (votesInfo) votesInfo.textContent = 'Vote par points — ' + myVotes + '/' + maxVotes + ' votes utilisés';
       });
 
       board.appendChild(el); return el;
@@ -1051,7 +1103,7 @@ const UI = {
         if (templateLayer) templateLayer.appendChild(bl);
       }
       redrawCanvas();
-      if (statusText) statusText.textContent = 'Template: ' + templateName;
+      if (statusText) statusText.textContent = 'Modèle appliqué : ' + templateName;
     }
 
     // === MOUSE EVENTS ===
@@ -1150,7 +1202,7 @@ const UI = {
         var pp = document.getElementById('darkboard-postit-colors');
         if (sp) sp.style.display = currentTool === 'shape' ? 'flex' : 'none';
         if (pp) pp.style.display = currentTool === 'postit' ? 'flex' : 'none';
-        if (statusText) statusText.textContent = 'Outil: ' + currentTool;
+        if (statusText) { var toolNames = {select:'Sélection',postit:'Post-it',pen:'Stylo',shape:'Forme',text:'Texte',circle:'Cercle de groupe',eraser:'Gomme'}; statusText.textContent = 'Outil : ' + (toolNames[currentTool] || currentTool); }
         e.preventDefault();
       }
       if (e.code === 'Escape') { cleanup(); }
@@ -1167,7 +1219,7 @@ const UI = {
         var pp = document.getElementById('darkboard-postit-colors');
         if (sp) sp.style.display = currentTool === 'shape' ? 'flex' : 'none';
         if (pp) pp.style.display = currentTool === 'postit' ? 'flex' : 'none';
-        if (statusText) statusText.textContent = 'Outil: ' + currentTool;
+        if (statusText) { var toolNames = {select:'Sélection',postit:'Post-it',pen:'Stylo',shape:'Forme',text:'Texte',circle:'Cercle de groupe',eraser:'Gomme'}; statusText.textContent = 'Outil : ' + (toolNames[currentTool] || currentTool); }
       });
     });
     overlay.querySelectorAll('.darkboard-shape-btn').forEach(function(btn) {
@@ -1212,21 +1264,21 @@ const UI = {
       isoloirBtn.classList.toggle('active', isoloirMode);
       if (isoloirMode) board.classList.add('darkboard-isoloir');
       else board.classList.remove('darkboard-isoloir');
-      if (statusText) statusText.textContent = isoloirMode ? 'Mode Isoloir activé — post-its des autres masqués' : 'Prêt';
+      if (statusText) statusText.textContent = isoloirMode ? 'Mode Isoloir activé — les post-its des autres participants sont masqués' : 'Prêt';
     });
 
     // === DOT VOTING ===
     var voteBtn = document.getElementById('darkboard-vote-btn');
     if (voteBtn) voteBtn.addEventListener('click', function() {
       dotVotingMode = !dotVotingMode; voteBtn.classList.toggle('active', dotVotingMode);
-      if (votesInfo) { votesInfo.style.display = dotVotingMode ? 'inline' : 'none'; votesInfo.textContent = 'Dot Voting — ' + myVotes + '/' + maxVotes + ' votes'; }
+      if (votesInfo) { votesInfo.style.display = dotVotingMode ? 'inline' : 'none'; votesInfo.textContent = 'Vote par points — ' + myVotes + '/' + maxVotes + ' votes utilisés'; }
       if (dotVotingMode) board.classList.add('darkboard-vote-mode'); else board.classList.remove('darkboard-vote-mode');
     });
 
     // === EXPORT PNG ===
     var exportBtn = document.getElementById('darkboard-export-btn');
     if (exportBtn) exportBtn.addEventListener('click', function() {
-      try { var a = document.createElement('a'); a.download = 'darkboard-'+boardId+'.png'; a.href = drawCanvas.toDataURL('image/png'); a.click(); self.showNotification('Export PNG OK'); } catch(err) { self.showNotification('Erreur export'); }
+      try { var a = document.createElement('a'); a.download = 'tableau-'+boardId+'.png'; a.href = drawCanvas.toDataURL('image/png'); a.click(); self.showNotification('Tableau exporté en PNG avec succès'); } catch(err) { self.showNotification('Impossible d\'exporter le tableau. Veuillez réessayer.'); }
     });
 
     // === TIMER ===
@@ -1248,7 +1300,7 @@ const UI = {
       if (timerOn) { clearInterval(timerInt); timerOn = false; tsBtn.innerHTML = '&#9654;'; }
       else { if (timerSec<=0 && tPre) timerSec=parseInt(tPre.value)||300; timerOn=true; tsBtn.innerHTML='&#9646;&#9646;';
         timerInt = setInterval(function() { timerSec=Math.max(0,timerSec-1); updTimer();
-          if (timerSec<=0) { clearInterval(timerInt); timerOn=false; tsBtn.innerHTML='&#9654;'; self.showNotification('⏰ Timer terminé !'); }
+          if (timerSec<=0) { clearInterval(timerInt); timerOn=false; tsBtn.innerHTML='&#9654;'; self.showNotification('Le minuteur est terminé !'); }
         }, 1000); }
     });
     if (trBtn) trBtn.addEventListener('click', function() { clearInterval(timerInt); timerOn=false; timerSec=parseInt(tPre?tPre.value:300); updTimer(); if(tsBtn)tsBtn.innerHTML='&#9654;'; });
@@ -1313,7 +1365,7 @@ const UI = {
 
     var closeBtn = document.getElementById('postit-close');
     if (closeBtn) closeBtn.onclick = cleanup;
-    if (statusText) statusText.textContent = 'Prêt — Raccourcis: V N P S T G E | Esc pour fermer';
+    if (statusText) statusText.textContent = 'Prêt — Raccourcis : V N P S T G E | Échap pour fermer';
   },
 
 
@@ -1480,7 +1532,7 @@ const UI = {
     // Clear
     var clearBtn = document.getElementById('wb-clear');
     if (clearBtn) clearBtn.onclick = function() {
-      if (confirm('Effacer tout le tableau ?')) {
+      if (confirm('Voulez-vous vraiment effacer tout le tableau ? Cette action est irréversible.')) {
         Network.socket.emit('wb-clear', { whiteboardId: whiteboardId }, function() {});
       }
     };
@@ -1506,6 +1558,10 @@ const UI = {
     if (closeBtn) closeBtn.onclick = cleanup;
     window.addEventListener('keydown', onEsc);
 
+    // Close on overlay backdrop click
+    function onOverlayClick(e) { if (e.target === overlay) cleanup(); }
+    overlay.addEventListener('click', onOverlayClick);
+
     clearCanvas();
   },
 
@@ -1523,7 +1579,7 @@ const UI = {
     overlay.style.display = 'flex';
 
     var grid = document.getElementById('collab-space-grid');
-    grid.innerHTML = '<div class="collab-screen-tile collab-screen-empty"><p>Aucun partage d\'écran</p><p style="font-size:0.75rem;color:#666;">Cliquez sur "Partager mon écran"</p></div>';
+    grid.innerHTML = '<div class="collab-screen-tile collab-screen-empty"><p>Aucun partage d\'écran en cours</p><p style="font-size:0.75rem;color:#666;">Cliquez sur \u00ab Partager mon écran \u00bb pour commencer</p></div>';
 
     Network.socket.emit('join-collab-space', { spaceId: spaceId });
 
@@ -1622,7 +1678,7 @@ const UI = {
 
     var label = document.createElement('div');
     label.className = 'screen-label';
-    label.textContent = pseudo || 'Anonyme';
+    label.textContent = pseudo || 'Participant anonyme';
 
     tile.appendChild(video);
     tile.appendChild(label);
@@ -1634,7 +1690,7 @@ const UI = {
     var grid = document.getElementById('collab-space-grid');
     if (!grid) return;
     if (grid.querySelectorAll('.collab-screen-tile:not(.collab-screen-empty)').length === 0) {
-      grid.innerHTML = '<div class="collab-screen-tile collab-screen-empty"><p>Aucun partage d\'écran</p><p style="font-size:0.75rem;color:#666;">Cliquez sur "Partager mon écran"</p></div>';
+      grid.innerHTML = '<div class="collab-screen-tile collab-screen-empty"><p>Aucun partage d\'écran en cours</p><p style="font-size:0.75rem;color:#666;">Cliquez sur \u00ab Partager mon écran \u00bb pour commencer</p></div>';
     }
   },
 
@@ -1714,7 +1770,7 @@ const UI = {
   updateCollabSpaceUsers: function(data) {
     if (!this.activeCollabSpace || this.activeCollabSpace !== data.spaceId) return;
     var el = document.getElementById('collab-space-users');
-    if (el) el.textContent = data.users.length + ' utilisateur(s)';
+    if (el) el.textContent = data.users.length + ' participant' + (data.users.length > 1 ? 's' : '');
   },
 
   onCollabScreenStarted: function(data) {

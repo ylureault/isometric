@@ -18,7 +18,7 @@ var Engine = {
   camera: { x: 0, y: 0 },
   zoom: CONSTANTS.ZOOM_DEFAULT,
   keys: {},
-  roomConfig: { name: 'Room', environment: 'bureau', gridSize: 20, roomId: null, isCreator: false },
+  roomConfig: { name: 'Salle', environment: 'bureau', gridSize: 20, roomId: null, isCreator: false },
   lastTime: 0, started: false,
   reactions: [], confetti: [], spotlight: null,
   tables: new Map(),
@@ -165,7 +165,11 @@ var Engine = {
     });
     s.on('hand-toggled', function(d) {
       var r = Network.remotePlayers.get(d.socketId); if (r) r.handRaised = d.handRaised;
-      if (d.socketId === Network.mySocketId) self.player.handRaised = d.handRaised;
+      if (d.socketId === Network.mySocketId) {
+        self.player.handRaised = d.handRaised;
+        var handBtn = document.getElementById('btn-hand');
+        if (handBtn) handBtn.classList.toggle('hand-raised', d.handRaised);
+      }
     });
     s.on('all-hands-lowered', function() { self.player.handRaised = false; Network.remotePlayers.forEach(function(r) { r.handRaised = false; }); });
     s.on('effect-triggered', function(d) { if (d.type === 'confetti') self.triggerConfetti(); if (d.type === 'applause') self.triggerApplause(); });
@@ -210,7 +214,7 @@ var Engine = {
   parseRoomConfig: function() {
     var p = new URLSearchParams(window.location.search);
     this.roomConfig.roomId = p.get('room');
-    this.roomConfig.name = p.get('name') || 'Room';
+    this.roomConfig.name = p.get('name') || 'Salle';
     this.roomConfig.environment = p.get('env') || 'open-space';
     this.roomConfig.gridSize = Math.min(CONSTANTS.GRID_MAX, Math.max(CONSTANTS.GRID_MIN, parseInt(p.get('size')) || CONSTANTS.GRID_DEFAULT));
     this.roomConfig.isCreator = p.get('creator') === 'true';
@@ -221,14 +225,14 @@ var Engine = {
     if (!this.roomConfig.roomId) { UI.showError('Aucun identifiant de salle fourni. Veuillez utiliser un lien valide.'); return; }
     if (!this.roomConfig.isCreator) {
       fetch('/api/rooms/' + this.roomConfig.roomId).then(function(resp) {
-        if (!resp.ok) { UI.showError('Room introuvable'); return; }
+        if (!resp.ok) { UI.showError('Cette salle est introuvable. Vérifiez le lien et réessayez.'); return; }
         return resp.json();
       }).then(function(info) {
         if (!info) return;
         self.roomConfig.name = info.name;
         self.roomConfig.environment = info.environment;
         self.roomConfig.gridSize = info.gridSize;
-        if (info.participantCount >= info.maxParticipants) { UI.showError('Room pleine'); return; }
+        if (info.participantCount >= info.maxParticipants) { UI.showError('Cette salle est complète. Le nombre maximum de participants est atteint.'); return; }
         self.initBoard();
       }).catch(function() { self.initBoard(); });
     } else {
@@ -364,7 +368,7 @@ var Engine = {
     if (e.code === 'KeyH') Network.socket.emit('toggle-hand', {});
     if (e.code === 'Tab') { e.preventDefault(); var mc = document.getElementById('minimap-container'); if (mc) mc.style.display = mc.style.display === 'none' ? 'block' : 'none'; }
     if (e.key === '?') UI.toggleShortcutsModal();
-    if (e.code === 'KeyV' && !this.editMode) { this.viewMode = this.viewMode === 'iso' ? 'topdown' : 'iso'; UI.showNotification('Vue: ' + (this.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus')); }
+    if (e.code === 'KeyV' && !this.editMode) { this.viewMode = this.viewMode === 'iso' ? 'topdown' : 'iso'; UI.showNotification('Vue : ' + (this.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus')); }
     if (e.code === 'KeyE' && this.player.isAdmin) this.toggleEditMode();
     if (e.code === 'Escape') { if (this.editMode) { this.toggleEditMode(); return; } UI.hideContextMenu(); if (UI.shortcutsModalOpen) UI.toggleShortcutsModal(); if (UI.adminPanelOpen) UI.toggleAdminPanel(); }
     if (e.code === 'Space' && this.player.isAdmin && !this.player.isBroadcasting) {
@@ -506,19 +510,19 @@ var Engine = {
                 direction: this.player.direction,
                 isWalking: false, walkPhase: 0
               });
-              UI.showNotification('Téléporté via ' + (ditem.doorLabel || 'portail'));
+              UI.showNotification('Téléporté(e) vers « ' + (ditem.doorLabel || 'Portail') + ' »');
             } else {
-              UI.showNotification('Porte de destination introuvable');
+              UI.showNotification('La porte de destination est introuvable');
             }
           } else if (this.player.isAdmin) {
             // Admin links two doors together
-            if (!ditem.id) { UI.showNotification('Porte sans identifiant'); return; }
+            if (!ditem.id) { UI.showNotification('Cette porte n\'a pas d\'identifiant'); return; }
             var allDoors = Board.furniture.filter(function(f) {
               var fd = Environments.furnitureTypes[f.type];
               return fd && fd.isDoor && f.id && f.id !== ditem.id;
             });
             if (allDoors.length === 0) {
-              UI.showNotification('Placez une 2e porte pour créer un passage');
+              UI.showNotification('Placez une seconde porte pour créer un passage');
             } else {
               // Auto-link to first unlinked door, or let admin choose
               var unlinked = allDoors.filter(function(d) { return !d.linkedDoorId; });
@@ -528,13 +532,13 @@ var Engine = {
               } else if (unlinked.length > 1) {
                 // Ask which door to link to
                 var names = unlinked.map(function(d, idx) { return (idx+1) + ': ' + d.type + ' (' + d.x + ',' + d.y + ')'; }).join('\n');
-                var choice = prompt('Lier à quelle porte ?\n' + names);
+                var choice = prompt('À quelle porte souhaitez-vous relier celle-ci ?\n' + names);
                 var idx = parseInt(choice) - 1;
                 target = (idx >= 0 && idx < unlinked.length) ? unlinked[idx] : unlinked[0];
               } else {
                 target = allDoors[0]; // all linked, relink first
               }
-              var label = prompt('Nom de ce passage (optionnel):') || 'Passage';
+              var label = prompt('Donnez un nom à ce passage (facultatif) :') || 'Passage';
               ditem.linkedDoorId = target.id;
               target.linkedDoorId = ditem.id;
               ditem.doorLabel = label;
@@ -543,10 +547,10 @@ var Engine = {
               Network.socket.emit('link-doors', {
                 door1Id: ditem.id, door2Id: target.id, label: label
               });
-              UI.showNotification('Portes liées : "' + label + '"');
+              UI.showNotification('Portes reliées : « ' + label + ' »');
             }
           } else {
-            UI.showNotification('Cette porte n\'est pas encore reliée');
+            UI.showNotification('Cette porte n\'est reliée à aucune autre. Rapprochez-vous d\'une porte en tant qu\'admin pour la relier.');
           }
           return;
         }
@@ -632,7 +636,7 @@ var Engine = {
         // Admin: select furniture for move/delete
         if (this.player.isAdmin && fitem.id) {
           this.selectedFurniture = fitem;
-          UI.showNotification('Sélectionné: ' + fdef.name + ' — Clic droit pour options');
+          UI.showNotification(fdef.name + ' sélectionné — Clic droit pour les options');
           return;
         }
         return;
@@ -670,6 +674,9 @@ var Engine = {
 
     Network.socket.on('chat-message', function(msg) {
       if (!messages) return;
+      // Remove empty state placeholder on first message
+      var emptyEl = document.getElementById("chat-empty-state");
+      if (emptyEl) emptyEl.remove();
       var div = document.createElement('div');
       div.className = 'chat-msg';
       div.innerHTML = '<span class="chat-msg-author">' + self.escapeHtml(msg.pseudo || 'Anonyme') + ':</span> ' + self.escapeHtml(msg.text);
@@ -1567,7 +1574,7 @@ var Engine = {
     ctx.font = '11px "Segoe UI", sans-serif';
     ctx.fillStyle = '#999';
     ctx.textAlign = 'left';
-    ctx.fillText('Vue de dessus — V pour basculer', 16, h - 70);
+    ctx.fillText('Vue de dessus — Appuyez sur V pour basculer en vue isométrique', 16, h - 70);
 
     // Minimap not needed in topdown
   },
@@ -1588,11 +1595,11 @@ var Engine = {
       this.editDragging = null;
       this.editHovered = null;
       UI.showEditToolbar(true);
-      UI.showNotification('Mode edition active - Vue du dessus');
+      UI.showNotification('Mode édition activé — Vue de dessus');
     } else {
       Board.buildCollisionMap();
       UI.showEditToolbar(false);
-      UI.showNotification('Mode edition desactive');
+      UI.showNotification('Mode édition désactivé');
     }
   },
 
@@ -1726,7 +1733,7 @@ var Engine = {
         if (r && r.success) {
           Board.furniture.push(r.item);
           Board.buildCollisionMap();
-          UI.showNotification(def.name + ' place');
+          UI.showNotification(def.name + ' placé avec succès');
         }
       });
       return;
@@ -1739,7 +1746,7 @@ var Engine = {
           if (r && r.success) {
             Board.furniture = Board.furniture.filter(function(f) { return f.id !== item.id; });
             Board.buildCollisionMap();
-            UI.showNotification('Mobilier supprime');
+            UI.showNotification('Mobilier supprimé');
           }
         });
       }
