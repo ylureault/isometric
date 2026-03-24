@@ -453,16 +453,63 @@ const Board = {
     var legH = 10;
     var cx = x + w / 2, cy = y + d / 2;
 
+    // Chairs around the table (context)
+    var numChairs = Math.min(4, Math.max(2, Math.floor(w)));
+    for (var ci = 0; ci < numChairs; ci++) {
+      var chairAngle = ci * Math.PI * 2 / numChairs + Math.PI / 4;
+      var chairDist = w * 0.55;
+      var chairX = cx + Math.cos(chairAngle) * chairDist - 0.25;
+      var chairY = cy + Math.sin(chairAngle) * chairDist - 0.25;
+      // Simple chair silhouette
+      this.drawIsoBox(ctx, chairX+0.05, chairY+0.05, 0, 0.4, 0.4, 0.5, '#555', '#444', '#4a4a4a', null);
+      this.drawIsoBox(ctx, chairX+0.12, chairY+0.12, 0.5, 0.15, 0.15, 5.5, '#666', '#555', '#5a5a5a', null);
+      this.drawIsoBox(ctx, chairX, chairY, 6, 0.5, 0.5, 0.8, '#5a6d7a', '#4a5d6a', '#506370', null);
+      // Mini backrest facing table center
+      var backAngle = chairAngle + Math.PI;
+      var backX = chairX + 0.25 + Math.cos(backAngle) * 0.22;
+      var backY = chairY + 0.25 + Math.sin(backAngle) * 0.22;
+      this.drawIsoBox(ctx, backX - 0.2, backY - 0.03, 6.8, 0.4, 0.06, 5, '#5a6d7a', '#4a5d6a', '#506370', null);
+    }
+
+    // Base foot
+    var baseP = this.iso(cx, cy, 0);
+    ctx.beginPath();
+    ctx.ellipse(baseP.x, baseP.y, 5, 2.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#bbb';
+    ctx.fill();
     // Center pole
-    this.drawIsoBox(ctx, cx-0.1, cy-0.1, 0, 0.2, 0.2, legH, '#ccc', '#bbb', '#c0c0c0', null);
-    // Table top (approximate circle with octagon)
+    this.drawIsoBox(ctx, cx-0.08, cy-0.08, 0.5, 0.16, 0.16, legH - 0.5, '#c8c8c8', '#b8b8b8', '#c0c0c0', null);
+    // Pole highlight
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    var pp1 = this.iso(cx+0.08, cy-0.08, 1);
+    var pp2 = this.iso(cx+0.08, cy-0.08, legH - 1);
+    ctx.beginPath();
+    ctx.moveTo(pp1.x, pp1.y);
+    ctx.lineTo(pp2.x, pp2.y);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.restore();
+
+    // Table top (12-gon for smoother circle)
     var r = w * 0.45;
     var pts = [];
-    for (var a = 0; a < 8; a++) {
-      var angle = a * Math.PI / 4;
+    for (var a = 0; a < 12; a++) {
+      var angle = a * Math.PI * 2 / 12;
       pts.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, legH + 1]);
     }
     this.drawIsoPoly(ctx, pts, def.topColor, 'rgba(0,0,0,0.08)', 0.5);
+    // Table edge shadow
+    var edgePts = [];
+    for (var a2 = 0; a2 < 12; a2++) {
+      var angle2 = a2 * Math.PI * 2 / 12;
+      edgePts.push([cx + Math.cos(angle2) * r, cy + Math.sin(angle2) * r, legH + 0.5]);
+    }
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    this.drawIsoPoly(ctx, edgePts, '#000', null, 0);
+    ctx.restore();
   },
 
   drawBookshelf(ctx, item, def) {
@@ -540,28 +587,42 @@ const Board = {
     var w = def.width, d = def.height;
     var h = def.drawHeight;
 
-    // Frame posts
-    this.drawIsoBox(ctx, x, y, 0, 0.08, 0.08, h, '#a0b0b8', '#8a9aa0', '#95a5ad', null);
-    this.drawIsoBox(ctx, x, y+d, 0, 0.08, 0.08, h, '#a0b0b8', '#8a9aa0', '#95a5ad', null);
+    // Floor mounting plates
+    this.drawIsoBox(ctx, x-0.02, y-0.02, 0, 0.12, 0.12, 0.3, '#888', '#777', '#808080', null);
+    this.drawIsoBox(ctx, x-0.02, y+d-0.06, 0, 0.12, 0.12, 0.3, '#888', '#777', '#808080', null);
 
-    // Glass panel (semi-transparent)
+    // Frame posts (brushed aluminum)
+    this.drawIsoBox(ctx, x, y, 0.3, 0.08, 0.08, h - 0.3, '#b0c0c8', '#9aaab0', '#a5b5bd', null);
+    this.drawIsoBox(ctx, x, y+d-0.04, 0.3, 0.08, 0.08, h - 0.3, '#b0c0c8', '#9aaab0', '#a5b5bd', null);
+    // Post highlights
     ctx.save();
-    ctx.globalAlpha = 0.2;
-    this.drawIsoPoly(ctx, [[x,y,1],[x,y+d,1],[x,y+d,h-1],[x,y,h-1]], '#b0dce8', '#90c0d0', 1);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.1;
+    this.drawIsoLine(ctx, [x+0.08, y, 1], [x+0.08, y, h-1], '#fff', 0.6);
+    this.drawIsoLine(ctx, [x+0.08, y+d-0.04, 1], [x+0.08, y+d-0.04, h-1], '#fff', 0.6);
+    ctx.restore();
+
+    // Glass panel (frosted semi-transparent)
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    this.drawIsoPoly(ctx, [[x,y+0.08,1.5],[x,y+d-0.04,1.5],[x,y+d-0.04,h-1],[x,y+0.08,h-1]], '#b8e0ec', '#98c8d8', 0.8);
     ctx.restore();
 
     // Frame lines
-    this.drawIsoLine(ctx, [x,y,0], [x,y,h], '#a0b8c0', 1.5);
-    this.drawIsoLine(ctx, [x,y+d,0], [x,y+d,h], '#a0b8c0', 1.5);
-    this.drawIsoLine(ctx, [x,y,h], [x,y+d,h], '#a0b8c0', 1);
-    this.drawIsoLine(ctx, [x,y,h/2], [x,y+d,h/2], '#a0b8c0', 0.5);
+    this.drawIsoLine(ctx, [x,y,0.3], [x,y,h], '#a8c0c8', 1.5);
+    this.drawIsoLine(ctx, [x,y+d,0.3], [x,y+d,h], '#a8c0c8', 1.5);
+    this.drawIsoLine(ctx, [x,y,h], [x,y+d,h], '#a8c0c8', 1);
+    this.drawIsoLine(ctx, [x,y,1.5], [x,y+d,1.5], '#a8c0c8', 0.8);
+    this.drawIsoLine(ctx, [x,y,h*0.5], [x,y+d,h*0.5], '#b0c8d0', 0.3);
 
-    // Reflection highlight
+    // Main reflection highlight (diagonal streak)
     ctx.save();
-    ctx.globalAlpha = 0.08;
-    this.drawIsoPoly(ctx, [[x,y+0.3,2],[x,y+d*0.6,2],[x,y+d*0.6,h-2],[x,y+0.3,h-2]], '#fff', null, 0);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.07;
+    this.drawIsoPoly(ctx, [[x,y+0.2,3],[x,y+d*0.5,3],[x,y+d*0.4,h-2],[x,y+0.1,h-2]], '#fff', null, 0);
+    ctx.restore();
+    // Secondary small highlight
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    this.drawIsoPoly(ctx, [[x,y+d*0.6,4],[x,y+d*0.8,4],[x,y+d*0.75,h*0.6],[x,y+d*0.55,h*0.6]], '#fff', null, 0);
     ctx.restore();
   },
 
