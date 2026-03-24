@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const Client = require('socket.io-client');
 const express = require('express');
+const CONSTANTS = require('../shared/constants');
 
 let io, httpServer, port;
 let roomManager;
@@ -198,7 +199,7 @@ describe('Socket.io Integration Tests', () => {
     const roomId = 'it-full';
     const clients = [];
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < CONSTANTS.MAX_PARTICIPANTS; i++) {
       const c = createClient();
       clients.push(c);
       await waitForConnect(c);

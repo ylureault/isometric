@@ -113,12 +113,12 @@ describe('EPIC 2 — Accès à une room', () => {
       rm.joinRoom('r1', 's2', { pseudo: 'B', colors: {} });
       const info = rm.getRoomInfo('r1');
       expect(info.participantCount).toBe(2);
-      expect(info.maxParticipants).toBe(20);
+      expect(info.maxParticipants).toBe(CONSTANTS.MAX_PARTICIPANTS);
     });
 
-    test('Room pleine (20 participants) → erreur room_full', () => {
+    test('Room pleine → erreur room_full', () => {
       rm.createRoom('r1', { name: 'Test' });
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < CONSTANTS.MAX_PARTICIPANTS; i++) {
         rm.joinRoom('r1', `s${i}`, { pseudo: `P${i}`, colors: {}, isCreator: i === 0 });
       }
       const result = rm.joinRoom('r1', 's20', { pseudo: 'P20', colors: {} });

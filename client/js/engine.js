@@ -56,7 +56,7 @@ var Engine = {
     window.addEventListener('keydown', function(e) { self.onKeyDown(e); });
     window.addEventListener('keyup', function(e) { self.onKeyUp(e); });
     window.addEventListener('wheel', function(e) { self.onWheel(e); }, { passive: false });
-    window.addEventListener('beforeunload', function() { Network.leaveRoom(); });
+    window.addEventListener('beforeunload', function() { Audio.destroy(); Network.leaveRoom(); });
     window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
     this.canvas.addEventListener('mousedown', function(e) { self.onMouseDown(e); });
     this.canvas.addEventListener('mousemove', function(e) { self.onMouseMove(e); });
@@ -162,8 +162,9 @@ var Engine = {
     s.on('vote-updated', function(v) { UI.updateVotePopup(v); });
     s.on('vote-ended', function(v) { UI.updateVotePopup(v); setTimeout(function() { UI.hideVotePopup(); }, 5000); });
     s.on('timer-created', function(t) { UI.showTimer(t); });
-    s.on('timer-ended', function() { UI.showNotification('Timer terminé !'); });
+    s.on('timer-ended', function() { self.initSfx(); self.playSfx('notification'); UI.showNotification('Timer terminé !'); });
     s.on('timer-paused', function(d) { if (UI.activeTimer) UI.activeTimer.paused = d.paused; });
+    s.on('timer-cancelled', function(d) { UI.activeTimer = null; UI.hideTimer(); UI.showNotification('Timer annulé'); });
     s.on('furniture-added', function(i) { Board.furniture.push(i); Board.buildCollisionMap(); });
     s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); });
     s.on('furniture-moved', function(d) {
@@ -176,7 +177,7 @@ var Engine = {
       if (d1) { d1.linkedDoorId = d.door2Id; d1.doorLabel = d.label; }
       if (d2) { d2.linkedDoorId = d.door1Id; d2.doorLabel = d.label; }
     });
-    s.on('admin-broadcast-start', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = true; UI.showNotification(d.pseudo + ' parle à tous'); });
+    s.on('admin-broadcast-start', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = true; self.initSfx(); self.playSfx('notification'); UI.showNotification(d.pseudo + ' parle à tous'); });
     s.on('admin-broadcast-stop', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = false; });
     s.on('participant-speaking-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isSpeaking = d.speaking; });
 
@@ -691,65 +692,226 @@ var Engine = {
 
   // ===== SOUND DESIGN =====
   sfxCtx: null,
+  sfxMasterGain: null,
+  sfxVolume: 0.7,
   sfxLastStep: 0,
   sfxInitialized: false,
+  // Sound spam prevention: track last play time per sound type
+  _sfxLastPlay: {},
+  _sfxMinInterval: { step: 200, bump: 250, join: 800, leave: 800, proximity: 500, notification: 1000, click: 100 },
+  // Queue for sounds when multiple fire at once
+  _sfxQueue: [],
+  _sfxQueueTimer: null,
 
   initSfx: function() {
     if (this.sfxInitialized) return;
     try {
       this.sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Master gain node for SFX volume control (separate from voice)
+      this.sfxMasterGain = this.sfxCtx.createGain();
+      this.sfxMasterGain.gain.value = this.sfxVolume;
+      this.sfxMasterGain.connect(this.sfxCtx.destination);
       this.sfxInitialized = true;
     } catch(e) {}
   },
 
+  setSfxVolume: function(vol) {
+    this.sfxVolume = Math.max(0, Math.min(1, vol));
+    if (this.sfxMasterGain) {
+      this.sfxMasterGain.gain.setValueAtTime(this.sfxVolume, this.sfxCtx.currentTime);
+    }
+  },
+
+  // Resume AudioContext on user interaction (Chrome autoplay policy)
+  _ensureSfxContext: function() {
+    if (!this.sfxCtx) return false;
+    if (this.sfxCtx.state === 'suspended') {
+      this.sfxCtx.resume();
+    }
+    return this.sfxCtx.state === 'running';
+  },
+
   playSfx: function(type) {
-    if (!this.sfxCtx) return;
+    if (!this.sfxCtx || !this.sfxMasterGain) return;
+    if (!this._ensureSfxContext()) return;
+
+    // Sound spam prevention: debounce by type
+    var now = performance.now();
+    var minInterval = this._sfxMinInterval[type] || 200;
+    if (this._sfxLastPlay[type] && now - this._sfxLastPlay[type] < minInterval) return;
+    this._sfxLastPlay[type] = now;
+
     try {
       var ctx = this.sfxCtx;
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      var dest = this.sfxMasterGain;
+      var t = ctx.currentTime;
 
       if (type === 'step') {
+        // Barely audible soft tap — filtered noise-like click
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.value = 180 + Math.random() * 40;
-        gain.gain.value = 0.03;
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.08);
+        osc.frequency.value = 150 + Math.random() * 60;
+        gain.gain.setValueAtTime(0.015, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start(t);
+        osc.stop(t + 0.05);
+
       } else if (type === 'bump') {
-        osc.type = 'triangle';
-        osc.frequency.value = 120;
-        gain.gain.value = 0.06;
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.15);
+        // Percussive wall hit: short noise burst + low thud
+        // Thud component
+        var osc1 = ctx.createOscillator();
+        var gain1 = ctx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(100, t);
+        osc1.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+        gain1.gain.setValueAtTime(0.12, t);
+        gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        osc1.connect(gain1);
+        gain1.connect(dest);
+        osc1.start(t);
+        osc1.stop(t + 0.1);
+        // Noise/click component using high-frequency square wave
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.type = 'square';
+        osc2.frequency.value = 800;
+        gain2.gain.setValueAtTime(0.04, t);
+        gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+        osc2.connect(gain2);
+        gain2.connect(dest);
+        osc2.start(t);
+        osc2.stop(t + 0.03);
+
       } else if (type === 'proximity') {
+        // Gentle shimmer to indicate entering audio range
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.value = 440;
-        gain.gain.value = 0.02;
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.2);
+        osc.frequency.setValueAtTime(600, t);
+        osc.frequency.exponentialRampToValueAtTime(800, t + 0.15);
+        gain.gain.setValueAtTime(0.02, t);
+        gain.gain.linearRampToValueAtTime(0.03, t + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start(t);
+        osc.stop(t + 0.2);
+
       } else if (type === 'join') {
-        // Two-note chime: C5 then E5
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523, ctx.currentTime);
-        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.3);
+        // Pleasant two-note chime with harmonic: C5 -> E5
+        // Fundamental note 1: C5 (523 Hz)
+        var osc1 = ctx.createOscillator();
+        var gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.value = 523.25;
+        gain1.gain.setValueAtTime(0.09, t);
+        gain1.gain.exponentialRampToValueAtTime(0.02, t + 0.15);
+        gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        osc1.connect(gain1);
+        gain1.connect(dest);
+        osc1.start(t);
+        osc1.stop(t + 0.25);
+        // Harmonic of note 1 (octave above, subtle)
+        var osc1h = ctx.createOscillator();
+        var gain1h = ctx.createGain();
+        osc1h.type = 'sine';
+        osc1h.frequency.value = 1046.5;
+        gain1h.gain.setValueAtTime(0.025, t);
+        gain1h.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc1h.connect(gain1h);
+        gain1h.connect(dest);
+        osc1h.start(t);
+        osc1h.stop(t + 0.2);
+        // Fundamental note 2: E5 (659 Hz), starts after note 1
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.value = 659.25;
+        gain2.gain.setValueAtTime(0.001, t);
+        gain2.gain.setValueAtTime(0.1, t + 0.13);
+        gain2.gain.exponentialRampToValueAtTime(0.02, t + 0.35);
+        gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        osc2.connect(gain2);
+        gain2.connect(dest);
+        osc2.start(t);
+        osc2.stop(t + 0.5);
+        // Harmonic of note 2 (octave above, subtle)
+        var osc2h = ctx.createOscillator();
+        var gain2h = ctx.createGain();
+        osc2h.type = 'sine';
+        osc2h.frequency.value = 1318.5;
+        gain2h.gain.setValueAtTime(0.001, t);
+        gain2h.gain.setValueAtTime(0.02, t + 0.13);
+        gain2h.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc2h.connect(gain2h);
+        gain2h.connect(dest);
+        osc2h.start(t);
+        osc2h.stop(t + 0.4);
+
       } else if (type === 'leave') {
-        // Descending tone: E5 then C4
+        // Soft descending tone: E5 -> C5, gentle and not alarming
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(659, ctx.currentTime);
-        osc.frequency.setValueAtTime(262, ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.06, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(659, t);
+        osc.frequency.exponentialRampToValueAtTime(440, t + 0.2);
+        osc.frequency.exponentialRampToValueAtTime(392, t + 0.35);
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.linearRampToValueAtTime(0.03, t + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start(t);
+        osc.stop(t + 0.35);
+
+      } else if (type === 'notification') {
+        // Three-note ascending chime for important events (timer, admin)
+        var notes = [523.25, 659.25, 783.99]; // C5, E5, G5 (major triad)
+        for (var i = 0; i < notes.length; i++) {
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = notes[i];
+          var noteStart = t + i * 0.12;
+          gain.gain.setValueAtTime(0.001, t);
+          gain.gain.setValueAtTime(0.1, noteStart);
+          gain.gain.exponentialRampToValueAtTime(0.02, noteStart + 0.2);
+          gain.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.4);
+          osc.connect(gain);
+          gain.connect(dest);
+          osc.start(t);
+          osc.stop(noteStart + 0.4);
+        }
+        // Add a subtle fifth harmonic on the last note for richness
+        var osc3h = ctx.createOscillator();
+        var gain3h = ctx.createGain();
+        osc3h.type = 'sine';
+        osc3h.frequency.value = 1567.98; // G6
+        var lastStart = t + 0.24;
+        gain3h.gain.setValueAtTime(0.001, t);
+        gain3h.gain.setValueAtTime(0.025, lastStart);
+        gain3h.gain.exponentialRampToValueAtTime(0.001, lastStart + 0.35);
+        osc3h.connect(gain3h);
+        gain3h.connect(dest);
+        osc3h.start(t);
+        osc3h.stop(lastStart + 0.35);
+
+      } else if (type === 'click') {
+        // Crisp, short UI click
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(1200, t);
+        osc.frequency.exponentialRampToValueAtTime(600, t + 0.02);
+        gain.gain.setValueAtTime(0.03, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start(t);
+        osc.stop(t + 0.04);
       }
     } catch(e) {}
   },

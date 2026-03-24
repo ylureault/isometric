@@ -101,15 +101,29 @@ const UI = {
   // ===== TOOLBAR =====
 
   initToolbar() {
+    // Click sound for all toolbar buttons
+    document.querySelectorAll('.toolbar-btn, .reaction-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        Engine.initSfx();
+        Engine.playSfx('click');
+      });
+    });
+
     // Mute button
     document.getElementById('btn-mute')?.addEventListener('click', () => {
       const muted = Audio.toggleMute();
       this.updateMuteButton(muted);
     });
 
-    // Volume slider
+    // Voice volume slider
     document.getElementById('volume-slider')?.addEventListener('input', (e) => {
       Audio.setMasterVolume(parseFloat(e.target.value) / 100);
+    });
+
+    // SFX volume slider
+    document.getElementById('sfx-volume-slider')?.addEventListener('input', (e) => {
+      Engine.initSfx();
+      Engine.setSfxVolume(parseFloat(e.target.value) / 100);
     });
 
     // Radius slider
@@ -1868,6 +1882,8 @@ const UI = {
     if (el) el.style.display = 'block';
     if (globalEl) globalEl.style.display = 'block';
     this.activeTimer = timer;
+    var cancelBtn = document.getElementById('btn-cancel-timer');
+    if (cancelBtn) cancelBtn.style.display = 'inline-block';
     this.updateTimerDisplay();
   },
 
@@ -1916,5 +1932,39 @@ const UI = {
       if (el) el.innerHTML = '<span class="timer-text timer-ended">Terminé !</span>';
       if (globalTime) globalTime.textContent = 'Terminé !';
     }
+
+    // Add stop button for admins on the global timer display
+    if (globalEl && Engine.player && Engine.player.isAdmin && t.running) {
+      var stopBtn = globalEl.querySelector('.timer-stop-btn');
+      if (!stopBtn) {
+        stopBtn = document.createElement('button');
+        stopBtn.className = 'timer-stop-btn';
+        stopBtn.title = 'Arrêter le timer';
+        stopBtn.textContent = '✕';
+        stopBtn.style.cssText = 'margin-left:8px;background:#e74c3c;color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;line-height:24px;padding:0;vertical-align:middle;';
+        stopBtn.addEventListener('click', function() {
+          if (UI.activeTimer) {
+            Network.socket.emit('cancel-timer', { timerId: UI.activeTimer.id }, function() {});
+          }
+        });
+        globalEl.appendChild(stopBtn);
+      }
+    }
+  },
+
+  hideTimer() {
+    const el = document.getElementById('timer-display');
+    const globalEl = document.getElementById('timer-display-global');
+    if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+    if (globalEl) {
+      globalEl.style.display = 'none';
+      globalEl.classList.remove('timer-warning', 'timer-critical');
+      var stopBtn = globalEl.querySelector('.timer-stop-btn');
+      if (stopBtn) stopBtn.remove();
+      var globalTime = document.getElementById('timer-global-time');
+      if (globalTime) globalTime.textContent = '00:00';
+    }
+    var cancelBtn = document.getElementById('btn-cancel-timer');
+    if (cancelBtn) cancelBtn.style.display = 'none';
   },
 };

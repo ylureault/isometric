@@ -698,6 +698,17 @@ class RoomManager {
     return { success: true, timer };
   }
 
+  cancelTimer(roomId, requesterId, timerId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    const timer = room.timers.get(timerId);
+    if (!timer) return { error: 'not_found' };
+    room.timers.delete(timerId);
+    return { success: true, timerId };
+  }
+
   // ===== TABLE NOTES =====
 
   updateTableNotes(roomId, tableId, content) {

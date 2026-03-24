@@ -16,9 +16,9 @@
     <p class="powered-by">Propulsé par <strong>Insuffle</strong> — Facilitation &amp; Collaboration</p>
 
     <div class="form-group">
-      <label for="room-name">Nom de la room</label>
+      <label for="room-name">Nom de la salle</label>
       <input type="text" id="room-name" placeholder="Ma réunion d'équipe" maxlength="50">
-      <span class="error-message" id="error-name">Le nom de la room est obligatoire</span>
+      <span class="error-message" id="error-name">Veuillez saisir un nom pour votre salle</span>
     </div>
 
     <div class="form-group">
@@ -37,13 +37,13 @@
       <div class="grid-size-display"><span id="grid-size-value">20</span> x <span id="grid-size-value2">20</span></div>
     </div>
 
-    <button class="btn btn-primary" id="btn-create">Créer la room</button>
+    <button class="btn btn-primary" id="btn-create">Créer la salle</button>
     <span class="error-message" id="error-create" style="text-align:center;"></span>
 
     <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 24px; width: 320px; text-align: center;">
-      <p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 12px;">Ou rejoindre une room existante</p>
+      <p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 12px;">Ou rejoindre une salle existante</p>
       <div class="form-group">
-        <input type="text" id="room-id-input" placeholder="ID de la room">
+        <input type="text" id="room-id-input" placeholder="Identifiant de la salle">
       </div>
       <button class="btn btn-secondary" id="btn-join" style="margin-top: 8px;">Rejoindre</button>
     </div>
@@ -85,7 +85,7 @@
         const data = await resp.json();
 
         if (!resp.ok) {
-          errorCreate.textContent = data.error || 'Erreur lors de la création';
+          errorCreate.textContent = data.error || 'Impossible de créer la salle. Veuillez réessayer.';
           errorCreate.style.display = 'block';
           return;
         }
@@ -100,7 +100,7 @@
         });
         window.location.href = `room.html?${params.toString()}`;
       } catch (err) {
-        errorCreate.textContent = 'Impossible de contacter le serveur';
+        errorCreate.textContent = 'Le serveur est injoignable. Vérifiez votre connexion et réessayez.';
         errorCreate.style.display = 'block';
       }
     });

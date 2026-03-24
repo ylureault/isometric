@@ -17,6 +17,7 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 const audioSignaling = new AudioSignaling(io, roomManager);
+const timerIntervals = new Map(); // timerId -> intervalId, for cleanup on cancel
 
 app.use(express.json());
 app.use('/client', express.static(path.join(__dirname, '..', 'client')));
@@ -610,18 +611,20 @@ io.on('connection', (socket) => {
     const rid = currentRoomId;
     const tickInterval = setInterval(() => {
       const room = roomManager.getRoom(rid);
-      if (!room) { clearInterval(tickInterval); return; }
+      if (!room) { clearInterval(tickInterval); timerIntervals.delete(timerId); return; }
       const timer = room.timers.get(timerId);
-      if (!timer || !timer.running) { clearInterval(tickInterval); return; }
+      if (!timer || !timer.running) { clearInterval(tickInterval); timerIntervals.delete(timerId); return; }
       if (!timer.paused) {
         timer.remaining = Math.max(0, timer.duration - (Date.now() - timer.startedAt) / 1000);
         if (timer.remaining <= 0) {
           timer.running = false;
           io.to(rid).emit('timer-ended', { timerId });
           clearInterval(tickInterval);
+          timerIntervals.delete(timerId);
         }
       }
     }, 1000);
+    timerIntervals.set(timerId, tickInterval);
     callback(result);
   });
 
@@ -630,6 +633,17 @@ io.on('connection', (socket) => {
     const result = roomManager.pauseTimer(currentRoomId, socket.id, data.timerId);
     if (result.error) return callback(result);
     io.to(currentRoomId).emit('timer-paused', { timerId: data.timerId, paused: result.timer.paused });
+    callback(result);
+  });
+
+  socket.on('cancel-timer', (data, callback) => {
+    if (!currentRoomId) return callback({ error: 'not_in_room' });
+    const result = roomManager.cancelTimer(currentRoomId, socket.id, data.timerId);
+    if (result.error) return callback(result);
+    // Clear the server-side interval to prevent memory leaks
+    const interval = timerIntervals.get(data.timerId);
+    if (interval) { clearInterval(interval); timerIntervals.delete(data.timerId); }
+    io.to(currentRoomId).emit('timer-cancelled', { timerId: data.timerId });
     callback(result);
   });
 

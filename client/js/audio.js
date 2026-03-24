@@ -18,6 +18,16 @@ const Audio = {
   async init() {
     try {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Resume AudioContext on any user interaction (Chrome autoplay policy)
+      const resumeCtx = () => {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          this.audioContext.resume();
+        }
+      };
+      ['click', 'touchstart', 'keydown'].forEach(evt => {
+        document.addEventListener(evt, resumeCtx, { once: false, passive: true });
+      });
     } catch (e) {
       console.warn('AudioContext not available');
     }
@@ -30,6 +40,10 @@ const Audio = {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          // Prefer higher quality voice settings
+          sampleRate: { ideal: 48000 },
+          channelCount: { ideal: 1 },
+          latency: { ideal: 0.01 },
         },
         video: false,
       };
@@ -40,6 +54,14 @@ const Audio = {
 
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
       this.hasPermission = true;
+
+      // Apply mute state to newly acquired tracks
+      if (this.isMuted) {
+        this.localStream.getAudioTracks().forEach(track => {
+          track.enabled = false;
+        });
+      }
+
       return true;
     } catch (e) {
       console.warn('Microphone permission denied:', e.message);
@@ -50,15 +72,20 @@ const Audio = {
 
   toggleMute() {
     this.isMuted = !this.isMuted;
+    this._applyMuteState();
+    if (Network.socket) {
+      Network.socket.emit('mute-changed', { muted: this.isMuted });
+    }
+    return this.isMuted;
+  },
+
+  // Centralized mute application — ensures all tracks match mute state
+  _applyMuteState() {
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
         track.enabled = !this.isMuted;
       });
     }
-    if (Network.socket) {
-      Network.socket.emit('mute-changed', { muted: this.isMuted });
-    }
-    return this.isMuted;
   },
 
   setMasterVolume(vol) {
@@ -86,6 +113,11 @@ const Audio = {
   _setupPeerConnection(socketId, connection) {
     const audioElement = new window.Audio();
     audioElement.autoplay = true;
+
+    // Set output device if selected
+    if (this.selectedOutputDevice && audioElement.setSinkId) {
+      audioElement.setSinkId(this.selectedOutputDevice).catch(() => {});
+    }
 
     const peer = {
       connection,
@@ -150,6 +182,25 @@ const Audio = {
     return peer;
   },
 
+  // Prefer Opus codec with high bitrate for voice clarity
+  _preferOpus(sdp) {
+    // Set Opus parameters for voice: maxaveragebitrate, stereo off, DTX on (silence suppression)
+    if (sdp.indexOf('opus/48000') === -1) return sdp;
+    return sdp.replace(
+      /a=fmtp:(\d+) (.+)/g,
+      function(match, pt, params) {
+        if (sdp.indexOf('a=rtpmap:' + pt + ' opus/48000') !== -1) {
+          var extra = '';
+          if (params.indexOf('maxaveragebitrate') === -1) extra += ';maxaveragebitrate=32000';
+          if (params.indexOf('usedtx') === -1) extra += ';usedtx=1';
+          if (params.indexOf('stereo') === -1) extra += ';stereo=0';
+          return 'a=fmtp:' + pt + ' ' + params + extra;
+        }
+        return match;
+      }
+    );
+  },
+
   // Create or update peer connection for audio
   async connectToPeer(socketId) {
     if (this.peers.has(socketId) || this._connectingPeers.has(socketId)) return;
@@ -161,8 +212,9 @@ const Audio = {
       const connection = new RTCPeerConnection(this._createPeerConfig());
       this._setupPeerConnection(socketId, connection);
 
-      // Create offer
+      // Create offer with Opus preference
       const offer = await connection.createOffer();
+      offer.sdp = this._preferOpus(offer.sdp);
       await connection.setLocalDescription(offer);
       Network.socket.emit('rtc-offer', {
         targetSocketId: socketId,
@@ -215,6 +267,7 @@ const Audio = {
       peer.pendingCandidates = [];
 
       const answer = await connection.createAnswer();
+      answer.sdp = this._preferOpus(answer.sdp);
       await connection.setLocalDescription(answer);
       Network.socket.emit('rtc-answer', {
         targetSocketId: fromSocketId,
@@ -449,14 +502,26 @@ const Audio = {
   },
 
   destroy() {
+    // Stop all local tracks
     if (this.localStream) {
       this.localStream.getTracks().forEach(t => t.stop());
+      this.localStream = null;
     }
+    // Disconnect all peers (copies keys to avoid mutation during iteration)
     for (const sid of [...this.peers.keys()]) {
       this.disconnectPeer(sid);
     }
+    this._connectingPeers.clear();
+    // Clean up analyser
+    this._analyser = null;
+    this._analyserData = null;
+    this._isSpeakingState = false;
+    // Close audio context
     if (this.audioContext) {
-      this.audioContext.close();
+      try { this.audioContext.close(); } catch (e) { /* ignore */ }
+      this.audioContext = null;
     }
+    this.hasPermission = false;
+    this.isMuted = false;
   },
 };

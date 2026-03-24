@@ -6,8 +6,11 @@ const ScreenShare = {
   shareScope: null, // 'global' or 'table'
   shareTableId: null,
 
+  // Outgoing screen share connections (sender side)
+  outgoingPeers: new Map(), // socketId -> RTCPeerConnection
+
   // Incoming screen shares
-  incomingShares: new Map(), // socketId -> { stream, videoElement }
+  incomingShares: new Map(), // socketId -> { connection, videoElement }
   activeGlobalShare: null, // { socketId, pseudo }
 
   async startShare(scope = 'global', tableId = null) {
@@ -48,7 +51,14 @@ const ScreenShare = {
     this.shareScope = null;
     this.shareTableId = null;
 
+    // Close all outgoing peer connections
+    for (const [sid, conn] of this.outgoingPeers) {
+      try { conn.close(); } catch (e) { /* ignore */ }
+    }
+    this.outgoingPeers.clear();
+
     Network.socket.emit('screen-share-stop');
+    UI.updateScreenShareButton();
   },
 
   broadcastStream() {
@@ -66,10 +76,14 @@ const ScreenShare = {
     const config = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
       ],
     };
 
     const connection = new RTCPeerConnection(config);
+
+    // Store the outgoing connection so we can handle answers and ICE candidates
+    this.outgoingPeers.set(socketId, connection);
 
     this.localStream.getTracks().forEach(track => {
       connection.addTrack(track, this.localStream);
@@ -81,6 +95,12 @@ const ScreenShare = {
           targetSocketId: socketId,
           candidate: event.candidate,
         });
+      }
+    };
+
+    connection.onconnectionstatechange = () => {
+      if (connection.connectionState === 'failed' || connection.connectionState === 'closed') {
+        this.outgoingPeers.delete(socketId);
       }
     };
 
@@ -136,23 +156,31 @@ const ScreenShare = {
   },
 
   async handleScreenAnswer(fromSocketId, answer) {
-    const share = this.incomingShares.get(fromSocketId);
-    if (!share) return;
+    // The answer comes from a receiver, so look up our outgoing peer connection
+    const connection = this.outgoingPeers.get(fromSocketId);
+    if (!connection) return;
     try {
-      await share.connection.setRemoteDescription(new RTCSessionDescription(answer));
+      await connection.setRemoteDescription(new RTCSessionDescription(answer));
     } catch (e) {
       console.error('Screen answer error:', e);
     }
   },
 
   async handleScreenIceCandidate(fromSocketId, candidate) {
+    // Check outgoing connections first (we are the sender, they are sending ICE back)
+    const outgoing = this.outgoingPeers.get(fromSocketId);
+    if (outgoing) {
+      try {
+        await outgoing.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) { /* ignore non-fatal ICE errors */ }
+      return;
+    }
+    // Otherwise check incoming connections (we are the receiver)
     const share = this.incomingShares.get(fromSocketId);
     if (!share) return;
     try {
       await share.connection.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch (e) {
-      console.error('Screen ICE error:', e);
-    }
+    } catch (e) { /* ignore non-fatal ICE errors */ }
   },
 
   removeShare(socketId) {
@@ -206,5 +234,9 @@ const ScreenShare = {
     for (const [sid] of this.incomingShares) {
       this.removeShare(sid);
     }
+    for (const [sid, conn] of this.outgoingPeers) {
+      try { conn.close(); } catch (e) { /* ignore */ }
+    }
+    this.outgoingPeers.clear();
   },
 };
