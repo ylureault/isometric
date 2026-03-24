@@ -1350,11 +1350,26 @@ const Board = {
     ctx.fillStyle = '#D4A017';
     ctx.fill();
 
-    // Label (linked room name if set)
+    // Connected indicator
+    if (item.linkedDoorId) {
+      // Green glow for connected doors
+      ctx.beginPath();
+      ctx.arc(portalPos.x, portalPos.y - 18, 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(107,203,119,' + (0.6 + Math.sin(time * 2) * 0.3) + ')';
+      ctx.fill();
+    } else {
+      // Red dot for unconnected
+      ctx.beginPath();
+      ctx.arc(portalPos.x, portalPos.y - 18, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,107,107,0.6)';
+      ctx.fill();
+    }
+
+    // Label
     ctx.font = 'bold 8px "Segoe UI", sans-serif';
-    ctx.fillStyle = 'rgba(200,160,255,0.8)';
+    ctx.fillStyle = item.linkedDoorId ? 'rgba(107,203,119,0.9)' : 'rgba(200,160,255,0.7)';
     ctx.textAlign = 'center';
-    ctx.fillText(item.doorLabel || '🚪 Portail', portalPos.x, portalPos.y + 20);
+    ctx.fillText(item.doorLabel || (item.linkedDoorId ? 'Passage' : 'Non relié'), portalPos.x, portalPos.y + 20);
   },
 
   drawClock(ctx, item, def) {

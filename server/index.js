@@ -377,6 +377,27 @@ io.on('connection', (socket) => {
     callback(result);
   });
 
+  // Link two doors together (paired teleportation)
+  socket.on('link-doors', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p || !p.isAdmin) return;
+    const door1 = room.furniture.find(f => f.id === data.door1Id);
+    const door2 = room.furniture.find(f => f.id === data.door2Id);
+    if (door1 && door2) {
+      door1.linkedDoorId = door2.id;
+      door2.linkedDoorId = door1.id;
+      door1.doorLabel = data.label || 'Passage';
+      door2.doorLabel = data.label || 'Passage';
+      // Broadcast to all so everyone sees the link
+      socket.to(currentRoomId).emit('doors-linked', {
+        door1Id: door1.id, door2Id: door2.id, label: data.label || 'Passage'
+      });
+    }
+  });
+
   // ===== WHITEBOARD =====
 
   socket.on('create-whiteboard', (data, callback) => {

@@ -129,6 +129,12 @@ var Engine = {
     s.on('timer-paused', function(d) { if (UI.activeTimer) UI.activeTimer.paused = d.paused; });
     s.on('furniture-added', function(i) { Board.furniture.push(i); Board.buildCollisionMap(); });
     s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); });
+    s.on('doors-linked', function(d) {
+      var d1 = Board.furniture.find(function(f) { return f.id === d.door1Id; });
+      var d2 = Board.furniture.find(function(f) { return f.id === d.door2Id; });
+      if (d1) { d1.linkedDoorId = d.door2Id; d1.doorLabel = d.label; }
+      if (d2) { d2.linkedDoorId = d.door1Id; d2.doorLabel = d.label; }
+    });
     s.on('admin-broadcast-start', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = true; UI.showNotification(d.pseudo + ' parle à tous'); });
     s.on('admin-broadcast-stop', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = false; });
     s.on('participant-speaking-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isSpeaking = d.speaking; });
@@ -403,6 +409,12 @@ var Engine = {
             if (targetDoor) {
               this.player.x = targetDoor.x + 0.5;
               this.player.y = targetDoor.y + 1.5; // appear in front of target door
+              // Broadcast new position to all players
+              Network.socket.emit('position-update', {
+                x: this.player.x, y: this.player.y,
+                direction: this.player.direction,
+                isWalking: false, walkPhase: 0
+              });
               UI.showNotification('Téléporté via ' + (ditem.doorLabel || 'portail'));
             } else {
               UI.showNotification('Porte de destination introuvable');
@@ -416,14 +428,29 @@ var Engine = {
             if (allDoors.length === 0) {
               UI.showNotification('Placez une 2e porte pour créer un passage');
             } else {
-              // Auto-link to first unlinked door, or ask
-              var unlinked = allDoors.find(function(d) { return !d.linkedDoorId; });
-              var target = unlinked || allDoors[0];
+              // Auto-link to first unlinked door, or let admin choose
+              var unlinked = allDoors.filter(function(d) { return !d.linkedDoorId; });
+              var target;
+              if (unlinked.length === 1) {
+                target = unlinked[0];
+              } else if (unlinked.length > 1) {
+                // Ask which door to link to
+                var names = unlinked.map(function(d, idx) { return (idx+1) + ': ' + d.type + ' (' + d.x + ',' + d.y + ')'; }).join('\n');
+                var choice = prompt('Lier à quelle porte ?\n' + names);
+                var idx = parseInt(choice) - 1;
+                target = (idx >= 0 && idx < unlinked.length) ? unlinked[idx] : unlinked[0];
+              } else {
+                target = allDoors[0]; // all linked, relink first
+              }
+              var label = prompt('Nom de ce passage (optionnel):') || 'Passage';
               ditem.linkedDoorId = target.id;
               target.linkedDoorId = ditem.id;
-              var label = prompt('Nom de ce passage (optionnel):') || 'Passage';
               ditem.doorLabel = label;
               target.doorLabel = label;
+              // Persist door links on server
+              Network.socket.emit('link-doors', {
+                door1Id: ditem.id, door2Id: target.id, label: label
+              });
               UI.showNotification('Portes liées : "' + label + '"');
             }
           } else {

@@ -708,6 +708,8 @@ const UI = {
   },
 
 
+
+
   // ===== POST-IT DARK BOARD POP-IN =====
 
   openPostItBoard: function(boardId, furnitureItem) {
@@ -720,54 +722,125 @@ const UI = {
     var drawCanvas = document.getElementById('darkboard-canvas');
     var viewport = document.getElementById('darkboard-viewport');
     var wrapper = document.getElementById('darkboard-transform-wrapper');
+    var templateLayer = document.getElementById('darkboard-template-layer');
     var statusText = document.getElementById('darkboard-status-text');
     var votesInfo = document.getElementById('darkboard-votes-info');
+    var minimapCanvas = document.getElementById('darkboard-minimap-canvas');
+    var minimapVP = document.getElementById('darkboard-minimap-vp');
 
     if (!board || !drawCanvas || !viewport) { overlay.style.display = 'none'; return; }
     board.innerHTML = '';
+    if (templateLayer) templateLayer.innerHTML = '';
     var drawCtx = drawCanvas.getContext('2d');
     drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    var minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
 
-    // State
+    // === STATE ===
     var currentColor = '#FFE066', penColor = '#FFFFFF', penWidth = 2;
     var currentTool = 'select', shapeType = 'rect';
-    var postits = [], strokes = [], circles = [];
-    var dotVotingMode = false, myVotes = 0, maxVotes = 3;
-    var dragState = null, drawState = null;
-    var panX = 0, panY = 0, zoom = 1, isPanning = false, panStart = {x:0,y:0}, panOrig = {x:0,y:0};
+    var postits = [], strokes = [], circles = [], textLabels = [];
+    var dotVotingMode = false, isoloirMode = false, myVotes = 0, maxVotes = 3;
+    var dragState = null, drawState = null, resizeState = null;
+    var panX = -1500, panY = -1500, zoom = 1;
+    var isPanning = false, panStart = {x:0,y:0}, panOrig = {x:0,y:0};
+    var myPseudo = (typeof Engine !== 'undefined' && Engine.player) ? Engine.player.pseudo : 'Moi';
 
+    // === PAN & ZOOM ===
     function applyTransform() {
       if (wrapper) wrapper.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
       var zl = document.getElementById('darkboard-zoom-label');
       if (zl) zl.textContent = Math.round(zoom * 100) + '%';
+      updateMinimap();
     }
     applyTransform();
 
-    // Redraw all canvas content
+    // === MINIMAP ===
+    function updateMinimap() {
+      if (!minimapCtx || !minimapCanvas || !minimapVP || !viewport) return;
+      var cw = drawCanvas.width, ch = drawCanvas.height;
+      var mw = minimapCanvas.width, mh = minimapCanvas.height;
+      var sx = mw / cw, sy = mh / ch;
+      minimapCtx.clearRect(0, 0, mw, mh);
+      minimapCtx.fillStyle = '#1a1a2e';
+      minimapCtx.fillRect(0, 0, mw, mh);
+      // Draw postits as colored dots
+      for (var pi = 0; pi < postits.length; pi++) {
+        minimapCtx.fillStyle = postits[pi].color || '#FFE066';
+        minimapCtx.fillRect(postits[pi].x * sx, postits[pi].y * sy, 4, 3);
+      }
+      // Draw strokes as thin lines
+      minimapCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+      minimapCtx.lineWidth = 0.5;
+      for (var si = 0; si < strokes.length; si++) {
+        var s = strokes[si];
+        if (s.type === 'pen' && s.points && s.points.length > 1) {
+          minimapCtx.beginPath();
+          minimapCtx.moveTo(s.points[0].x * sx, s.points[0].y * sy);
+          for (var j = 1; j < s.points.length; j++) minimapCtx.lineTo(s.points[j].x * sx, s.points[j].y * sy);
+          minimapCtx.stroke();
+        }
+      }
+      // Viewport indicator
+      var vpRect = viewport.getBoundingClientRect();
+      var vpW = vpRect.width / zoom, vpH = vpRect.height / zoom;
+      var vpX = -panX / zoom, vpY = -panY / zoom;
+      minimapVP.style.left = (vpX * sx) + 'px';
+      minimapVP.style.top = (vpY * sy) + 'px';
+      minimapVP.style.width = (vpW * sx) + 'px';
+      minimapVP.style.height = (vpH * sy) + 'px';
+    }
+
+    // === CANVAS COORDINATES (accounts for pan + zoom) ===
+    function canvasPos(e) {
+      var rect = viewport.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left - panX) / zoom,
+        y: (e.clientY - rect.top - panY) / zoom
+      };
+    }
+
+    // === REDRAW CANVAS ===
     function redrawCanvas() {
       drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+      // Strokes
       for (var i = 0; i < strokes.length; i++) {
         var s = strokes[i];
+        drawCtx.strokeStyle = s.color || '#fff';
+        drawCtx.lineWidth = s.width || 2;
+        drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
         if (s.type === 'pen' && s.points && s.points.length > 1) {
-          drawCtx.beginPath(); drawCtx.strokeStyle = s.color || '#fff'; drawCtx.lineWidth = s.width || 2;
-          drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
+          drawCtx.beginPath();
           drawCtx.moveTo(s.points[0].x, s.points[0].y);
           for (var j = 1; j < s.points.length; j++) drawCtx.lineTo(s.points[j].x, s.points[j].y);
           drawCtx.stroke();
         } else if (s.type === 'shape') {
-          drawCtx.strokeStyle = s.color || '#fff'; drawCtx.lineWidth = s.width || 2;
           drawCtx.beginPath();
           if (s.shape === 'rect') drawCtx.rect(s.x, s.y, s.w, s.h);
-          else if (s.shape === 'ellipse') drawCtx.ellipse(s.x+s.w/2, s.y+s.h/2, Math.abs(s.w/2), Math.abs(s.h/2), 0, 0, Math.PI*2);
-          else { drawCtx.moveTo(s.x, s.y); drawCtx.lineTo(s.x+s.w, s.y+s.h); }
+          else if (s.shape === 'ellipse') drawCtx.ellipse(s.x+s.w/2, s.y+s.h/2, Math.abs(s.w/2)||1, Math.abs(s.h/2)||1, 0, 0, Math.PI*2);
+          else if (s.shape === 'arrow') {
+            drawCtx.moveTo(s.x, s.y); drawCtx.lineTo(s.x+s.w, s.y+s.h);
+            drawCtx.stroke();
+            // Arrowhead
+            var angle = Math.atan2(s.h, s.w);
+            var ax = s.x+s.w, ay = s.y+s.h, alen = 14;
+            drawCtx.beginPath();
+            drawCtx.moveTo(ax, ay);
+            drawCtx.lineTo(ax - alen*Math.cos(angle-0.4), ay - alen*Math.sin(angle-0.4));
+            drawCtx.moveTo(ax, ay);
+            drawCtx.lineTo(ax - alen*Math.cos(angle+0.4), ay - alen*Math.sin(angle+0.4));
+          } else { // line
+            drawCtx.moveTo(s.x, s.y); drawCtx.lineTo(s.x+s.w, s.y+s.h);
+          }
           drawCtx.stroke();
         }
       }
+      // Group circles
       for (var ci = 0; ci < circles.length; ci++) {
         var c = circles[ci];
         drawCtx.beginPath();
         drawCtx.ellipse(c.cx, c.cy, Math.abs(c.rx), Math.abs(c.ry), 0, 0, Math.PI*2);
-        drawCtx.strokeStyle = c.color || 'rgba(255,255,255,0.6)'; drawCtx.lineWidth = 2.5;
+        drawCtx.strokeStyle = c.color || 'rgba(255,255,255,0.6)';
+        drawCtx.lineWidth = 2.5;
         drawCtx.setLineDash([8,4]); drawCtx.stroke(); drawCtx.setLineDash([]);
         if (c.label) {
           drawCtx.font = 'bold 14px "Segoe UI", sans-serif';
@@ -775,26 +848,30 @@ const UI = {
           drawCtx.fillText(c.label, c.cx, c.cy - Math.abs(c.ry) - 8);
         }
       }
-      // In-progress
+      // In-progress drawing preview
       if (drawState) {
+        drawCtx.strokeStyle = drawState.color || penColor;
+        drawCtx.lineWidth = drawState.width || penWidth;
+        drawCtx.lineCap = 'round';
         if (drawState.type === 'pen' && drawState.points.length > 1) {
-          drawCtx.beginPath(); drawCtx.strokeStyle = drawState.color; drawCtx.lineWidth = drawState.width;
-          drawCtx.lineCap = 'round'; drawCtx.moveTo(drawState.points[0].x, drawState.points[0].y);
+          drawCtx.beginPath();
+          drawCtx.moveTo(drawState.points[0].x, drawState.points[0].y);
           for (var dp = 1; dp < drawState.points.length; dp++) drawCtx.lineTo(drawState.points[dp].x, drawState.points[dp].y);
           drawCtx.stroke();
         } else if (drawState.type === 'shape' || drawState.type === 'circle') {
           var dw = drawState.endX - drawState.startX, dh = drawState.endY - drawState.startY;
-          drawCtx.strokeStyle = drawState.type === 'circle' ? 'rgba(255,255,255,0.5)' : drawState.color;
-          drawCtx.lineWidth = drawState.type === 'circle' ? 2 : drawState.width;
-          if (drawState.type === 'circle') { drawCtx.setLineDash([6,3]); }
+          if (drawState.type === 'circle') { drawCtx.strokeStyle = 'rgba(255,255,255,0.5)'; drawCtx.lineWidth = 2; drawCtx.setLineDash([6,3]); }
           drawCtx.beginPath();
-          if ((drawState.shape === 'rect' || !drawState.shape) && drawState.type !== 'circle') drawCtx.rect(drawState.startX, drawState.startY, dw, dh);
-          else drawCtx.ellipse(drawState.startX+dw/2, drawState.startY+dh/2, Math.abs(dw/2)||1, Math.abs(dh/2)||1, 0, 0, Math.PI*2);
+          if (drawState.shape === 'rect') drawCtx.rect(drawState.startX, drawState.startY, dw, dh);
+          else if (drawState.shape === 'ellipse' || drawState.type === 'circle') drawCtx.ellipse(drawState.startX+dw/2, drawState.startY+dh/2, Math.abs(dw/2)||1, Math.abs(dh/2)||1, 0, 0, Math.PI*2);
+          else { drawCtx.moveTo(drawState.startX, drawState.startY); drawCtx.lineTo(drawState.endX, drawState.endY); }
           drawCtx.stroke(); drawCtx.setLineDash([]);
         }
       }
+      updateMinimap();
     }
 
+    // === POST-IT ===
     function broadcastPostit(p) {
       Network.socket.emit('wb-postit', { whiteboardId: boardId,
         postitData: { id: p.id, text: p.text, x: p.x, y: p.y, color: p.color, pseudo: p.pseudo, votes: p.votes || 0 }
@@ -803,52 +880,163 @@ const UI = {
 
     function createPostItEl(postit) {
       var el = document.createElement('div');
-      el.className = 'postit-note'; el.dataset.postitId = postit.id;
-      el.style.cssText = 'background:' + (postit.color||currentColor) + ';left:' + postit.x + 'px;top:' + postit.y + 'px;position:absolute;';
+      el.className = 'db-postit'; // FIXED: use CSS class name
+      el.dataset.postitId = postit.id;
+      el.style.background = postit.color || currentColor;
+      el.style.left = postit.x + 'px';
+      el.style.top = postit.y + 'px';
+
+      // Isoloir: mark own vs other
+      if (postit.pseudo === myPseudo) el.classList.add('db-postit-own');
+      else el.classList.add('db-postit-other');
+
       var textarea = document.createElement('textarea');
       textarea.value = postit.text || ''; textarea.placeholder = 'Écrire ici...';
       textarea.addEventListener('input', function() { postit.text = textarea.value; broadcastPostit(postit); });
       textarea.addEventListener('keydown', function(e) { e.stopPropagation(); });
-      var delBtn = document.createElement('button'); delBtn.className = 'postit-delete'; delBtn.textContent = '✕';
+
+      var delBtn = document.createElement('button'); delBtn.className = 'db-postit-delete'; delBtn.textContent = '✕';
       delBtn.addEventListener('click', function(e) { e.stopPropagation(); el.remove(); postits = postits.filter(function(p){return p.id!==postit.id;}); });
-      var author = document.createElement('div'); author.className = 'postit-author';
-      author.textContent = postit.pseudo || Engine.player.pseudo;
-      var badge = document.createElement('div'); badge.className = 'postit-vote-badge';
+
+      var author = document.createElement('div'); author.className = 'db-postit-author';
+      author.textContent = postit.pseudo || myPseudo;
+
+      var badge = document.createElement('div'); badge.className = 'db-vote-badge';
       badge.textContent = postit.votes || 0; badge.style.display = (postit.votes > 0) ? 'flex' : 'none';
-      el.appendChild(delBtn); el.appendChild(textarea); el.appendChild(author); el.appendChild(badge);
+
+      // Resize handle
+      var resizeHandle = document.createElement('div'); resizeHandle.className = 'db-postit-resize';
+      resizeHandle.addEventListener('mousedown', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        resizeState = { el: el, postit: postit, startX: e.clientX, startY: e.clientY, origW: el.offsetWidth, origH: el.offsetHeight };
+      });
+
+      el.appendChild(delBtn); el.appendChild(textarea); el.appendChild(author); el.appendChild(badge); el.appendChild(resizeHandle);
+
+      // Drag
       el.addEventListener('mousedown', function(e) {
-        if (dotVotingMode || currentTool !== 'select') return;
-        if (e.target === textarea || e.target === delBtn) return;
+        if (dotVotingMode || (currentTool !== 'select' && currentTool !== 'postit')) return;
+        if (e.target === textarea || e.target === delBtn || e.target === resizeHandle) return;
         dragState = { el:el, postit:postit, startX:e.clientX, startY:e.clientY, origX:postit.x, origY:postit.y };
+        el.classList.add('db-postit-selected');
         e.preventDefault(); e.stopPropagation();
       });
+
+      // Dot vote
       el.addEventListener('click', function(e) {
         if (!dotVotingMode) return; if (e.target === delBtn) return; e.stopPropagation();
         if (myVotes >= maxVotes) { self.showNotification('Votes épuisés (' + maxVotes + ' max)'); return; }
         myVotes++; postit.votes = (postit.votes||0) + 1;
         badge.textContent = postit.votes; badge.style.display = 'flex';
-        el.classList.add('postit-voted'); setTimeout(function(){el.classList.remove('postit-voted');}, 300);
+        el.classList.add('db-postit-voted'); setTimeout(function(){el.classList.remove('db-postit-voted');}, 350);
         broadcastPostit(postit);
         if (votesInfo) votesInfo.textContent = 'Dot Voting — ' + myVotes + '/' + maxVotes + ' votes';
       });
+
       board.appendChild(el); return el;
     }
 
-    function addNewPostit() {
+    function addNewPostit(atX, atY) {
+      var x = atX || ((-panX/zoom) + 200 + Math.random()*400);
+      var y = atY || ((-panY/zoom) + 200 + Math.random()*300);
       var postit = { id: 'p_'+Date.now()+'_'+Math.random().toString(36).substr(2,4), text: '',
-        x: 400+Math.random()*800, y: 400+Math.random()*600, color: currentColor, pseudo: Engine.player.pseudo, votes: 0 };
+        x: x, y: y, color: currentColor, pseudo: myPseudo, votes: 0 };
       postits.push(postit); createPostItEl(postit); broadcastPostit(postit);
     }
 
-    // Canvas coordinates
-    function canvasPos(e) {
-      var rect = drawCanvas.getBoundingClientRect();
-      return { x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom };
+    // === TEXT LABELS ===
+    function addTextLabel(x, y) {
+      var el = document.createElement('div');
+      el.className = 'db-text-label';
+      el.contentEditable = true;
+      el.style.left = x + 'px'; el.style.top = y + 'px';
+      el.textContent = 'Texte';
+      el.addEventListener('keydown', function(e) { e.stopPropagation(); });
+      el.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+      board.appendChild(el);
+      textLabels.push({ el: el, x: x, y: y });
+      el.focus();
     }
 
-    // Mouse events on viewport
+    // === ERASER ===
+    function eraseAt(pos) {
+      var eraseRadius = 20;
+      // Erase strokes near pos
+      strokes = strokes.filter(function(s) {
+        if (s.type === 'pen' && s.points) {
+          for (var i = 0; i < s.points.length; i++) {
+            var dx = s.points[i].x - pos.x, dy = s.points[i].y - pos.y;
+            if (Math.sqrt(dx*dx + dy*dy) < eraseRadius) return false;
+          }
+        } else if (s.type === 'shape') {
+          var cx = s.x + s.w/2, cy = s.y + s.h/2;
+          var dx2 = cx - pos.x, dy2 = cy - pos.y;
+          if (Math.sqrt(dx2*dx2 + dy2*dy2) < eraseRadius + Math.max(Math.abs(s.w), Math.abs(s.h))/2) return false;
+        }
+        return true;
+      });
+      // Erase circles near pos
+      circles = circles.filter(function(c) {
+        var dx = c.cx - pos.x, dy = c.cy - pos.y;
+        return Math.sqrt(dx*dx + dy*dy) > eraseRadius + Math.max(Math.abs(c.rx), Math.abs(c.ry));
+      });
+      redrawCanvas();
+    }
+
+    // === TEMPLATES ===
+    function applyTemplate(templateName) {
+      if (templateLayer) templateLayer.innerHTML = '';
+      postits.forEach(function(p) {
+        var el = board.querySelector('[data-postit-id="'+p.id+'"]');
+        if (el) el.remove();
+      });
+      postits = []; strokes = []; circles = [];
+      drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+
+      var cw = drawCanvas.width, ch = drawCanvas.height;
+      if (templateName === 'blank') {
+        // Nothing
+      } else if (templateName === 'retro') {
+        // 3 columns: +, -, Actions
+        var labels = ['+  Ce qui a bien marché', '−  Ce qui n\'a pas marché', 'Actions à prendre'];
+        var colors = ['#6BCB77', '#FF6B6B', '#4D96FF'];
+        for (var i = 0; i < 3; i++) {
+          var col = document.createElement('div'); col.className = 'db-template-col';
+          col.style.left = (cw/3*i) + 'px'; col.style.top = '0'; col.style.width = (cw/3) + 'px'; col.style.height = ch + 'px';
+          var lbl = document.createElement('div'); lbl.className = 'db-template-col-label'; lbl.textContent = labels[i];
+          lbl.style.color = colors[i];
+          col.appendChild(lbl);
+          if (templateLayer) templateLayer.appendChild(col);
+        }
+      } else if (templateName === 'swot') {
+        var quadrants = ['Forces', 'Faiblesses', 'Opportunités', 'Menaces'];
+        var qcolors = ['#6BCB77', '#FF6B6B', '#4D96FF', '#FFE066'];
+        for (var q = 0; q < 4; q++) {
+          var qd = document.createElement('div'); qd.className = 'db-template-quadrant';
+          qd.style.left = (q%2 === 0 ? 0 : cw/2) + 'px';
+          qd.style.top = (q < 2 ? 0 : ch/2) + 'px';
+          qd.style.width = (cw/2) + 'px'; qd.style.height = (ch/2) + 'px';
+          var ql = document.createElement('div'); ql.className = 'db-template-quadrant-label';
+          ql.textContent = quadrants[q]; ql.style.color = qcolors[q];
+          qd.appendChild(ql);
+          if (templateLayer) templateLayer.appendChild(qd);
+        }
+      } else if (templateName === 'brainstorm') {
+        var bl = document.createElement('div'); bl.className = 'db-template-col';
+        bl.style.left = '0'; bl.style.top = '0'; bl.style.width = cw + 'px'; bl.style.height = ch + 'px';
+        var blbl = document.createElement('div'); blbl.className = 'db-template-col-label';
+        blbl.textContent = 'BRAINSTORMING — Toutes les idées sont bonnes !';
+        bl.appendChild(blbl);
+        if (templateLayer) templateLayer.appendChild(bl);
+      }
+      redrawCanvas();
+      if (statusText) statusText.textContent = 'Template: ' + templateName;
+    }
+
+    // === MOUSE EVENTS ===
     function onDown(e) {
-      if (e.target.closest && e.target.closest('.postit-note')) return;
+      if (e.target.closest && e.target.closest('.db-postit')) return;
+      if (e.target.closest && e.target.closest('.db-text-label')) return;
       var pos = canvasPos(e);
       if (currentTool === 'pen') {
         drawState = { type:'pen', color:penColor, width:penWidth, points:[pos] }; e.preventDefault();
@@ -857,12 +1045,24 @@ const UI = {
       } else if (currentTool === 'circle') {
         drawState = { type:'circle', startX:pos.x, startY:pos.y, endX:pos.x, endY:pos.y }; e.preventDefault();
       } else if (currentTool === 'postit') {
-        addNewPostit();
-      } else if (e.button === 1 || e.button === 2 || e.shiftKey) {
+        addNewPostit(pos.x, pos.y); e.preventDefault();
+      } else if (currentTool === 'text') {
+        addTextLabel(pos.x, pos.y); e.preventDefault();
+      } else if (currentTool === 'eraser') {
+        drawState = { type:'eraser' }; eraseAt(pos); e.preventDefault();
+      } else if (currentTool === 'select') {
+        // Pan with any button or shift
         isPanning = true; panStart = {x:e.clientX,y:e.clientY}; panOrig = {x:panX,y:panY}; e.preventDefault();
       }
     }
+
     function onMove(e) {
+      if (resizeState) {
+        var dw = (e.clientX - resizeState.startX) / zoom, dh = (e.clientY - resizeState.startY) / zoom;
+        resizeState.el.style.width = Math.max(100, resizeState.origW + dw) + 'px';
+        resizeState.el.style.minHeight = Math.max(80, resizeState.origH + dh) + 'px';
+        return;
+      }
       if (dragState) {
         var dx = (e.clientX-dragState.startX)/zoom, dy = (e.clientY-dragState.startY)/zoom;
         dragState.postit.x = Math.max(0, dragState.origX+dx); dragState.postit.y = Math.max(0, dragState.origY+dy);
@@ -872,17 +1072,24 @@ const UI = {
       if (drawState) {
         var pos = canvasPos(e);
         if (drawState.type === 'pen') drawState.points.push(pos);
+        else if (drawState.type === 'eraser') eraseAt(pos);
         else { drawState.endX = pos.x; drawState.endY = pos.y; }
         redrawCanvas();
       }
     }
+
     function onUp(e) {
-      if (dragState) { broadcastPostit(dragState.postit); dragState = null; return; }
+      if (resizeState) { resizeState = null; return; }
+      if (dragState) {
+        dragState.el.classList.remove('db-postit-selected');
+        broadcastPostit(dragState.postit); dragState = null; return;
+      }
       if (isPanning) { isPanning = false; return; }
       if (drawState) {
         if (drawState.type === 'pen' && drawState.points.length > 1) {
-          strokes.push({ type:'pen', color:drawState.color, width:drawState.width, points:drawState.points });
-          Network.socket.emit('wb-stroke', { whiteboardId:boardId, strokeData:strokes[strokes.length-1] });
+          var stroke = { type:'pen', color:drawState.color, width:drawState.width, points:drawState.points };
+          strokes.push(stroke);
+          Network.socket.emit('wb-stroke', { whiteboardId:boardId, strokeData:stroke });
         } else if (drawState.type === 'shape') {
           var sw = drawState.endX-drawState.startX, sh = drawState.endY-drawState.startY;
           if (Math.abs(sw)>5 || Math.abs(sh)>5) {
@@ -890,16 +1097,17 @@ const UI = {
             strokes.push(shp); Network.socket.emit('wb-stroke', { whiteboardId:boardId, strokeData:shp });
           }
         } else if (drawState.type === 'circle') {
-          var cw = drawState.endX-drawState.startX, ch = drawState.endY-drawState.startY;
-          if (Math.abs(cw)>20 && Math.abs(ch)>20) {
+          var cw2 = drawState.endX-drawState.startX, ch2 = drawState.endY-drawState.startY;
+          if (Math.abs(cw2)>20 && Math.abs(ch2)>20) {
             var label = prompt('Nom du groupe (optionnel):') || '';
-            var circ = { id:'c_'+Date.now(), cx:drawState.startX+cw/2, cy:drawState.startY+ch/2, rx:Math.abs(cw/2), ry:Math.abs(ch/2), color:'rgba(255,255,255,0.5)', label:label };
+            var circ = { id:'c_'+Date.now(), cx:drawState.startX+cw2/2, cy:drawState.startY+ch2/2, rx:Math.abs(cw2/2), ry:Math.abs(ch2/2), color:'rgba(255,255,255,0.5)', label:label };
             circles.push(circ); Network.socket.emit('wb-stroke', { whiteboardId:boardId, strokeData:{type:'circle',circle:circ} });
           }
         }
         drawState = null; redrawCanvas();
       }
     }
+
     function onWheel(e) { e.preventDefault(); zoom = Math.max(0.2, Math.min(3, zoom + (e.deltaY > 0 ? -0.1 : 0.1))); applyTransform(); }
 
     viewport.addEventListener('mousedown', onDown);
@@ -908,7 +1116,27 @@ const UI = {
     viewport.addEventListener('wheel', onWheel, { passive: false });
     viewport.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 
-    // Toolbar tool selection
+    // === KEYBOARD SHORTCUTS ===
+    function onKeyDown(e) {
+      // Don't trigger when typing in textarea/contenteditable
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.isContentEditable) return;
+      var key = e.key.toLowerCase();
+      var toolMap = { v:'select', n:'postit', p:'pen', s:'shape', t:'text', g:'circle', e:'eraser' };
+      if (toolMap[key]) {
+        currentTool = toolMap[key];
+        overlay.querySelectorAll('.darkboard-tool-icon').forEach(function(b) { b.classList.toggle('active', b.dataset.tool === currentTool); });
+        var sp = document.getElementById('darkboard-shape-types');
+        var pp = document.getElementById('darkboard-postit-colors');
+        if (sp) sp.style.display = currentTool === 'shape' ? 'flex' : 'none';
+        if (pp) pp.style.display = currentTool === 'postit' ? 'flex' : 'none';
+        if (statusText) statusText.textContent = 'Outil: ' + currentTool;
+        e.preventDefault();
+      }
+      if (e.code === 'Escape') { cleanup(); }
+    }
+    window.addEventListener('keydown', onKeyDown);
+
+    // === TOOLBAR WIRING ===
     overlay.querySelectorAll('.darkboard-tool-icon').forEach(function(btn) {
       btn.addEventListener('click', function() {
         currentTool = btn.dataset.tool;
@@ -938,39 +1166,75 @@ const UI = {
         overlay.querySelectorAll('.darkboard-postit-color').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
     });
 
-    // Dot voting
+    // === TEMPLATE DROPDOWN ===
+    var templateBtn = document.getElementById('darkboard-template-btn');
+    var templateMenu = document.getElementById('darkboard-template-menu');
+    if (templateBtn && templateMenu) {
+      templateBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        templateMenu.style.display = templateMenu.style.display === 'none' ? 'block' : 'none';
+      });
+      templateMenu.querySelectorAll('.darkboard-dropdown-item').forEach(function(item) {
+        item.addEventListener('click', function(e) {
+          e.stopPropagation();
+          applyTemplate(item.dataset.template);
+          templateMenu.style.display = 'none';
+        });
+      });
+      overlay.addEventListener('click', function() { templateMenu.style.display = 'none'; });
+    }
+
+    // === ISOLOIR MODE ===
+    var isoloirBtn = document.getElementById('darkboard-isoloir-btn');
+    if (isoloirBtn) isoloirBtn.addEventListener('click', function() {
+      isoloirMode = !isoloirMode;
+      isoloirBtn.classList.toggle('active', isoloirMode);
+      if (isoloirMode) board.classList.add('darkboard-isoloir');
+      else board.classList.remove('darkboard-isoloir');
+      if (statusText) statusText.textContent = isoloirMode ? 'Mode Isoloir activé — post-its des autres masqués' : 'Prêt';
+    });
+
+    // === DOT VOTING ===
     var voteBtn = document.getElementById('darkboard-vote-btn');
     if (voteBtn) voteBtn.addEventListener('click', function() {
       dotVotingMode = !dotVotingMode; voteBtn.classList.toggle('active', dotVotingMode);
-      if (votesInfo) { votesInfo.style.display = dotVotingMode ? 'inline' : 'none'; }
-      if (dotVotingMode) board.classList.add('vote-mode'); else board.classList.remove('vote-mode');
+      if (votesInfo) { votesInfo.style.display = dotVotingMode ? 'inline' : 'none'; votesInfo.textContent = 'Dot Voting — ' + myVotes + '/' + maxVotes + ' votes'; }
+      if (dotVotingMode) board.classList.add('darkboard-vote-mode'); else board.classList.remove('darkboard-vote-mode');
     });
 
-    // Export PNG
+    // === EXPORT PNG ===
     var exportBtn = document.getElementById('darkboard-export-btn');
     if (exportBtn) exportBtn.addEventListener('click', function() {
-      try { var a = document.createElement('a'); a.download = 'darkboard.png'; a.href = drawCanvas.toDataURL('image/png'); a.click(); self.showNotification('Export PNG OK'); } catch(e) {}
+      try { var a = document.createElement('a'); a.download = 'darkboard-'+boardId+'.png'; a.href = drawCanvas.toDataURL('image/png'); a.click(); self.showNotification('Export PNG OK'); } catch(err) { self.showNotification('Erreur export'); }
     });
 
-    // Timer
+    // === TIMER ===
     var timerDisp = document.getElementById('darkboard-timer-display');
     var timerSec = 0, timerOn = false, timerInt = null;
-    function updTimer() { if (timerDisp) { var m=Math.floor(timerSec/60),s=timerSec%60; timerDisp.textContent=(m<10?'0':'')+m+':'+(s<10?'0':'')+s; } }
     var tsBtn = document.getElementById('darkboard-timer-start');
     var trBtn = document.getElementById('darkboard-timer-reset');
     var tPre = document.getElementById('darkboard-timer-preset');
+    function updTimer() {
+      if (!timerDisp) return;
+      var m = Math.floor(timerSec/60), s = timerSec%60;
+      timerDisp.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+      // Timer warning/danger states
+      timerDisp.classList.remove('timer-warning', 'timer-danger');
+      if (timerOn && timerSec <= 10 && timerSec > 0) timerDisp.classList.add('timer-danger');
+      else if (timerOn && timerSec <= 30) timerDisp.classList.add('timer-warning');
+    }
     if (tsBtn) tsBtn.addEventListener('click', function() {
       if (timerOn) { clearInterval(timerInt); timerOn = false; tsBtn.innerHTML = '&#9654;'; }
       else { if (timerSec<=0 && tPre) timerSec=parseInt(tPre.value)||300; timerOn=true; tsBtn.innerHTML='&#9646;&#9646;';
         timerInt = setInterval(function() { timerSec=Math.max(0,timerSec-1); updTimer();
-          if (timerSec<=0) { clearInterval(timerInt); timerOn=false; tsBtn.innerHTML='&#9654;'; self.showNotification('Timer terminé !'); }
+          if (timerSec<=0) { clearInterval(timerInt); timerOn=false; tsBtn.innerHTML='&#9654;'; self.showNotification('⏰ Timer terminé !'); }
         }, 1000); }
     });
     if (trBtn) trBtn.addEventListener('click', function() { clearInterval(timerInt); timerOn=false; timerSec=parseInt(tPre?tPre.value:300); updTimer(); if(tsBtn)tsBtn.innerHTML='&#9654;'; });
     if (tPre) tPre.addEventListener('change', function() { if(!timerOn){timerSec=parseInt(tPre.value)||0; updTimer();} });
     updTimer();
 
-    // Network load
+    // === NETWORK LOAD + SYNC ===
     Network.socket.emit('wb-open', { whiteboardId: boardId }, function(resp) {
       if (resp && resp.success) {
         if (resp.postits) resp.postits.forEach(function(p) { postits.push(p); createPostItEl(p); });
@@ -986,7 +1250,7 @@ const UI = {
         var el = board.querySelector('[data-postit-id="'+pd.id+'"]');
         if (el) { el.style.left=pd.x+'px'; el.style.top=pd.y+'px';
           var ta=el.querySelector('textarea'); if(ta&&ta!==document.activeElement) ta.value=pd.text;
-          var bg=el.querySelector('.postit-vote-badge'); if(bg){bg.textContent=ex.votes; bg.style.display=ex.votes>0?'flex':'none';}
+          var bg=el.querySelector('.db-vote-badge'); if(bg){bg.textContent=ex.votes; bg.style.display=ex.votes>0?'flex':'none';}
         }
       } else { postits.push(pd); createPostItEl(pd); }
     }
@@ -997,21 +1261,26 @@ const UI = {
     }
     Network.socket.on('wb-stroke', onRS);
 
-    // Cleanup
+    // === CLEANUP (FIXED: removes ALL listeners) ===
     function cleanup() {
       overlay.style.display = 'none';
-      viewport.removeEventListener('mousedown', onDown); viewport.removeEventListener('mousemove', onMove);
-      viewport.removeEventListener('mouseup', onUp); viewport.removeEventListener('wheel', onWheel);
-      Network.socket.off('wb-postit', onRP); Network.socket.off('wb-stroke', onRS);
+      viewport.removeEventListener('mousedown', onDown);
+      viewport.removeEventListener('mousemove', onMove);
+      viewport.removeEventListener('mouseup', onUp);
+      viewport.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKeyDown); // FIXED: always remove
+      Network.socket.off('wb-postit', onRP);
+      Network.socket.off('wb-stroke', onRS);
       Network.socket.emit('wb-close', { whiteboardId: boardId });
-      if (timerInt) clearInterval(timerInt); board.classList.remove('vote-mode');
+      if (timerInt) clearInterval(timerInt);
+      board.classList.remove('darkboard-vote-mode', 'darkboard-isoloir');
     }
+
     var closeBtn = document.getElementById('postit-close');
     if (closeBtn) closeBtn.onclick = cleanup;
-    function onEsc(e) { if (e.code === 'Escape') { cleanup(); window.removeEventListener('keydown', onEsc); } }
-    window.addEventListener('keydown', onEsc);
-    if (statusText) statusText.textContent = 'Prêt — Choisissez un outil à gauche';
+    if (statusText) statusText.textContent = 'Prêt — Raccourcis: V N P S T G E | Esc pour fermer';
   },
+
 
 
   // ===== WHITEBOARD POP-IN =====

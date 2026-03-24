@@ -259,8 +259,12 @@ const Environments = {
 
   getFurniture(envType, gridSize) {
     const preset = this.presets[envType];
-    if (!preset) return this.presets['bureau'].furniture(gridSize);
-    return preset.furniture(gridSize);
+    var items = preset ? preset.furniture(gridSize) : this.presets['bureau'].furniture(gridSize);
+    // Ensure every item has a unique ID
+    for (var i = 0; i < items.length; i++) {
+      if (!items[i].id) items[i].id = 'furn_init_' + i + '_' + items[i].type;
+    }
+    return items;
   },
 
   getPreset(envType) {
