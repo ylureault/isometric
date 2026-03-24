@@ -1384,6 +1384,8 @@ const Board = {
   drawCollabSpace(ctx, item, def) {
     var w = item.width || def.width;
     var h = item.height || def.height;
+    var time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+
     // Subtle green-tinted overlay
     for (var dy = 0; dy < h; dy++) {
       for (var dx = 0; dx < w; dx++) {
@@ -1393,14 +1395,45 @@ const Board = {
         );
       }
     }
-    // Border dashes
-    this.drawIsoLine(ctx, [item.x, item.y, 0.3], [item.x+w, item.y, 0.3], 'rgba(46,204,113,0.3)', 1.5);
-    this.drawIsoLine(ctx, [item.x+w, item.y, 0.3], [item.x+w, item.y+h, 0.3], 'rgba(46,204,113,0.3)', 1.5);
-    this.drawIsoLine(ctx, [item.x+w, item.y+h, 0.3], [item.x, item.y+h, 0.3], 'rgba(46,204,113,0.3)', 1.5);
-    this.drawIsoLine(ctx, [item.x, item.y+h, 0.3], [item.x, item.y, 0.3], 'rgba(46,204,113,0.3)', 1.5);
-    // Label
+
+    // Animated dashed border
+    var dashOffset = (time * 3) % 2;
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.lineDashOffset = -dashOffset * 5;
+    var corners = [
+      this.iso(item.x, item.y, 0.3),
+      this.iso(item.x+w, item.y, 0.3),
+      this.iso(item.x+w, item.y+h, 0.3),
+      this.iso(item.x, item.y+h, 0.3)
+    ];
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    ctx.lineTo(corners[1].x, corners[1].y);
+    ctx.lineTo(corners[2].x, corners[2].y);
+    ctx.lineTo(corners[3].x, corners[3].y);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(46,204,113,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Pulsing glow at corners
+    var pulse = Math.sin(time * 3) * 0.3 + 0.7;
+    for (var ci = 0; ci < 4; ci++) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(corners[ci].x, corners[ci].y, 5 * pulse, 0, Math.PI * 2);
+      var cGrad = ctx.createRadialGradient(corners[ci].x, corners[ci].y, 0, corners[ci].x, corners[ci].y, 5 * pulse);
+      cGrad.addColorStop(0, 'rgba(46,204,113,' + (0.2 * pulse) + ')');
+      cGrad.addColorStop(1, 'rgba(46,204,113,0)');
+      ctx.fillStyle = cGrad;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Label with background pill
     var lp = this.iso(item.x + w/2, item.y + h/2, 1);
-    // Background pill for label
     ctx.fillStyle = 'rgba(46,204,113,0.15)';
     var pillW = 80, pillH = 26;
     ctx.beginPath();
@@ -1410,7 +1443,7 @@ const Board = {
     ctx.font = 'bold 10px "Segoe UI", sans-serif';
     ctx.fillStyle = 'rgba(46,204,113,0.85)';
     ctx.textAlign = 'center';
-    ctx.fillText('🤝 Espace collaboratif', lp.x, lp.y - 2);
+    ctx.fillText('Espace collaboratif', lp.x, lp.y - 2);
     ctx.font = '7px "Segoe UI", sans-serif';
     ctx.fillStyle = 'rgba(46,204,113,0.55)';
     ctx.fillText('Cliquez pour partager', lp.x, lp.y + 8);
