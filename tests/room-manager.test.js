@@ -739,7 +739,7 @@ describe('EPIC 12 — Table Association et Position', () => {
     const room = rm.getRoom('r1');
     const p = room.participants.get('s1');
     expect(p.x).toBe(0);
-    expect(p.y).toBe(20);
+    expect(p.y).toBe(19.5); // clamped to gridSize - 0.5
   });
 
   test('updatePosition validates non-numeric x/y', () => {

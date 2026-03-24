@@ -197,13 +197,18 @@ io.on('connection', (socket) => {
     if (!currentRoomId) return;
     const result = roomManager.updatePosition(currentRoomId, socket.id, data);
 
-    socket.to(currentRoomId).emit('participant-moved', {
-      socketId: socket.id,
-      x: data.x, y: data.y,
-      direction: data.direction,
-      isWalking: data.isWalking,
-      walkPhase: data.walkPhase,
-    });
+    // Broadcast validated position (not raw client data)
+    const room = roomManager.getRoom(currentRoomId);
+    const pp = room ? room.participants.get(socket.id) : null;
+    if (pp) {
+      socket.to(currentRoomId).emit('participant-moved', {
+        socketId: socket.id,
+        x: pp.x, y: pp.y,
+        direction: pp.direction,
+        isWalking: pp.isWalking,
+        walkPhase: pp.walkPhase,
+      });
+    }
 
     // Table association change — only broadcast when actually changed
     if (result && result.changed) {

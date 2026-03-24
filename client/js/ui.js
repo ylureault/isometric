@@ -1522,11 +1522,14 @@ const UI = {
     };
 
     var closeBtn = document.getElementById('collab-space-close');
-    if (closeBtn) closeBtn.onclick = function() { self.closeCollabSpace(spaceId); };
-
     function onEsc(e) {
-      if (e.code === 'Escape') { self.closeCollabSpace(spaceId); window.removeEventListener('keydown', onEsc); }
+      if (e.code === 'Escape') closeAndCleanup();
     }
+    function closeAndCleanup() {
+      self.closeCollabSpace(spaceId);
+      window.removeEventListener('keydown', onEsc);
+    }
+    if (closeBtn) closeBtn.onclick = closeAndCleanup;
     window.addEventListener('keydown', onEsc);
   },
 

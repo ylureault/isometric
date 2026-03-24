@@ -163,8 +163,8 @@ class RoomManager {
 
     // Validate position bounds
     var gs = room.gridSize || 100;
-    p.x = Math.max(0, Math.min(gs, typeof data.x === 'number' ? data.x : p.x));
-    p.y = Math.max(0, Math.min(gs, typeof data.y === 'number' ? data.y : p.y));
+    p.x = Math.max(0, Math.min(gs - 0.5, typeof data.x === 'number' ? data.x : p.x));
+    p.y = Math.max(0, Math.min(gs - 0.5, typeof data.y === 'number' ? data.y : p.y));
     p.direction = data.direction || p.direction;
     p.isWalking = !!data.isWalking;
     p.walkPhase = data.walkPhase || 0;
@@ -464,8 +464,14 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    const gs = room.gridSize;
     const id = `furn_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-    const item = { id, ...furnitureData };
+    const item = {
+      id,
+      ...furnitureData,
+      x: Math.max(0, Math.min(gs - 1, furnitureData.x || 0)),
+      y: Math.max(0, Math.min(gs - 1, furnitureData.y || 0)),
+    };
     room.furniture.push(item);
     return { success: true, item };
   }
@@ -679,11 +685,13 @@ class RoomManager {
   pauseTimer(roomId, requesterId, timerId) {
     const room = this.rooms.get(roomId);
     if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
     const timer = room.timers.get(timerId);
     if (!timer) return { error: 'not_found' };
     timer.paused = !timer.paused;
     if (timer.paused) {
-      timer.remaining -= (Date.now() - timer.startedAt) / 1000;
+      timer.remaining = Math.max(0, timer.remaining - (Date.now() - timer.startedAt) / 1000);
     } else {
       timer.startedAt = Date.now();
     }
