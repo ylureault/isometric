@@ -700,4 +700,64 @@ describe('EPIC 11 — Mobilier', () => {
     const result = rm.addFurniture('r1', 's2', { type: 'plant', x: 5, y: 5 });
     expect(result.error).toBe('not_admin');
   });
+
+  test('Furniture gets unique ID on add', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    rm.joinRoom('r1', 's1', { pseudo: 'Admin', colors: {}, isCreator: true });
+    const r1 = rm.addFurniture('r1', 's1', { type: 'door', x: 5, y: 5 });
+    const r2 = rm.addFurniture('r1', 's1', { type: 'door', x: 10, y: 10 });
+    expect(r1.item.id).toBeDefined();
+    expect(r2.item.id).toBeDefined();
+    expect(r1.item.id).not.toBe(r2.item.id);
+  });
+});
+
+// ===== EPIC 12: Table Association & Position =====
+
+describe('EPIC 12 — Table Association et Position', () => {
+  test('updateTableAssociation returns changed:true with correct oldTableId', () => {
+    rm.createRoom('r1', { name: 'Test', gridSize: 20 });
+    rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    // Create a table
+    const table = rm.createTable('r1', 's1', { name: 'Table 1', x: 5, y: 5, width: 3, height: 3, radius: 4 });
+    // Move player near the table
+    rm.updatePosition('r1', 's1', { x: 6, y: 6, direction: { dx: 0, dy: 1 }, isWalking: false, walkPhase: 0 });
+    const room = rm.getRoom('r1');
+    const p = room.participants.get('s1');
+    expect(p.tableId).toBe(table.table.id);
+    // Move away
+    const result = rm.updatePosition('r1', 's1', { x: 18, y: 18, direction: { dx: 0, dy: 1 }, isWalking: false, walkPhase: 0 });
+    expect(result.changed).toBe(true);
+    expect(result.oldTableId).toBe(table.table.id);
+    expect(result.newTableId).toBeNull();
+  });
+
+  test('updatePosition clamps position to grid bounds', () => {
+    rm.createRoom('r1', { name: 'Test', gridSize: 20 });
+    rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    rm.updatePosition('r1', 's1', { x: -5, y: 999, direction: { dx: 0, dy: 1 }, isWalking: false, walkPhase: 0 });
+    const room = rm.getRoom('r1');
+    const p = room.participants.get('s1');
+    expect(p.x).toBe(0);
+    expect(p.y).toBe(20);
+  });
+
+  test('updatePosition validates non-numeric x/y', () => {
+    rm.createRoom('r1', { name: 'Test', gridSize: 20 });
+    rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true, x: 5, y: 5 });
+    rm.updatePosition('r1', 's1', { x: 'evil', y: null, direction: { dx: 0, dy: 1 }, isWalking: false, walkPhase: 0 });
+    const room = rm.getRoom('r1');
+    const p = room.participants.get('s1');
+    // Should keep previous valid position, not NaN
+    expect(typeof p.x).toBe('number');
+    expect(isNaN(p.x)).toBe(false);
+  });
+
+  test('updatePosition returns changed:false when no table change', () => {
+    rm.createRoom('r1', { name: 'Test', gridSize: 20 });
+    rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    const result = rm.updatePosition('r1', 's1', { x: 5, y: 5, direction: { dx: 0, dy: 1 }, isWalking: false, walkPhase: 0 });
+    // No tables, so no change
+    expect(result.changed).toBe(false);
+  });
 });
