@@ -826,4 +826,32 @@ describe('EPIC 13 — Hardening', () => {
     const t = rm.createTable('r1', 's1', { name: 'X'.repeat(100), x: 5, y: 5 });
     expect(t.table.name.length).toBeLessThanOrEqual(50);
   });
+
+  test('Creator regains admin on rejoin after disconnect', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    // Mark creator disconnected
+    rm.markDisconnected('r1', 's1');
+    const room = rm.getRoom('r1');
+    const oldP = room.participants.get('s1');
+    expect(oldP.disconnected).toBe(true);
+    // Rejoin with same pseudo but new socket
+    const r = rm.joinRoom('r1', 's2', { pseudo: 'Alice', colors: {} });
+    expect(r.participant.role).toBe('creator');
+    expect(r.participant.isAdmin).toBe(true);
+    // Old socket entry removed
+    expect(room.participants.has('s1')).toBe(false);
+    expect(room.creatorSocketId).toBe('s2');
+  });
+
+  test('Non-creator does NOT get creator role on rejoin', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    rm.joinRoom('r1', 's2', { pseudo: 'Bob', colors: {} });
+    rm.markDisconnected('r1', 's2');
+    // Bob rejoins with new socket
+    const r = rm.joinRoom('r1', 's3', { pseudo: 'Bob', colors: {} });
+    expect(r.participant.role).toBe('participant');
+    expect(r.participant.isAdmin).toBe(false);
+  });
 });

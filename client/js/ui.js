@@ -901,7 +901,7 @@ const UI = {
       textarea.addEventListener('keydown', function(e) { e.stopPropagation(); });
 
       var delBtn = document.createElement('button'); delBtn.className = 'db-postit-delete'; delBtn.textContent = '✕';
-      delBtn.addEventListener('click', function(e) { e.stopPropagation(); el.remove(); postits = postits.filter(function(p){return p.id!==postit.id;}); });
+      delBtn.addEventListener('click', function(e) { e.stopPropagation(); el.remove(); postits = postits.filter(function(p){return p.id!==postit.id;}); Network.socket.emit('wb-postit-delete', { whiteboardId: boardId, postitId: postit.id }); });
 
       var author = document.createElement('div'); author.className = 'db-postit-author';
       author.textContent = postit.pseudo || myPseudo;
@@ -986,6 +986,7 @@ const UI = {
         return Math.sqrt(dx*dx + dy*dy) > eraseRadius + Math.max(Math.abs(c.rx), Math.abs(c.ry));
       });
       redrawCanvas();
+      Network.socket.emit('wb-erase', { whiteboardId: boardId });
     }
 
     // === TEMPLATES ===
@@ -1159,16 +1160,16 @@ const UI = {
         overlay.querySelectorAll('.darkboard-shape-btn').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
     });
     overlay.querySelectorAll('.darkboard-color-dot').forEach(function(btn) {
-      btn.addEventListener('click', function() { penColor = btn.dataset.color;
-        overlay.querySelectorAll('.darkboard-color-dot').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
+      btn.onclick = function() { penColor = btn.dataset.color;
+        overlay.querySelectorAll('.darkboard-color-dot').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); };
     });
     overlay.querySelectorAll('.darkboard-width-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() { penWidth = parseInt(btn.dataset.width);
-        overlay.querySelectorAll('.darkboard-width-btn').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
+      btn.onclick = function() { penWidth = parseInt(btn.dataset.width);
+        overlay.querySelectorAll('.darkboard-width-btn').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); };
     });
     overlay.querySelectorAll('.darkboard-postit-color').forEach(function(btn) {
-      btn.addEventListener('click', function() { currentColor = btn.dataset.color;
-        overlay.querySelectorAll('.darkboard-postit-color').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
+      btn.onclick = function() { currentColor = btn.dataset.color;
+        overlay.querySelectorAll('.darkboard-postit-color').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); };
     });
 
     // === TEMPLATE DROPDOWN ===
@@ -1265,17 +1266,31 @@ const UI = {
       if (data.strokeData) { if(data.strokeData.type==='circle'&&data.strokeData.circle) circles.push(data.strokeData.circle); else strokes.push(data.strokeData); redrawCanvas(); }
     }
     Network.socket.on('wb-stroke', onRS);
+    function onRPDel(data) {
+      if (data.whiteboardId !== boardId) return;
+      postits = postits.filter(function(p) { return p.id !== data.postitId; });
+      var el = board.querySelector('[data-postit-id="' + data.postitId + '"]');
+      if (el) el.remove();
+    }
+    Network.socket.on('wb-postit-delete', onRPDel);
+    function onRErase(data) {
+      if (data.whiteboardId !== boardId) return;
+      strokes = []; circles = []; redrawCanvas();
+    }
+    Network.socket.on('wb-erase', onRErase);
 
-    // === CLEANUP (FIXED: removes ALL listeners) ===
+    // === CLEANUP (removes ALL listeners) ===
     function cleanup() {
       overlay.style.display = 'none';
       viewport.removeEventListener('mousedown', onDown);
       viewport.removeEventListener('mousemove', onMove);
       viewport.removeEventListener('mouseup', onUp);
       viewport.removeEventListener('wheel', onWheel);
-      window.removeEventListener('keydown', onKeyDown); // FIXED: always remove
+      window.removeEventListener('keydown', onKeyDown);
       Network.socket.off('wb-postit', onRP);
       Network.socket.off('wb-stroke', onRS);
+      Network.socket.off('wb-postit-delete', onRPDel);
+      Network.socket.off('wb-erase', onRErase);
       Network.socket.emit('wb-close', { whiteboardId: boardId });
       if (timerInt) clearInterval(timerInt);
       board.classList.remove('darkboard-vote-mode', 'darkboard-isoloir');
@@ -1424,21 +1439,21 @@ const UI = {
     // Color buttons
     var colorBtns = overlay.querySelectorAll('.wb-color-btn');
     colorBtns.forEach(function(btn) {
-      btn.addEventListener('click', function() {
+      btn.onclick = function() {
         currentColor = btn.dataset.color;
         colorBtns.forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
-      });
+      };
     });
 
     // Width buttons
     var widthBtns = overlay.querySelectorAll('.wb-width-btn');
     widthBtns.forEach(function(btn) {
-      btn.addEventListener('click', function() {
+      btn.onclick = function() {
         currentWidth = parseInt(btn.dataset.width);
         widthBtns.forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
-      });
+      };
     });
 
     // Undo
@@ -1874,8 +1889,7 @@ const UI = {
       return;
     }
 
-    const elapsed = t.paused ? 0 : (Date.now() - t.startedAt) / 1000;
-    const remaining = Math.max(0, t.duration - elapsed);
+    const remaining = t.paused ? (t.remaining || t.duration) : Math.max(0, t.duration - (Date.now() - t.startedAt) / 1000);
     const mins = Math.floor(remaining / 60);
     const secs = Math.floor(remaining % 60);
     const timeStr = mins + ':' + secs.toString().padStart(2, '0');

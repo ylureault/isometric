@@ -470,6 +470,32 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('wb-postit-delete', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (room) {
+      const wb = room.whiteboards.get(data.whiteboardId);
+      if (wb && wb.postits) {
+        wb.postits = wb.postits.filter(p => p.id !== data.postitId);
+      }
+    }
+    socket.to(currentRoomId).emit('wb-postit-delete', {
+      whiteboardId: data.whiteboardId,
+      postitId: data.postitId,
+    });
+  });
+
+  socket.on('wb-erase', (data) => {
+    if (!currentRoomId) return;
+    // Eraser clears strokes on server — simplified approach
+    const room = roomManager.getRoom(currentRoomId);
+    if (room) {
+      const wb = room.whiteboards.get(data.whiteboardId);
+      if (wb) { wb.strokes = []; }
+    }
+    socket.to(currentRoomId).emit('wb-erase', { whiteboardId: data.whiteboardId });
+  });
+
   socket.on('wb-undo', (data) => {
     if (!currentRoomId) return;
     const result = roomManager.undoWhiteboardStroke(currentRoomId, data.whiteboardId, socket.id);

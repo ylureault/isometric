@@ -452,7 +452,7 @@ const Audio = {
     if (this.localStream) {
       this.localStream.getTracks().forEach(t => t.stop());
     }
-    for (const [sid] of this.peers) {
+    for (const sid of [...this.peers.keys()]) {
       this.disconnectPeer(sid);
     }
     if (this.audioContext) {

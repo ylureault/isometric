@@ -323,7 +323,7 @@ var Engine = {
   },
 
   onKeyDown: function(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable) return;
     this.keys[e.code] = true;
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].indexOf(e.code) >= 0) e.preventDefault();
     if (e.code === 'KeyM') { var m = Audio.toggleMute(); this.player.isMuted = m; UI.updateMuteButton(m); }
@@ -343,7 +343,7 @@ var Engine = {
 
   onKeyUp: function(e) {
     this.keys[e.code] = false;
-    if (e.code === 'Space' && this.player.isBroadcasting) {
+    if (e.code === 'Space' && this.player.isBroadcasting && this.player.isAdmin) {
       this.player.isBroadcasting = false;
       Network.socket.emit('admin-broadcast-stop');
     }
@@ -478,6 +478,7 @@ var Engine = {
             }
           } else if (this.player.isAdmin) {
             // Admin links two doors together
+            if (!ditem.id) { UI.showNotification('Porte sans identifiant'); return; }
             var allDoors = Board.furniture.filter(function(f) {
               var fd = Environments.furnitureTypes[f.type];
               return fd && fd.isDoor && f.id && f.id !== ditem.id;

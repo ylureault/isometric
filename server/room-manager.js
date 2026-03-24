@@ -57,7 +57,17 @@ class RoomManager {
     if (room.participants.size >= CONSTANTS.MAX_PARTICIPANTS) return { error: 'room_full' };
 
     const pseudo = (data.pseudo || '').toString().trim().slice(0, 30) || 'Anonyme';
-    const isCreator = data.isCreator && !room.creatorSocketId;
+    let isCreator = !!(data.isCreator && !room.creatorSocketId);
+
+    // Check if rejoining creator (same pseudo as disconnected creator)
+    if (!isCreator && room.creatorSocketId) {
+      const oldCreator = room.participants.get(room.creatorSocketId);
+      if (oldCreator && oldCreator.disconnected && oldCreator.pseudo === pseudo) {
+        room.participants.delete(room.creatorSocketId);
+        room.creatorSocketId = socketId;
+        isCreator = true;
+      }
+    }
 
     const participant = {
       socketId,
