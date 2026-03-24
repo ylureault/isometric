@@ -71,7 +71,27 @@ var Engine = {
     Network.onParticipantLeft = function(d) { UI.showNotification(d.pseudo + ' a quitté'); };
     Network.onParticipantDisconnected = function(d) { UI.showNotification(d.pseudo + ' déconnecté'); };
     Network.onReconnecting = function() { UI.showReconnecting(true); };
-    Network.onReconnected = function() { UI.showReconnecting(false); UI.showNotification('Reconnecté !'); };
+    Network.onReconnected = function() {
+      UI.showReconnecting(false);
+      // Re-join room with same config after reconnection (new socket ID)
+      if (self.roomConfig && self.roomConfig.roomId) {
+        Network.joinRoom(self.roomConfig.roomId, {
+          pseudo: self.player.pseudo,
+          colors: self.player.colors,
+          accessory: self.player.accessory || 'none',
+          isCreator: false, // on reconnect, not creator
+          roomName: self.roomConfig.name,
+          environment: self.roomConfig.environment,
+          gridSize: self.roomConfig.gridSize,
+        }, function(resp) {
+          if (resp && !resp.error) {
+            UI.showNotification('Reconnecté !');
+          } else {
+            UI.showNotification('Erreur de reconnexion');
+          }
+        });
+      }
+    };
 
     this.setupNetworkEvents();
     this.setupChat();
@@ -254,6 +274,22 @@ var Engine = {
       self.roomConfig.gridSize = r.room.gridSize;
       document.getElementById('hud-room-name').textContent = r.room.name;
       if (!self.roomConfig.isCreator) Board.init(r.room.gridSize, r.room.environment);
+      // Apply server furniture state (preserves door links, server-added items)
+      if (r.furniture && r.furniture.length > 0) {
+        // Merge server furniture with client-generated preset
+        for (var fi = 0; fi < r.furniture.length; fi++) {
+          var sf = r.furniture[fi];
+          var existing = Board.furniture.find(function(f) { return f.id === sf.id; });
+          if (existing) {
+            // Copy server properties (door links, etc.)
+            if (sf.linkedDoorId) existing.linkedDoorId = sf.linkedDoorId;
+            if (sf.doorLabel) existing.doorLabel = sf.doorLabel;
+          } else {
+            Board.furniture.push(sf);
+          }
+        }
+        Board.buildCollisionMap();
+      }
       if (r.tables) r.tables.forEach(function(t) { self.tables.set(t.id, t); });
       UI.showCopyLink(self.roomConfig.roomId);
       UI.updateAdminUI(self.player.isAdmin);
@@ -400,7 +436,7 @@ var Engine = {
       var ditem = Board.furniture[di];
       var ddef = Environments.furnitureTypes[ditem.type];
       if (!ddef || !ddef.isDoor) continue;
-      if (clickX === ditem.x && clickY === ditem.y) {
+      if (clickX >= ditem.x && clickX < ditem.x + (ddef.width || 1) && clickY >= ditem.y && clickY < ditem.y + (ddef.height || 1)) {
         var doorDist = Math.sqrt((px - (ditem.x + 0.5)) * (px - (ditem.x + 0.5)) + (py - (ditem.y + 0.5)) * (py - (ditem.y + 0.5)));
         if (doorDist < 3) {
           // If door is linked to another door, teleport player there
@@ -579,7 +615,7 @@ var Engine = {
       if (!messages) return;
       var div = document.createElement('div');
       div.className = 'chat-msg';
-      div.innerHTML = '<span class="chat-msg-author">' + (msg.pseudo || 'Anonyme') + ':</span> ' + self.escapeHtml(msg.text);
+      div.innerHTML = '<span class="chat-msg-author">' + self.escapeHtml(msg.pseudo || 'Anonyme') + ':</span> ' + self.escapeHtml(msg.text);
       messages.appendChild(div);
       messages.scrollTop = messages.scrollHeight;
 

@@ -1,6 +1,7 @@
 // UI: Complete HUD, admin panel, context menu, notifications, toolbar, reactions, shortcuts
 
 const UI = {
+  escapeHtml: function(str) { var d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; },
   avatarConfig: null,
   previewCanvas: null,
   previewCtx: null,
@@ -246,7 +247,7 @@ const UI = {
     const targetIsAdmin = targetData.isAdmin;
     const targetIsCreator = targetData.role === 'creator';
 
-    let html = `<div class="ctx-menu-header">${targetData.pseudo}</div>`;
+    let html = `<div class="ctx-menu-header">${this.escapeHtml(targetData.pseudo)}</div>`;
 
     if (isLocalAdmin && !targetIsCreator && targetSocketId !== Network.mySocketId) {
       if (!targetIsAdmin) {
@@ -417,7 +418,7 @@ const UI = {
 
   renderParticipantRow(socketId, p) {
     const isMe = socketId === Network.mySocketId;
-    const name = isMe ? `${p.pseudo} (vous)` : p.pseudo;
+    const name = isMe ? `${this.escapeHtml(p.pseudo)} (vous)` : this.escapeHtml(p.pseudo);
     const badge = p.isAdmin ? '<span class="badge-admin">★</span>' : '';
     const muteBadge = p.isMuted ? '<span class="badge-muted">🔇</span>' : '';
     const handBadge = p.handRaised ? '<span class="badge-hand">✋</span>' : '';
@@ -1452,6 +1453,9 @@ const UI = {
 
     // Close
     var closeBtn = document.getElementById('wb-close');
+    function onEsc(e) {
+      if (e.code === 'Escape') cleanup();
+    }
     function cleanup() {
       overlay.style.display = 'none';
       self.activeWhiteboardId = null;
@@ -1459,17 +1463,13 @@ const UI = {
       canvas.removeEventListener('mousemove', onMove);
       canvas.removeEventListener('mouseup', onUp);
       canvas.removeEventListener('mouseleave', onUp);
+      window.removeEventListener('keydown', onEsc);
       Network.socket.off('wb-stroke', onRemoteStroke);
       Network.socket.off('wb-undo', onRemoteUndo);
       Network.socket.off('wb-cleared', onRemoteClear);
       Network.socket.emit('wb-close', { whiteboardId: whiteboardId });
     }
     if (closeBtn) closeBtn.onclick = cleanup;
-
-    // ESC closes
-    function onEsc(e) {
-      if (e.code === 'Escape') { cleanup(); window.removeEventListener('keydown', onEsc); }
-    }
     window.addEventListener('keydown', onEsc);
 
     clearCanvas();

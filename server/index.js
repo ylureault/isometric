@@ -96,12 +96,16 @@ io.on('connection', (socket) => {
       handRaised: false,
     });
 
+    // Include furniture state (with door links) so clients get server state
+    const furnitureState = room.furniture || [];
+
     callback({
       success: true,
       room: result.room,
       participants: result.participants,
       tables: result.tables,
       theme: result.theme,
+      furniture: furnitureState,
       you: {
         socketId: socket.id,
         x: result.participant.x,
@@ -192,19 +196,13 @@ io.on('connection', (socket) => {
       walkPhase: data.walkPhase,
     });
 
-    // Table association change
-    if (result) {
-      const room = roomManager.getRoom(currentRoomId);
-      if (room) {
-        const p = room.participants.get(socket.id);
-        if (p) {
-          // Notify about table change
-          io.to(currentRoomId).emit('participant-table-changed', {
-            socketId: socket.id,
-            tableId: p.tableId,
-          });
-        }
-      }
+    // Table association change — only broadcast when actually changed
+    if (result && result.changed) {
+      io.to(currentRoomId).emit('participant-table-changed', {
+        socketId: socket.id,
+        tableId: result.newTableId,
+        oldTableId: result.oldTableId,
+      });
     }
   });
 
@@ -384,15 +382,19 @@ io.on('connection', (socket) => {
     if (!room) return;
     const p = room.participants.get(socket.id);
     if (!p || !p.isAdmin) return;
-    const door1 = room.furniture.find(f => f.id === data.door1Id);
-    const door2 = room.furniture.find(f => f.id === data.door2Id);
+    // Find or create furniture entries for linked doors
+    let door1 = room.furniture.find(f => f.id === data.door1Id);
+    let door2 = room.furniture.find(f => f.id === data.door2Id);
+    // If doors are from presets (not in server furniture), create entries
+    if (!door1 && data.door1Id) { door1 = { id: data.door1Id, type: 'door' }; room.furniture.push(door1); }
+    if (!door2 && data.door2Id) { door2 = { id: data.door2Id, type: 'door' }; room.furniture.push(door2); }
     if (door1 && door2) {
       door1.linkedDoorId = door2.id;
       door2.linkedDoorId = door1.id;
       door1.doorLabel = data.label || 'Passage';
       door2.doorLabel = data.label || 'Passage';
-      // Broadcast to all so everyone sees the link
-      socket.to(currentRoomId).emit('doors-linked', {
+      // Broadcast to ALL (including sender) for consistency
+      io.to(currentRoomId).emit('doors-linked', {
         door1Id: door1.id, door2Id: door2.id, label: data.label || 'Passage'
       });
     }

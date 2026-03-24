@@ -150,17 +150,19 @@ class RoomManager {
     const p = room.participants.get(socketId);
     if (!p) return null;
 
-    p.x = data.x;
-    p.y = data.y;
-    p.direction = data.direction;
-    p.isWalking = data.isWalking;
-    p.walkPhase = data.walkPhase;
+    // Validate position bounds
+    var gs = room.gridSize || 100;
+    p.x = Math.max(0, Math.min(gs, typeof data.x === 'number' ? data.x : p.x));
+    p.y = Math.max(0, Math.min(gs, typeof data.y === 'number' ? data.y : p.y));
+    p.direction = data.direction || p.direction;
+    p.isWalking = !!data.isWalking;
+    p.walkPhase = data.walkPhase || 0;
     p.lastSeen = Date.now();
 
-    // Check table proximity
-    this.updateTableAssociation(roomId, socketId);
+    // Check table proximity — return table change result
+    var tableResult = this.updateTableAssociation(roomId, socketId);
 
-    return p;
+    return tableResult;
   }
 
   getRoomInfo(roomId) {
@@ -359,6 +361,7 @@ class RoomManager {
     const newTableId = closestTable ? closestTable.id : null;
 
     if (newTableId !== p.tableId) {
+      const oldTableId = p.tableId; // Capture BEFORE overwrite
       // Leave old table
       if (p.tableId) {
         const oldTable = room.tables.get(p.tableId);
@@ -369,7 +372,7 @@ class RoomManager {
         closestTable.participants.add(socketId);
       }
       p.tableId = newTableId;
-      return { changed: true, oldTableId: p.tableId, newTableId, socketId };
+      return { changed: true, oldTableId, newTableId, socketId };
     }
     return { changed: false };
   }
