@@ -707,381 +707,312 @@ const UI = {
     if (container) container.style.display = 'none';
   },
 
+
   // ===== POST-IT DARK BOARD POP-IN =====
 
   openPostItBoard: function(boardId, furnitureItem) {
     var self = this;
     var overlay = document.getElementById('postit-overlay');
     if (!overlay) return;
-
     overlay.style.display = 'flex';
-    // Map to actual HTML element IDs (new darkboard layout)
-    var board = document.getElementById('darkboard-postit-layer') || document.getElementById('postit-board-bg');
-    if (!board) { overlay.style.display = 'none'; return; }
+
+    var board = document.getElementById('darkboard-postit-layer');
+    var drawCanvas = document.getElementById('darkboard-canvas');
+    var viewport = document.getElementById('darkboard-viewport');
+    var wrapper = document.getElementById('darkboard-transform-wrapper');
+    var statusText = document.getElementById('darkboard-status-text');
+    var votesInfo = document.getElementById('darkboard-votes-info');
+
+    if (!board || !drawCanvas || !viewport) { overlay.style.display = 'none'; return; }
     board.innerHTML = '';
+    var drawCtx = drawCanvas.getContext('2d');
+    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
 
-    var circlesCanvas = document.getElementById('darkboard-canvas') || document.getElementById('darkboard-circles-canvas');
-    if (!circlesCanvas) { overlay.style.display = 'none'; return; }
-    var circlesCtx = circlesCanvas.getContext('2d');
-    var footer = document.getElementById('darkboard-statusbar') || document.getElementById('darkboard-footer');
+    // State
+    var currentColor = '#FFE066', penColor = '#FFFFFF', penWidth = 2;
+    var currentTool = 'select', shapeType = 'rect';
+    var postits = [], strokes = [], circles = [];
+    var dotVotingMode = false, myVotes = 0, maxVotes = 3;
+    var dragState = null, drawState = null;
+    var panX = 0, panY = 0, zoom = 1, isPanning = false, panStart = {x:0,y:0}, panOrig = {x:0,y:0};
 
-    var currentColor = '#FFE066';
-    var postits = [];
-    var circles = []; // { id, cx, cy, rx, ry, color }
-    var votes = {}; // postitId -> { count, voters: Set }
-    var myVotes = 0;
-    var maxVotes = 3;
-    var dotVotingMode = false;
-    var circleMode = false;
-    var dragState = null;
-    var circleDrawState = null;
-
-    function resizeCirclesCanvas() {
-      var rect = board.parentElement.getBoundingClientRect();
-      circlesCanvas.width = rect.width;
-      circlesCanvas.height = rect.height;
-      redrawCircles();
+    function applyTransform() {
+      if (wrapper) wrapper.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+      var zl = document.getElementById('darkboard-zoom-label');
+      if (zl) zl.textContent = Math.round(zoom * 100) + '%';
     }
-    setTimeout(resizeCirclesCanvas, 50);
+    applyTransform();
 
-    function redrawCircles() {
-      circlesCtx.clearRect(0, 0, circlesCanvas.width, circlesCanvas.height);
-      for (var i = 0; i < circles.length; i++) {
-        var c = circles[i];
-        circlesCtx.beginPath();
-        circlesCtx.ellipse(c.cx, c.cy, Math.abs(c.rx), Math.abs(c.ry), 0, 0, Math.PI * 2);
-        circlesCtx.strokeStyle = c.color || 'rgba(255,255,255,0.6)';
-        circlesCtx.lineWidth = 2.5;
-        circlesCtx.setLineDash([8, 4]);
-        circlesCtx.stroke();
-        circlesCtx.setLineDash([]);
-        if (c.label) {
-          circlesCtx.font = 'bold 13px "Segoe UI", sans-serif';
-          circlesCtx.fillStyle = c.color || 'rgba(255,255,255,0.7)';
-          circlesCtx.textAlign = 'center';
-          circlesCtx.fillText(c.label, c.cx, c.cy - Math.abs(c.ry) - 6);
+    // Redraw all canvas content
+    function redrawCanvas() {
+      drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+      for (var i = 0; i < strokes.length; i++) {
+        var s = strokes[i];
+        if (s.type === 'pen' && s.points && s.points.length > 1) {
+          drawCtx.beginPath(); drawCtx.strokeStyle = s.color || '#fff'; drawCtx.lineWidth = s.width || 2;
+          drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
+          drawCtx.moveTo(s.points[0].x, s.points[0].y);
+          for (var j = 1; j < s.points.length; j++) drawCtx.lineTo(s.points[j].x, s.points[j].y);
+          drawCtx.stroke();
+        } else if (s.type === 'shape') {
+          drawCtx.strokeStyle = s.color || '#fff'; drawCtx.lineWidth = s.width || 2;
+          drawCtx.beginPath();
+          if (s.shape === 'rect') drawCtx.rect(s.x, s.y, s.w, s.h);
+          else if (s.shape === 'ellipse') drawCtx.ellipse(s.x+s.w/2, s.y+s.h/2, Math.abs(s.w/2), Math.abs(s.h/2), 0, 0, Math.PI*2);
+          else { drawCtx.moveTo(s.x, s.y); drawCtx.lineTo(s.x+s.w, s.y+s.h); }
+          drawCtx.stroke();
         }
       }
-      // Draw in-progress circle
-      if (circleDrawState) {
-        var dx = circleDrawState.endX - circleDrawState.startX;
-        var dy = circleDrawState.endY - circleDrawState.startY;
-        circlesCtx.beginPath();
-        circlesCtx.ellipse(
-          circleDrawState.startX + dx / 2,
-          circleDrawState.startY + dy / 2,
-          Math.abs(dx / 2), Math.abs(dy / 2), 0, 0, Math.PI * 2
-        );
-        circlesCtx.strokeStyle = 'rgba(255,255,255,0.5)';
-        circlesCtx.lineWidth = 2;
-        circlesCtx.setLineDash([6, 3]);
-        circlesCtx.stroke();
-        circlesCtx.setLineDash([]);
+      for (var ci = 0; ci < circles.length; ci++) {
+        var c = circles[ci];
+        drawCtx.beginPath();
+        drawCtx.ellipse(c.cx, c.cy, Math.abs(c.rx), Math.abs(c.ry), 0, 0, Math.PI*2);
+        drawCtx.strokeStyle = c.color || 'rgba(255,255,255,0.6)'; drawCtx.lineWidth = 2.5;
+        drawCtx.setLineDash([8,4]); drawCtx.stroke(); drawCtx.setLineDash([]);
+        if (c.label) {
+          drawCtx.font = 'bold 14px "Segoe UI", sans-serif';
+          drawCtx.fillStyle = 'rgba(255,255,255,0.7)'; drawCtx.textAlign = 'center';
+          drawCtx.fillText(c.label, c.cx, c.cy - Math.abs(c.ry) - 8);
+        }
       }
+      // In-progress
+      if (drawState) {
+        if (drawState.type === 'pen' && drawState.points.length > 1) {
+          drawCtx.beginPath(); drawCtx.strokeStyle = drawState.color; drawCtx.lineWidth = drawState.width;
+          drawCtx.lineCap = 'round'; drawCtx.moveTo(drawState.points[0].x, drawState.points[0].y);
+          for (var dp = 1; dp < drawState.points.length; dp++) drawCtx.lineTo(drawState.points[dp].x, drawState.points[dp].y);
+          drawCtx.stroke();
+        } else if (drawState.type === 'shape' || drawState.type === 'circle') {
+          var dw = drawState.endX - drawState.startX, dh = drawState.endY - drawState.startY;
+          drawCtx.strokeStyle = drawState.type === 'circle' ? 'rgba(255,255,255,0.5)' : drawState.color;
+          drawCtx.lineWidth = drawState.type === 'circle' ? 2 : drawState.width;
+          if (drawState.type === 'circle') { drawCtx.setLineDash([6,3]); }
+          drawCtx.beginPath();
+          if ((drawState.shape === 'rect' || !drawState.shape) && drawState.type !== 'circle') drawCtx.rect(drawState.startX, drawState.startY, dw, dh);
+          else drawCtx.ellipse(drawState.startX+dw/2, drawState.startY+dh/2, Math.abs(dw/2)||1, Math.abs(dh/2)||1, 0, 0, Math.PI*2);
+          drawCtx.stroke(); drawCtx.setLineDash([]);
+        }
+      }
+    }
+
+    function broadcastPostit(p) {
+      Network.socket.emit('wb-postit', { whiteboardId: boardId,
+        postitData: { id: p.id, text: p.text, x: p.x, y: p.y, color: p.color, pseudo: p.pseudo, votes: p.votes || 0 }
+      });
     }
 
     function createPostItEl(postit) {
       var el = document.createElement('div');
-      el.className = 'postit-note';
-      el.dataset.postitId = postit.id;
-      el.style.background = postit.color || currentColor;
-      el.style.left = postit.x + 'px';
-      el.style.top = postit.y + 'px';
-
+      el.className = 'postit-note'; el.dataset.postitId = postit.id;
+      el.style.cssText = 'background:' + (postit.color||currentColor) + ';left:' + postit.x + 'px;top:' + postit.y + 'px;position:absolute;';
       var textarea = document.createElement('textarea');
-      textarea.value = postit.text || '';
-      textarea.placeholder = 'Écrire ici...';
-      textarea.addEventListener('input', function() {
-        postit.text = textarea.value;
-        Network.socket.emit('wb-postit', {
-          whiteboardId: boardId,
-          postitData: { id: postit.id, text: textarea.value, x: postit.x, y: postit.y, color: postit.color, pseudo: postit.pseudo || Engine.player.pseudo, votes: postit.votes || 0 },
-        });
-      });
+      textarea.value = postit.text || ''; textarea.placeholder = 'Écrire ici...';
+      textarea.addEventListener('input', function() { postit.text = textarea.value; broadcastPostit(postit); });
       textarea.addEventListener('keydown', function(e) { e.stopPropagation(); });
-
-      var deleteBtn = document.createElement('button');
-      deleteBtn.className = 'postit-delete';
-      deleteBtn.textContent = '✕';
-      deleteBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        el.remove();
-        postits = postits.filter(function(p) { return p.id !== postit.id; });
-      });
-
-      var author = document.createElement('div');
-      author.className = 'postit-author';
+      var delBtn = document.createElement('button'); delBtn.className = 'postit-delete'; delBtn.textContent = '✕';
+      delBtn.addEventListener('click', function(e) { e.stopPropagation(); el.remove(); postits = postits.filter(function(p){return p.id!==postit.id;}); });
+      var author = document.createElement('div'); author.className = 'postit-author';
       author.textContent = postit.pseudo || Engine.player.pseudo;
-
-      // Vote badge
-      var voteBadge = document.createElement('div');
-      voteBadge.className = 'postit-vote-badge';
-      voteBadge.textContent = postit.votes || 0;
-      voteBadge.style.display = (postit.votes > 0) ? 'flex' : 'none';
-
-      el.appendChild(deleteBtn);
-      el.appendChild(textarea);
-      el.appendChild(author);
-      el.appendChild(voteBadge);
-
-      // Drag to move (unless in vote mode)
+      var badge = document.createElement('div'); badge.className = 'postit-vote-badge';
+      badge.textContent = postit.votes || 0; badge.style.display = (postit.votes > 0) ? 'flex' : 'none';
+      el.appendChild(delBtn); el.appendChild(textarea); el.appendChild(author); el.appendChild(badge);
       el.addEventListener('mousedown', function(e) {
-        if (dotVotingMode) return;
-        if (circleMode) return;
-        if (e.target === textarea || e.target === deleteBtn) return;
-        dragState = { el: el, postit: postit, startX: e.clientX, startY: e.clientY, origX: postit.x, origY: postit.y };
-        e.preventDefault();
+        if (dotVotingMode || currentTool !== 'select') return;
+        if (e.target === textarea || e.target === delBtn) return;
+        dragState = { el:el, postit:postit, startX:e.clientX, startY:e.clientY, origX:postit.x, origY:postit.y };
+        e.preventDefault(); e.stopPropagation();
       });
-
-      // Dot voting click
       el.addEventListener('click', function(e) {
-        if (!dotVotingMode) return;
-        if (e.target === deleteBtn) return;
-        e.stopPropagation();
-        if (myVotes >= maxVotes) {
-          self.showNotification('Vous avez utilisé vos ' + maxVotes + ' votes !');
-          return;
-        }
-        myVotes++;
-        postit.votes = (postit.votes || 0) + 1;
-        voteBadge.textContent = postit.votes;
-        voteBadge.style.display = 'flex';
-        // Animate
-        el.classList.add('postit-voted');
-        setTimeout(function() { el.classList.remove('postit-voted'); }, 300);
-        // Broadcast
-        Network.socket.emit('wb-postit', {
-          whiteboardId: boardId,
-          postitData: { id: postit.id, text: postit.text, x: postit.x, y: postit.y, color: postit.color, pseudo: postit.pseudo, votes: postit.votes },
-        });
-        updateVotesInfo();
+        if (!dotVotingMode) return; if (e.target === delBtn) return; e.stopPropagation();
+        if (myVotes >= maxVotes) { self.showNotification('Votes épuisés (' + maxVotes + ' max)'); return; }
+        myVotes++; postit.votes = (postit.votes||0) + 1;
+        badge.textContent = postit.votes; badge.style.display = 'flex';
+        el.classList.add('postit-voted'); setTimeout(function(){el.classList.remove('postit-voted');}, 300);
+        broadcastPostit(postit);
+        if (votesInfo) votesInfo.textContent = 'Dot Voting — ' + myVotes + '/' + maxVotes + ' votes';
       });
-
-      board.appendChild(el);
-      return el;
+      board.appendChild(el); return el;
     }
 
-    function updateVotesInfo() {
-      var info = document.getElementById('darkboard-votes-info');
-      if (info) info.textContent = 'Dot Voting — ' + myVotes + '/' + maxVotes + ' votes utilisés';
+    function addNewPostit() {
+      var postit = { id: 'p_'+Date.now()+'_'+Math.random().toString(36).substr(2,4), text: '',
+        x: 400+Math.random()*800, y: 400+Math.random()*600, color: currentColor, pseudo: Engine.player.pseudo, votes: 0 };
+      postits.push(postit); createPostItEl(postit); broadcastPostit(postit);
     }
 
-    function findPostitEl(postitId) {
-      return board.querySelector('[data-postit-id="' + postitId + '"]');
+    // Canvas coordinates
+    function canvasPos(e) {
+      var rect = drawCanvas.getBoundingClientRect();
+      return { x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom };
     }
 
-    function onMouseMove(e) {
+    // Mouse events on viewport
+    function onDown(e) {
+      if (e.target.closest && e.target.closest('.postit-note')) return;
+      var pos = canvasPos(e);
+      if (currentTool === 'pen') {
+        drawState = { type:'pen', color:penColor, width:penWidth, points:[pos] }; e.preventDefault();
+      } else if (currentTool === 'shape') {
+        drawState = { type:'shape', shape:shapeType, color:penColor, width:penWidth, startX:pos.x, startY:pos.y, endX:pos.x, endY:pos.y }; e.preventDefault();
+      } else if (currentTool === 'circle') {
+        drawState = { type:'circle', startX:pos.x, startY:pos.y, endX:pos.x, endY:pos.y }; e.preventDefault();
+      } else if (currentTool === 'postit') {
+        addNewPostit();
+      } else if (e.button === 1 || e.button === 2 || e.shiftKey) {
+        isPanning = true; panStart = {x:e.clientX,y:e.clientY}; panOrig = {x:panX,y:panY}; e.preventDefault();
+      }
+    }
+    function onMove(e) {
       if (dragState) {
-        var dx = e.clientX - dragState.startX;
-        var dy = e.clientY - dragState.startY;
-        dragState.postit.x = Math.max(0, dragState.origX + dx);
-        dragState.postit.y = Math.max(0, dragState.origY + dy);
-        dragState.el.style.left = dragState.postit.x + 'px';
-        dragState.el.style.top = dragState.postit.y + 'px';
+        var dx = (e.clientX-dragState.startX)/zoom, dy = (e.clientY-dragState.startY)/zoom;
+        dragState.postit.x = Math.max(0, dragState.origX+dx); dragState.postit.y = Math.max(0, dragState.origY+dy);
+        dragState.el.style.left = dragState.postit.x+'px'; dragState.el.style.top = dragState.postit.y+'px'; return;
       }
-      if (circleDrawState) {
-        circleDrawState.endX = e.offsetX || (e.clientX - circlesCanvas.getBoundingClientRect().left);
-        circleDrawState.endY = e.offsetY || (e.clientY - circlesCanvas.getBoundingClientRect().top);
-        redrawCircles();
+      if (isPanning) { panX = panOrig.x+(e.clientX-panStart.x); panY = panOrig.y+(e.clientY-panStart.y); applyTransform(); return; }
+      if (drawState) {
+        var pos = canvasPos(e);
+        if (drawState.type === 'pen') drawState.points.push(pos);
+        else { drawState.endX = pos.x; drawState.endY = pos.y; }
+        redrawCanvas();
       }
     }
-
-    function onMouseUp(e) {
-      if (dragState) {
-        Network.socket.emit('wb-postit', {
-          whiteboardId: boardId,
-          postitData: { id: dragState.postit.id, text: dragState.postit.text, x: dragState.postit.x, y: dragState.postit.y, color: dragState.postit.color, pseudo: dragState.postit.pseudo, votes: dragState.postit.votes || 0 },
-        });
-        dragState = null;
-      }
-      if (circleDrawState) {
-        var dx = circleDrawState.endX - circleDrawState.startX;
-        var dy = circleDrawState.endY - circleDrawState.startY;
-        if (Math.abs(dx) > 20 && Math.abs(dy) > 20) {
-          var label = prompt('Nom du groupe (optionnel):') || '';
-          var circle = {
-            id: 'circle_' + Date.now(),
-            cx: circleDrawState.startX + dx / 2,
-            cy: circleDrawState.startY + dy / 2,
-            rx: Math.abs(dx / 2),
-            ry: Math.abs(dy / 2),
-            color: 'rgba(255,255,255,0.5)',
-            label: label,
-          };
-          circles.push(circle);
-          // Broadcast circle via wb-stroke (reuse channel)
-          Network.socket.emit('wb-stroke', {
-            whiteboardId: boardId,
-            strokeData: { type: 'circle', circle: circle },
-          });
+    function onUp(e) {
+      if (dragState) { broadcastPostit(dragState.postit); dragState = null; return; }
+      if (isPanning) { isPanning = false; return; }
+      if (drawState) {
+        if (drawState.type === 'pen' && drawState.points.length > 1) {
+          strokes.push({ type:'pen', color:drawState.color, width:drawState.width, points:drawState.points });
+          Network.socket.emit('wb-stroke', { whiteboardId:boardId, strokeData:strokes[strokes.length-1] });
+        } else if (drawState.type === 'shape') {
+          var sw = drawState.endX-drawState.startX, sh = drawState.endY-drawState.startY;
+          if (Math.abs(sw)>5 || Math.abs(sh)>5) {
+            var shp = { type:'shape', shape:drawState.shape, color:drawState.color, width:drawState.width, x:drawState.startX, y:drawState.startY, w:sw, h:sh };
+            strokes.push(shp); Network.socket.emit('wb-stroke', { whiteboardId:boardId, strokeData:shp });
+          }
+        } else if (drawState.type === 'circle') {
+          var cw = drawState.endX-drawState.startX, ch = drawState.endY-drawState.startY;
+          if (Math.abs(cw)>20 && Math.abs(ch)>20) {
+            var label = prompt('Nom du groupe (optionnel):') || '';
+            var circ = { id:'c_'+Date.now(), cx:drawState.startX+cw/2, cy:drawState.startY+ch/2, rx:Math.abs(cw/2), ry:Math.abs(ch/2), color:'rgba(255,255,255,0.5)', label:label };
+            circles.push(circ); Network.socket.emit('wb-stroke', { whiteboardId:boardId, strokeData:{type:'circle',circle:circ} });
+          }
         }
-        circleDrawState = null;
-        redrawCircles();
+        drawState = null; redrawCanvas();
       }
     }
+    function onWheel(e) { e.preventDefault(); zoom = Math.max(0.2, Math.min(3, zoom + (e.deltaY > 0 ? -0.1 : 0.1))); applyTransform(); }
 
-    overlay.addEventListener('mousemove', onMouseMove);
-    overlay.addEventListener('mouseup', onMouseUp);
+    viewport.addEventListener('mousedown', onDown);
+    viewport.addEventListener('mousemove', onMove);
+    viewport.addEventListener('mouseup', onUp);
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    viewport.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 
-    // Circle drawing on the canvas
-    circlesCanvas.addEventListener('mousedown', function(e) {
-      if (!circleMode) return;
-      var rect = circlesCanvas.getBoundingClientRect();
-      circleDrawState = {
-        startX: e.clientX - rect.left,
-        startY: e.clientY - rect.top,
-        endX: e.clientX - rect.left,
-        endY: e.clientY - rect.top,
-      };
-      e.preventDefault();
-      e.stopPropagation();
+    // Toolbar tool selection
+    overlay.querySelectorAll('.darkboard-tool-icon').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        currentTool = btn.dataset.tool;
+        overlay.querySelectorAll('.darkboard-tool-icon').forEach(function(b){b.classList.remove('active');});
+        btn.classList.add('active');
+        var sp = document.getElementById('darkboard-shape-types');
+        var pp = document.getElementById('darkboard-postit-colors');
+        if (sp) sp.style.display = currentTool === 'shape' ? 'flex' : 'none';
+        if (pp) pp.style.display = currentTool === 'postit' ? 'flex' : 'none';
+        if (statusText) statusText.textContent = 'Outil: ' + currentTool;
+      });
+    });
+    overlay.querySelectorAll('.darkboard-shape-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { shapeType = btn.dataset.shape;
+        overlay.querySelectorAll('.darkboard-shape-btn').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
+    });
+    overlay.querySelectorAll('.darkboard-color-dot').forEach(function(btn) {
+      btn.addEventListener('click', function() { penColor = btn.dataset.color;
+        overlay.querySelectorAll('.darkboard-color-dot').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
+    });
+    overlay.querySelectorAll('.darkboard-width-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { penWidth = parseInt(btn.dataset.width);
+        overlay.querySelectorAll('.darkboard-width-btn').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
+    });
+    overlay.querySelectorAll('.darkboard-postit-color').forEach(function(btn) {
+      btn.addEventListener('click', function() { currentColor = btn.dataset.color;
+        overlay.querySelectorAll('.darkboard-postit-color').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); });
     });
 
-    // Load existing
+    // Dot voting
+    var voteBtn = document.getElementById('darkboard-vote-btn');
+    if (voteBtn) voteBtn.addEventListener('click', function() {
+      dotVotingMode = !dotVotingMode; voteBtn.classList.toggle('active', dotVotingMode);
+      if (votesInfo) { votesInfo.style.display = dotVotingMode ? 'inline' : 'none'; }
+      if (dotVotingMode) board.classList.add('vote-mode'); else board.classList.remove('vote-mode');
+    });
+
+    // Export PNG
+    var exportBtn = document.getElementById('darkboard-export-btn');
+    if (exportBtn) exportBtn.addEventListener('click', function() {
+      try { var a = document.createElement('a'); a.download = 'darkboard.png'; a.href = drawCanvas.toDataURL('image/png'); a.click(); self.showNotification('Export PNG OK'); } catch(e) {}
+    });
+
+    // Timer
+    var timerDisp = document.getElementById('darkboard-timer-display');
+    var timerSec = 0, timerOn = false, timerInt = null;
+    function updTimer() { if (timerDisp) { var m=Math.floor(timerSec/60),s=timerSec%60; timerDisp.textContent=(m<10?'0':'')+m+':'+(s<10?'0':'')+s; } }
+    var tsBtn = document.getElementById('darkboard-timer-start');
+    var trBtn = document.getElementById('darkboard-timer-reset');
+    var tPre = document.getElementById('darkboard-timer-preset');
+    if (tsBtn) tsBtn.addEventListener('click', function() {
+      if (timerOn) { clearInterval(timerInt); timerOn = false; tsBtn.innerHTML = '&#9654;'; }
+      else { if (timerSec<=0 && tPre) timerSec=parseInt(tPre.value)||300; timerOn=true; tsBtn.innerHTML='&#9646;&#9646;';
+        timerInt = setInterval(function() { timerSec=Math.max(0,timerSec-1); updTimer();
+          if (timerSec<=0) { clearInterval(timerInt); timerOn=false; tsBtn.innerHTML='&#9654;'; self.showNotification('Timer terminé !'); }
+        }, 1000); }
+    });
+    if (trBtn) trBtn.addEventListener('click', function() { clearInterval(timerInt); timerOn=false; timerSec=parseInt(tPre?tPre.value:300); updTimer(); if(tsBtn)tsBtn.innerHTML='&#9654;'; });
+    if (tPre) tPre.addEventListener('change', function() { if(!timerOn){timerSec=parseInt(tPre.value)||0; updTimer();} });
+    updTimer();
+
+    // Network load
     Network.socket.emit('wb-open', { whiteboardId: boardId }, function(resp) {
       if (resp && resp.success) {
-        if (resp.postits) {
-          for (var i = 0; i < resp.postits.length; i++) {
-            postits.push(resp.postits[i]);
-            createPostItEl(resp.postits[i]);
-          }
-        }
-        if (resp.strokes) {
-          for (var j = 0; j < resp.strokes.length; j++) {
-            if (resp.strokes[j].type === 'circle' && resp.strokes[j].circle) {
-              circles.push(resp.strokes[j].circle);
-            }
-          }
-          redrawCircles();
-        }
+        if (resp.postits) resp.postits.forEach(function(p) { postits.push(p); createPostItEl(p); });
+        if (resp.strokes) { resp.strokes.forEach(function(s) {
+          if (s.type==='circle'&&s.circle) circles.push(s.circle); else strokes.push(s);
+        }); redrawCanvas(); }
       }
     });
-
-    // Listen for remote post-its
-    function onRemotePostit(data) {
-      if (data.whiteboardId !== boardId) return;
-      var pd = data.postitData;
-      var existing = postits.find(function(p) { return p.id === pd.id; });
-      if (existing) {
-        existing.text = pd.text;
-        existing.x = pd.x;
-        existing.y = pd.y;
-        existing.votes = pd.votes || 0;
-        var el = findPostitEl(pd.id);
-        if (el) {
-          el.style.left = pd.x + 'px';
-          el.style.top = pd.y + 'px';
-          var ta = el.querySelector('textarea');
-          if (ta && ta !== document.activeElement) ta.value = pd.text;
-          var badge = el.querySelector('.postit-vote-badge');
-          if (badge) {
-            badge.textContent = existing.votes;
-            badge.style.display = existing.votes > 0 ? 'flex' : 'none';
-          }
+    function onRP(data) {
+      if (data.whiteboardId !== boardId) return; var pd = data.postitData;
+      var ex = postits.find(function(p){return p.id===pd.id;});
+      if (ex) { ex.text=pd.text; ex.x=pd.x; ex.y=pd.y; ex.votes=pd.votes||0;
+        var el = board.querySelector('[data-postit-id="'+pd.id+'"]');
+        if (el) { el.style.left=pd.x+'px'; el.style.top=pd.y+'px';
+          var ta=el.querySelector('textarea'); if(ta&&ta!==document.activeElement) ta.value=pd.text;
+          var bg=el.querySelector('.postit-vote-badge'); if(bg){bg.textContent=ex.votes; bg.style.display=ex.votes>0?'flex':'none';}
         }
-      } else {
-        postits.push(pd);
-        createPostItEl(pd);
-      }
+      } else { postits.push(pd); createPostItEl(pd); }
     }
-    Network.socket.on('wb-postit', onRemotePostit);
-
-    // Listen for remote circles
-    function onRemoteStroke(data) {
+    Network.socket.on('wb-postit', onRP);
+    function onRS(data) {
       if (data.whiteboardId !== boardId) return;
-      if (data.strokeData && data.strokeData.type === 'circle' && data.strokeData.circle) {
-        circles.push(data.strokeData.circle);
-        redrawCircles();
-      }
+      if (data.strokeData) { if(data.strokeData.type==='circle'&&data.strokeData.circle) circles.push(data.strokeData.circle); else strokes.push(data.strokeData); redrawCanvas(); }
     }
-    Network.socket.on('wb-stroke', onRemoteStroke);
+    Network.socket.on('wb-stroke', onRS);
 
-    // Color buttons (support both old and new class names)
-    var colorBtns = overlay.querySelectorAll('.postit-color-btn, .darkboard-postit-color');
-    colorBtns.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        currentColor = btn.dataset.color;
-        colorBtns.forEach(function(b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-      });
-    });
-
-    // Add post-it: support old button ID or new toolbar tool click
-    var addBtn = document.getElementById('postit-add');
-    // Also support new toolbar "postit" tool button
-    var toolPostitBtn = overlay.querySelector('[data-tool="postit"]');
-    function addNewPostit() {
-      var id = 'postit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-      var postit = {
-        id: id,
-        text: '',
-        x: 30 + Math.random() * 400,
-        y: 30 + Math.random() * 300,
-        color: currentColor,
-        pseudo: Engine.player.pseudo,
-        votes: 0,
-      };
-      postits.push(postit);
-      createPostItEl(postit);
-      Network.socket.emit('wb-postit', { whiteboardId: boardId, postitData: postit });
-    }
-    if (addBtn) addBtn.onclick = addNewPostit;
-    if (toolPostitBtn) toolPostitBtn.addEventListener('click', addNewPostit);
-
-    // Circle tool toggle (support both old and new IDs)
-    var circleBtn = document.getElementById('postit-circle-tool') || overlay.querySelector('[data-tool="circle"]');
-    if (circleBtn) circleBtn.onclick = function() {
-      circleMode = !circleMode;
-      circleBtn.classList.toggle('active', circleMode);
-      if (circleMode) {
-        circlesCanvas.style.pointerEvents = 'auto';
-        dotVotingMode = false;
-        var voteBtn = document.getElementById('postit-vote-toggle') || document.getElementById('darkboard-vote-btn');
-        if (voteBtn) voteBtn.classList.remove('active');
-        footer.style.display = 'none';
-      } else {
-        circlesCanvas.style.pointerEvents = 'none';
-      }
-    };
-    circlesCanvas.style.pointerEvents = 'none';
-
-    // Dot voting toggle (support both old and new IDs)
-    var voteToggle = document.getElementById('postit-vote-toggle') || document.getElementById('darkboard-vote-btn');
-    if (voteToggle) voteToggle.onclick = function() {
-      dotVotingMode = !dotVotingMode;
-      voteToggle.classList.toggle('active', dotVotingMode);
-      footer.style.display = dotVotingMode ? 'block' : 'none';
-      if (dotVotingMode) {
-        circleMode = false;
-        if (circleBtn) circleBtn.classList.remove('active');
-        circlesCanvas.style.pointerEvents = 'none';
-        board.classList.add('vote-mode');
-        updateVotesInfo();
-      } else {
-        board.classList.remove('vote-mode');
-      }
-    };
-
-    // Close
+    // Cleanup
     function cleanup() {
       overlay.style.display = 'none';
-      overlay.removeEventListener('mousemove', onMouseMove);
-      overlay.removeEventListener('mouseup', onMouseUp);
-      Network.socket.off('wb-postit', onRemotePostit);
-      Network.socket.off('wb-stroke', onRemoteStroke);
+      viewport.removeEventListener('mousedown', onDown); viewport.removeEventListener('mousemove', onMove);
+      viewport.removeEventListener('mouseup', onUp); viewport.removeEventListener('wheel', onWheel);
+      Network.socket.off('wb-postit', onRP); Network.socket.off('wb-stroke', onRS);
       Network.socket.emit('wb-close', { whiteboardId: boardId });
-      footer.style.display = 'none';
-      board.classList.remove('vote-mode');
+      if (timerInt) clearInterval(timerInt); board.classList.remove('vote-mode');
     }
-
     var closeBtn = document.getElementById('postit-close');
     if (closeBtn) closeBtn.onclick = cleanup;
-
-    function onEsc(e) {
-      if (e.code === 'Escape') { cleanup(); window.removeEventListener('keydown', onEsc); }
-    }
+    function onEsc(e) { if (e.code === 'Escape') { cleanup(); window.removeEventListener('keydown', onEsc); } }
     window.addEventListener('keydown', onEsc);
+    if (statusText) statusText.textContent = 'Prêt — Choisissez un outil à gauche';
   },
+
 
   // ===== WHITEBOARD POP-IN =====
 
