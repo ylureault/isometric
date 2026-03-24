@@ -761,3 +761,69 @@ describe('EPIC 12 — Table Association et Position', () => {
     expect(result.changed).toBe(false);
   });
 });
+
+// ===== EPIC 13: Hardening & Edge Cases =====
+
+describe('EPIC 13 — Hardening', () => {
+  test('Pseudo is sanitized and capped at 30 chars', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    const r = rm.joinRoom('r1', 's1', { pseudo: '  A'.repeat(20) + '  ', colors: {}, isCreator: true });
+    expect(r.participant.pseudo.length).toBeLessThanOrEqual(30);
+    expect(r.participant.pseudo).not.toMatch(/^\s/);
+  });
+
+  test('Empty pseudo defaults to Anonyme', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    const r = rm.joinRoom('r1', 's1', { pseudo: '', colors: {} });
+    expect(r.participant.pseudo).toBe('Anonyme');
+  });
+
+  test('Null pseudo defaults to Anonyme', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    const r = rm.joinRoom('r1', 's1', { pseudo: null, colors: {} });
+    expect(r.participant.pseudo).toBe('Anonyme');
+  });
+
+  test('Timer duration is clamped to valid range', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    rm.joinRoom('r1', 's1', { pseudo: 'Admin', colors: {}, isCreator: true });
+    const t1 = rm.createTimer('r1', 's1', { duration: -100, scope: 'global' });
+    expect(t1.timer.duration).toBe(5);
+    const t2 = rm.createTimer('r1', 's1', { duration: 99999, scope: 'global' });
+    expect(t2.timer.duration).toBe(3600);
+    const t3 = rm.createTimer('r1', 's1', { duration: 'evil', scope: 'global' });
+    expect(t3.timer.duration).toBe(300); // default
+  });
+
+  test('Table coordinates are clamped to grid', () => {
+    rm.createRoom('r1', { name: 'Test', gridSize: 20 });
+    rm.joinRoom('r1', 's1', { pseudo: 'Admin', colors: {}, isCreator: true });
+    const t = rm.createTable('r1', 's1', { name: 'T', x: -5, y: 100, width: 50, height: -3, radius: 100 });
+    expect(t.table.x).toBe(0);
+    expect(t.table.y).toBe(19);
+    expect(t.table.width).toBe(10);
+    expect(t.table.height).toBe(1);
+    expect(t.table.radius).toBe(15);
+  });
+
+  test('Same socket joining twice leaves old room first (no duplicates)', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    rm.createRoom('r2', { name: 'Test2' });
+    rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    const room1 = rm.getRoom('r1');
+    expect(room1.participants.size).toBe(1);
+    // If the server calls leaveRoom before re-joining (simulated here)
+    rm.leaveRoom('r1', 's1');
+    expect(room1.participants.size).toBe(0);
+    rm.joinRoom('r2', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    const room2 = rm.getRoom('r2');
+    expect(room2.participants.size).toBe(1);
+  });
+
+  test('Table name is capped at 50 chars', () => {
+    rm.createRoom('r1', { name: 'Test' });
+    rm.joinRoom('r1', 's1', { pseudo: 'Admin', colors: {}, isCreator: true });
+    const t = rm.createTable('r1', 's1', { name: 'X'.repeat(100), x: 5, y: 5 });
+    expect(t.table.name.length).toBeLessThanOrEqual(50);
+  });
+});
