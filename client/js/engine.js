@@ -158,7 +158,7 @@ var Engine = {
     s.on('all-hands-lowered', function() { self.player.handRaised = false; Network.remotePlayers.forEach(function(r) { r.handRaised = false; }); });
     s.on('effect-triggered', function(d) { if (d.type === 'confetti') self.triggerConfetti(); if (d.type === 'applause') self.triggerApplause(); });
     s.on('spotlight-changed', function(d) { self.spotlight = d.active ? d.targetSocketId : null; });
-    s.on('vote-created', function(v) { UI.showVotePopup(v); });
+    s.on('vote-created', function(v) { self.initSfx(); self.playSfx('notification'); UI.showVotePopup(v); });
     s.on('vote-updated', function(v) { UI.updateVotePopup(v); });
     s.on('vote-ended', function(v) { UI.updateVotePopup(v); setTimeout(function() { UI.hideVotePopup(); }, 5000); });
     s.on('timer-created', function(t) { UI.showTimer(t); });
@@ -1135,6 +1135,9 @@ var Engine = {
 
     // Reactions
     this.drawReactions(ctx);
+
+    // Screen share overlay
+    ScreenShare.drawGlobalShare(ctx, 0, 0, this.roomConfig.gridSize);
 
     ctx.restore(); // end zoom
 
