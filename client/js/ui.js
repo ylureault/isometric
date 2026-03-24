@@ -715,12 +715,15 @@ const UI = {
     if (!overlay) return;
 
     overlay.style.display = 'flex';
-    var board = document.getElementById('postit-board-bg');
+    // Map to actual HTML element IDs (new darkboard layout)
+    var board = document.getElementById('darkboard-postit-layer') || document.getElementById('postit-board-bg');
+    if (!board) { overlay.style.display = 'none'; return; }
     board.innerHTML = '';
 
-    var circlesCanvas = document.getElementById('darkboard-circles-canvas');
+    var circlesCanvas = document.getElementById('darkboard-canvas') || document.getElementById('darkboard-circles-canvas');
+    if (!circlesCanvas) { overlay.style.display = 'none'; return; }
     var circlesCtx = circlesCanvas.getContext('2d');
-    var footer = document.getElementById('darkboard-footer');
+    var footer = document.getElementById('darkboard-statusbar') || document.getElementById('darkboard-footer');
 
     var currentColor = '#FFE066';
     var postits = [];
@@ -993,8 +996,8 @@ const UI = {
     }
     Network.socket.on('wb-stroke', onRemoteStroke);
 
-    // Color buttons
-    var colorBtns = overlay.querySelectorAll('.postit-color-btn');
+    // Color buttons (support both old and new class names)
+    var colorBtns = overlay.querySelectorAll('.postit-color-btn, .darkboard-postit-color');
     colorBtns.forEach(function(btn) {
       btn.addEventListener('click', function() {
         currentColor = btn.dataset.color;
@@ -1003,9 +1006,11 @@ const UI = {
       });
     });
 
-    // Add post-it button
+    // Add post-it: support old button ID or new toolbar tool click
     var addBtn = document.getElementById('postit-add');
-    if (addBtn) addBtn.onclick = function() {
+    // Also support new toolbar "postit" tool button
+    var toolPostitBtn = overlay.querySelector('[data-tool="postit"]');
+    function addNewPostit() {
       var id = 'postit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
       var postit = {
         id: id,
@@ -1019,17 +1024,19 @@ const UI = {
       postits.push(postit);
       createPostItEl(postit);
       Network.socket.emit('wb-postit', { whiteboardId: boardId, postitData: postit });
-    };
+    }
+    if (addBtn) addBtn.onclick = addNewPostit;
+    if (toolPostitBtn) toolPostitBtn.addEventListener('click', addNewPostit);
 
-    // Circle tool toggle
-    var circleBtn = document.getElementById('postit-circle-tool');
+    // Circle tool toggle (support both old and new IDs)
+    var circleBtn = document.getElementById('postit-circle-tool') || overlay.querySelector('[data-tool="circle"]');
     if (circleBtn) circleBtn.onclick = function() {
       circleMode = !circleMode;
       circleBtn.classList.toggle('active', circleMode);
       if (circleMode) {
         circlesCanvas.style.pointerEvents = 'auto';
         dotVotingMode = false;
-        var voteBtn = document.getElementById('postit-vote-toggle');
+        var voteBtn = document.getElementById('postit-vote-toggle') || document.getElementById('darkboard-vote-btn');
         if (voteBtn) voteBtn.classList.remove('active');
         footer.style.display = 'none';
       } else {
@@ -1038,8 +1045,8 @@ const UI = {
     };
     circlesCanvas.style.pointerEvents = 'none';
 
-    // Dot voting toggle
-    var voteToggle = document.getElementById('postit-vote-toggle');
+    // Dot voting toggle (support both old and new IDs)
+    var voteToggle = document.getElementById('postit-vote-toggle') || document.getElementById('darkboard-vote-btn');
     if (voteToggle) voteToggle.onclick = function() {
       dotVotingMode = !dotVotingMode;
       voteToggle.classList.toggle('active', dotVotingMode);

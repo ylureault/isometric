@@ -185,6 +185,7 @@ class RoomManager {
         socketId: sid,
         pseudo: p.pseudo,
         colors: p.colors,
+        accessory: p.accessory || 'none',
         x: p.x,
         y: p.y,
         direction: p.direction,
