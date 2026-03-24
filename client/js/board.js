@@ -240,6 +240,9 @@ const Board = {
     if (def.isProjector) return this.drawProjector(ctx, item, def);
     if (def.isWaterCooler) return this.drawWaterCooler(ctx, item, def);
     if (def.isLamp) return this.drawLamp(ctx, item, def);
+    if (def.isDoor) return this.drawDoor(ctx, item, def);
+    if (def.isClock) return this.drawClock(ctx, item, def);
+    if (def.isConfPhone) return this.drawConfPhone(ctx, item, def);
     if (def.isStandingDesk) return this.drawStandingDesk(ctx, item, def);
     if (item.type === 'desk') return this.drawDesk(ctx, item, def);
     if (item.type === 'chair') return this.drawChair(ctx, item, def);
@@ -717,6 +720,147 @@ const Board = {
     var mx = x + 0.3, my = y + 0.1;
     this.drawIsoPoly(ctx, [[mx,my,legH+1.5],[mx+0.6,my,legH+1.5],[mx+0.6,my,legH+9],[mx,my,legH+9]], '#2a2a2a', '#1a1a1a', 0.5);
     this.drawIsoPoly(ctx, [[mx+0.04,my,legH+2],[mx+0.56,my,legH+2],[mx+0.56,my,legH+8.5],[mx+0.04,my,legH+8.5]], '#4488cc', '#336699', 0.3);
+  },
+
+  drawDoor(ctx, item, def) {
+    var x = item.x, y = item.y;
+    var time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+
+    // Door frame (dark arch)
+    this.drawIsoBox(ctx, x+0.1, y+0.1, 0, 0.8, 0.8, 28, '#5A3A7A', '#4A2A6A', '#503070', null);
+
+    // Door surface (lighter purple)
+    this.drawIsoPoly(ctx, [
+      [x+0.15, y+0.5, 2],
+      [x+0.85, y+0.5, 2],
+      [x+0.85, y+0.5, 26],
+      [x+0.15, y+0.5, 26]
+    ], '#7B52A0', '#6A4290', 0.5);
+
+    // Door arch top
+    var archPos = this.iso(x+0.5, y+0.5, 27);
+    ctx.beginPath();
+    ctx.ellipse(archPos.x, archPos.y, 10, 5, 0, Math.PI, Math.PI * 2);
+    ctx.fillStyle = '#5A3A7A';
+    ctx.fill();
+
+    // Portal glow effect (animated)
+    var glowAlpha = 0.3 + Math.sin(time * 3) * 0.15;
+    var portalPos = this.iso(x+0.5, y+0.5, 14);
+    ctx.beginPath();
+    ctx.ellipse(portalPos.x, portalPos.y, 8, 12, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(155,89,182,' + glowAlpha + ')';
+    ctx.fill();
+
+    // Sparkle particles
+    for (var sp = 0; sp < 4; sp++) {
+      var sparkAngle = time * 2 + sp * Math.PI / 2;
+      var sparkR = 5 + Math.sin(time * 4 + sp) * 2;
+      var spx = portalPos.x + Math.cos(sparkAngle) * sparkR;
+      var spy = portalPos.y + Math.sin(sparkAngle) * sparkR * 0.6;
+      ctx.beginPath();
+      ctx.arc(spx, spy, 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(200,160,255,' + (0.5 + Math.sin(time * 5 + sp) * 0.3) + ')';
+      ctx.fill();
+    }
+
+    // Door handle
+    var handlePos = this.iso(x+0.75, y+0.5, 14);
+    ctx.beginPath();
+    ctx.arc(handlePos.x, handlePos.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#D4A017';
+    ctx.fill();
+
+    // Label (linked room name if set)
+    ctx.font = 'bold 8px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(200,160,255,0.8)';
+    ctx.textAlign = 'center';
+    ctx.fillText(item.doorLabel || '🚪 Portail', portalPos.x, portalPos.y + 20);
+  },
+
+  drawClock(ctx, item, def) {
+    var x = item.x + 0.5, y = item.y + 0.5;
+    var time = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+
+    // Wall mount (on y=0 wall)
+    var cz = 35;
+    var cpos = this.iso(x, y, cz);
+
+    // Clock face
+    ctx.beginPath();
+    ctx.arc(cpos.x, cpos.y, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fill();
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Hour marks
+    for (var h = 0; h < 12; h++) {
+      var angle = h * Math.PI / 6 - Math.PI / 2;
+      var mx = cpos.x + Math.cos(angle) * 8;
+      var my = cpos.y + Math.sin(angle) * 8;
+      ctx.beginPath();
+      ctx.arc(mx, my, 0.8, 0, Math.PI * 2);
+      ctx.fillStyle = '#333';
+      ctx.fill();
+    }
+
+    // Hour hand
+    var hourAngle = (time / 3600 % 12) * Math.PI / 6 - Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(cpos.x, cpos.y);
+    ctx.lineTo(cpos.x + Math.cos(hourAngle) * 5, cpos.y + Math.sin(hourAngle) * 5);
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Minute hand
+    var minAngle = (time / 60 % 60) * Math.PI / 30 - Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(cpos.x, cpos.y);
+    ctx.lineTo(cpos.x + Math.cos(minAngle) * 7, cpos.y + Math.sin(minAngle) * 7);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Center dot
+    ctx.beginPath();
+    ctx.arc(cpos.x, cpos.y, 1, 0, Math.PI * 2);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+  },
+
+  drawConfPhone(ctx, item, def) {
+    var x = item.x + 0.5, y = item.y + 0.5;
+
+    // Base (triangular speaker phone shape)
+    var pts = [];
+    for (var a = 0; a < 3; a++) {
+      var angle = a * Math.PI * 2 / 3 - Math.PI / 2;
+      pts.push([x + Math.cos(angle) * 0.35, y + Math.sin(angle) * 0.35, 11]);
+    }
+    this.drawIsoPoly(ctx, pts, '#3a3a3a', '#222', 0.5);
+
+    // Raised center
+    this.drawIsoBox(ctx, x-0.15, y-0.15, 10, 0.3, 0.3, 2, '#4a4a4a', '#333', '#3a3a3a', null);
+
+    // Small LED indicator
+    var ledPos = this.iso(x, y, 12.5);
+    ctx.beginPath();
+    ctx.arc(ledPos.x, ledPos.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#2ecc71';
+    ctx.fill();
+
+    // Speaker holes
+    for (var sh = 0; sh < 6; sh++) {
+      var sa = sh * Math.PI / 3;
+      var shp = this.iso(x + Math.cos(sa) * 0.2, y + Math.sin(sa) * 0.2, 12.5);
+      ctx.beginPath();
+      ctx.arc(shp.x, shp.y, 0.8, 0, Math.PI * 2);
+      ctx.fillStyle = '#222';
+      ctx.fill();
+    }
   },
 
   drawCollabSpace(ctx, item, def) {

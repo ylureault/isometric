@@ -437,6 +437,7 @@ const UI = {
       stage: '🎭', smallStage: '🎭', podium: '🎤', projector: '📽️', waterCooler: '🚰',
       filingCabinet: '🗄️', standingDesk: '🖥️', lamp: '💡',
       collabSpace: '🤝', carpet: '🟫', largeCarpet: '🟫',
+      door: '🚪', conferencePhone: '📞', trashBin: '🗑️', clock: '🕐',
     };
 
     var html = '';
@@ -581,6 +582,57 @@ const UI = {
 
     const envSelect = document.getElementById('admin-environment');
     if (envSelect) envSelect.value = Engine.roomConfig.environment;
+
+    // Wire up apply grid button
+    var self = this;
+    var gridBtn = document.getElementById('btn-apply-grid');
+    if (gridBtn && !gridBtn._wired) {
+      gridBtn._wired = true;
+      gridBtn.addEventListener('click', function() {
+        var s = parseInt(document.getElementById('admin-grid-size').value);
+        if (isNaN(s) || s < CONSTANTS.GRID_MIN || s > CONSTANTS.GRID_MAX) {
+          self.showNotification('Taille invalide (' + CONSTANTS.GRID_MIN + '-' + CONSTANTS.GRID_MAX + ')');
+          return;
+        }
+        gridBtn.disabled = true;
+        gridBtn.textContent = 'Application...';
+        Network.socket.emit('resize-grid', { size: s }, function(r) {
+          gridBtn.disabled = false;
+          gridBtn.textContent = 'Appliquer';
+          if (r && r.success) {
+            self.showNotification('Grille redimensionnée : ' + s + 'x' + s);
+            var status = document.getElementById('grid-apply-status');
+            if (status) { status.style.display = 'inline'; setTimeout(function() { status.style.display = 'none'; }, 2000); }
+            self.updateAdminSettings();
+          } else {
+            self.showNotification('Erreur : ' + (r && r.error || 'inconnu'));
+          }
+        });
+      });
+    }
+
+    // Wire up environment change button
+    var envBtn = document.getElementById('btn-apply-env');
+    if (envBtn && !envBtn._wired) {
+      envBtn._wired = true;
+      envBtn.addEventListener('click', function() {
+        var env = document.getElementById('admin-environment').value;
+        if (!confirm('Le mobilier actuel sera remplacé. Continuer ?')) return;
+        envBtn.disabled = true;
+        envBtn.textContent = 'Changement...';
+        Network.socket.emit('change-environment', { environment: env }, function(r) {
+          envBtn.disabled = false;
+          envBtn.textContent = 'Changer';
+          if (r && r.success) {
+            self.showNotification('Environnement changé : ' + env);
+            self.updateAdminSettings();
+            self.refreshFurnitureList();
+          } else {
+            self.showNotification('Erreur : ' + (r && r.error || 'inconnu'));
+          }
+        });
+      });
+    }
   },
 
   // ===== SHORTCUTS MODAL =====

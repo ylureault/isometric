@@ -108,8 +108,8 @@ var Engine = {
       if (d.socketId === Network.mySocketId) self.player.tableId = d.tableId;
     });
     s.on('theme-changed', function(t) { if (t.floorColor1) Board.floorColor1 = t.floorColor1; if (t.floorColor2) Board.floorColor2 = t.floorColor2; });
-    s.on('environment-changed', function(d) { self.roomConfig.environment = d.environment; Board.init(self.roomConfig.gridSize, d.environment); });
-    s.on('grid-resized', function(d) { self.roomConfig.gridSize = d.size; Board.init(d.size, self.roomConfig.environment); self.player.x = Math.min(self.player.x, d.size - 1); self.player.y = Math.min(self.player.y, d.size - 1); });
+    s.on('environment-changed', function(d) { self.roomConfig.environment = d.environment; Board.init(self.roomConfig.gridSize, d.environment); UI.updateAdminSettings(); UI.refreshFurnitureList(); });
+    s.on('grid-resized', function(d) { self.roomConfig.gridSize = d.size; Board.init(d.size, self.roomConfig.environment); self.player.x = Math.min(self.player.x, d.size - 1); self.player.y = Math.min(self.player.y, d.size - 1); UI.updateAdminSettings(); });
     s.on('reaction', function(d) {
       var r = Network.remotePlayers.get(d.socketId);
       if (r) self.addReaction(d.emoji, r.renderX, r.renderY);
@@ -330,6 +330,42 @@ var Engine = {
     var clickY = Math.floor(gp.y);
     var px = this.player.x;
     var py = this.player.y;
+
+    // Check door furniture (portals to sub-rooms)
+    for (var di = 0; di < Board.furniture.length; di++) {
+      var ditem = Board.furniture[di];
+      var ddef = Environments.furnitureTypes[ditem.type];
+      if (!ddef || !ddef.isDoor) continue;
+      if (clickX === ditem.x && clickY === ditem.y) {
+        var doorDist = Math.sqrt((px - (ditem.x + 0.5)) * (px - (ditem.x + 0.5)) + (py - (ditem.y + 0.5)) * (py - (ditem.y + 0.5)));
+        if (doorDist < 3) {
+          // If door has linked sub-room, open it
+          if (ditem.linkedSubRoomId && this.subRooms.has(ditem.linkedSubRoomId)) {
+            var linkedSr = this.subRooms.get(ditem.linkedSubRoomId);
+            var doorUrl = '/client/room.html?room=' + this.roomConfig.roomId + '_' + ditem.linkedSubRoomId + '&name=' + encodeURIComponent(linkedSr.name || 'Salle') + '&env=' + this.roomConfig.environment + '&size=15&creator=true';
+            Network.socket.emit('join-sub-room', { subRoomId: ditem.linkedSubRoomId });
+            window.open(doorUrl, '_blank');
+          } else if (this.player.isAdmin) {
+            // Admin can create + link a new room
+            var doorName = prompt('Nom de la salle derrière cette porte:');
+            if (doorName) {
+              var self2 = this;
+              Network.socket.emit('create-sub-room', { name: doorName, x: ditem.x, y: ditem.y, width: 3, height: 3 }, function(r) {
+                if (r && r.success) {
+                  self2.subRooms.set(r.subRoom.id, r.subRoom);
+                  ditem.linkedSubRoomId = r.subRoom.id;
+                  ditem.doorLabel = doorName;
+                  UI.showNotification('Porte liée à "' + doorName + '"');
+                }
+              });
+            }
+          } else {
+            UI.showNotification('Cette porte n\'est pas encore configurée');
+          }
+          return;
+        }
+      }
+    }
 
     // First check sub-rooms (portals)
     if (this.subRooms) {
@@ -819,37 +855,44 @@ var Engine = {
     var px = this.player.x;
     var py = this.player.y;
     var pr = this.player.audioRadius;
+    var viewRange = pr * 3; // Only show circles for nearby players
 
-    // Draw remote players' circles
+    // Draw remote players' indicators (only when close enough to matter)
     Network.remotePlayers.forEach(function(p) {
       if (p.opacity <= 0) return;
       var dist = Math.sqrt((px - p.renderX) * (px - p.renderX) + (py - p.renderY) * (py - p.renderY));
-      var inRange = dist < pr + CONSTANTS.AUDIO_RADIUS;
-      // Green if in range (can talk), gray if out of range
-      var color = inRange ? 'rgb(46,204,113)' : 'rgb(160,160,160)';
-      self.drawProximityCircle(ctx, p.renderX, p.renderY, CONSTANTS.AUDIO_RADIUS, color, false);
 
-      // Draw connection line between players who can hear each other
-      if (inRange && dist < pr) {
+      // Only show proximity circles for players within view range
+      if (dist > viewRange) return;
+
+      var inRange = dist < pr;
+      if (inRange) {
+        // Draw subtle connection line
         var p1 = Board.iso(px, py);
         var p2 = Board.iso(p.renderX, p.renderY);
+        var lineAlpha = Math.max(0.05, 0.2 * (1 - dist / pr));
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
-        ctx.strokeStyle = 'rgba(46,204,113,0.15)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(46,204,113,' + lineAlpha + ')';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
         ctx.stroke();
         ctx.setLineDash([]);
       }
+
+      // Show small circle only for nearby players (green if talking range, gray if not)
+      var color = inRange ? 'rgb(46,204,113)' : 'rgb(160,160,160)';
+      self.drawProximityCircle(ctx, p.renderX, p.renderY, CONSTANTS.AUDIO_RADIUS, color, false);
     });
 
-    // Draw local player's circle
+    // Draw local player's circle (always visible but subtle)
     this.drawProximityCircle(ctx, px, py, pr, 'rgb(52,152,219)', true);
 
-    // Stage indicator: if on stage, show broadcast icon
+    // Stage indicator
     if (Board.isOnStage(Math.floor(px), Math.floor(py))) {
-      var stagePos = Board.iso(px, py);
+      var elev = Board.getElevationAt(Math.floor(px), Math.floor(py));
+      var stagePos = Board.iso(px, py, elev);
       ctx.font = 'bold 10px "Segoe UI", sans-serif';
       ctx.fillStyle = 'rgba(241,196,15,0.8)';
       ctx.textAlign = 'center';

@@ -11,6 +11,7 @@
   <div class="avatar-config-overlay" id="avatar-config">
     <div class="avatar-config-panel">
       <div class="avatar-preview-container">
+        <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" style="height:32px;margin-bottom:12px;opacity:0.7;">
         <h2>Votre avatar</h2>
         <canvas id="avatar-preview-canvas" width="180" height="240"></canvas>
       </div>
@@ -38,6 +39,9 @@
 
   <!-- HUD top-left -->
   <div class="hud" id="hud" style="display: none;">
+    <div class="hud-item hud-brand">
+      <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" style="height:20px;vertical-align:middle;margin-right:6px;opacity:0.8;">
+    </div>
     <div class="hud-item hud-room-name" id="hud-room-name"></div>
     <div class="hud-item hud-coords" id="hud-coords">Position: 0, 0</div>
     <div class="hud-item hud-participants" id="hud-participants">Participants: 1</div>
@@ -59,7 +63,7 @@
       <button class="toolbar-btn" id="btn-hand" title="Lever la main (H)">✋</button>
       <div class="toolbar-radius" title="Rayon d'interaction">
         <span style="font-size:11px;color:#888;">🔊</span>
-        <input type="range" id="radius-slider" min="3" max="10" value="6" step="1">
+        <input type="range" id="radius-slider" min="2" max="6" value="3" step="0.5">
       </div>
     </div>
     <div class="toolbar-center">
@@ -172,8 +176,9 @@
     <div class="admin-tab-content" id="tab-reglages" style="display: none;">
       <div class="form-group" style="margin-bottom: 12px;">
         <label>Taille de la grille</label>
-        <input type="number" id="admin-grid-size" min="20" max="100" value="20" class="admin-input">
-        <button class="btn btn-secondary btn-sm" style="margin-top:4px;" onclick="const s=parseInt(document.getElementById('admin-grid-size').value);Network.socket.emit('resize-grid',{size:s},()=>{});">Appliquer</button>
+        <input type="number" id="admin-grid-size" min="10" max="100" value="20" class="admin-input">
+        <button class="btn btn-secondary btn-sm" style="margin-top:4px;" id="btn-apply-grid">Appliquer</button>
+        <span id="grid-apply-status" style="font-size:0.75rem;color:#2ecc71;display:none;margin-left:8px;">✓ Appliqué</span>
       </div>
       <div class="form-group" style="margin-bottom: 12px;">
         <label>Environnement</label>
@@ -183,7 +188,7 @@
           <option value="salle-de-conference">Salle de Conférence</option>
           <option value="coworking">Espace Coworking</option>
         </select>
-        <button class="btn btn-secondary btn-sm" style="margin-top:4px;" onclick="if(confirm('Le mobilier actuel sera remplacé. Continuer ?')){Network.socket.emit('change-environment',{environment:document.getElementById('admin-environment').value},()=>{});}">Changer</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:4px;" id="btn-apply-env">Changer</button>
       </div>
       <div class="form-group" style="margin-bottom: 12px;" id="close-room-section">
         <button class="btn btn-sm" style="background:#e74c3c;color:#fff;margin-top:12px;" onclick="if(confirm('Fermer la room pour tous les participants ?')){Network.socket.emit('close-room',{},(r)=>{if(r.success)window.location.href='/client/index.html'});}">Fermer la room</button>
@@ -242,34 +247,152 @@
     </div>
   </div>
 
-  <!-- Post-it Board Pop-in (Dark Board) -->
-  <div class="whiteboard-overlay" id="postit-overlay" style="display: none;">
-    <div class="whiteboard-popup darkboard-popup">
-      <div class="whiteboard-header darkboard-header">
-        <h3>Dark Board — Post-it collaboratif</h3>
-        <div class="whiteboard-tools darkboard-tools">
-          <div class="wb-colors">
-            <button class="postit-color-btn active" data-color="#FFE066" style="background:#FFE066;" title="Jaune"></button>
-            <button class="postit-color-btn" data-color="#FF6B6B" style="background:#FF6B6B;" title="Rouge"></button>
-            <button class="postit-color-btn" data-color="#6BCB77" style="background:#6BCB77;" title="Vert"></button>
-            <button class="postit-color-btn" data-color="#4D96FF" style="background:#4D96FF;" title="Bleu"></button>
-            <button class="postit-color-btn" data-color="#FF78C4" style="background:#FF78C4;" title="Rose"></button>
-            <button class="postit-color-btn" data-color="#FFB347" style="background:#FFB347;" title="Orange"></button>
+  <!-- Dark Board — Professional Collaboration Board -->
+  <div class="darkboard-overlay" id="postit-overlay" style="display: none;">
+    <div class="darkboard-container">
+      <!-- Top Header Bar -->
+      <div class="darkboard-topbar" id="darkboard-topbar">
+        <div class="darkboard-topbar-left">
+          <h3 class="darkboard-title">Dark Board</h3>
+          <div class="darkboard-separator"></div>
+          <!-- Templates dropdown -->
+          <div class="darkboard-dropdown" id="darkboard-template-dropdown">
+            <button class="darkboard-topbar-btn" id="darkboard-template-btn" title="Templates">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+              <span>Templates</span>
+            </button>
+            <div class="darkboard-dropdown-menu" id="darkboard-template-menu" style="display:none;">
+              <button class="darkboard-dropdown-item" data-template="blank">Blank Board</button>
+              <button class="darkboard-dropdown-item" data-template="retro">Retrospective (+, -, Actions)</button>
+              <button class="darkboard-dropdown-item" data-template="swot">SWOT Analysis</button>
+              <button class="darkboard-dropdown-item" data-template="brainstorm">Brainstorming</button>
+            </div>
           </div>
-          <div class="darkboard-actions">
-            <button class="btn btn-primary btn-sm" id="postit-add">+ Post-it</button>
-            <button class="btn btn-secondary btn-sm darkboard-tool-btn" id="postit-circle-tool" title="Entourer un groupe">⭕ Entourer</button>
-            <button class="btn btn-secondary btn-sm darkboard-tool-btn" id="postit-vote-toggle" title="Mode dot voting">🗳️ Dot Voting</button>
+          <div class="darkboard-separator"></div>
+          <!-- Isoloir mode -->
+          <button class="darkboard-topbar-btn" id="darkboard-isoloir-btn" title="Brainstorm mode: hide others' post-its until reveal">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3C4.5 3 1.7 5.1 0.5 8c1.2 2.9 4 5 7.5 5s6.3-2.1 7.5-5c-1.2-2.9-4-5-7.5-5zm0 8.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7zm0-5.5a2 2 0 100 4 2 2 0 000-4z"/></svg>
+            <span>Isoloir</span>
+          </button>
+          <!-- Dot voting -->
+          <button class="darkboard-topbar-btn" id="darkboard-vote-btn" title="Dot voting mode (3 votes per person)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="2.5"/><circle cx="12" cy="8" r="2.5"/><circle cx="8" cy="3" r="2.5"/></svg>
+            <span>Dot Vote</span>
+          </button>
+        </div>
+        <div class="darkboard-topbar-center">
+          <!-- Timer widget -->
+          <div class="darkboard-timer" id="darkboard-timer">
+            <span class="darkboard-timer-display" id="darkboard-timer-display">00:00</span>
+            <button class="darkboard-timer-btn" id="darkboard-timer-start" title="Start/Pause timer">&#9654;</button>
+            <button class="darkboard-timer-btn" id="darkboard-timer-reset" title="Reset timer">&#8634;</button>
+            <select class="darkboard-timer-preset" id="darkboard-timer-preset">
+              <option value="0">Custom</option>
+              <option value="60">1 min</option>
+              <option value="120">2 min</option>
+              <option value="300" selected>5 min</option>
+              <option value="600">10 min</option>
+            </select>
           </div>
         </div>
-        <button class="whiteboard-close-btn" id="postit-close">✕</button>
+        <div class="darkboard-topbar-right">
+          <button class="darkboard-topbar-btn" id="darkboard-export-btn" title="Export board as PNG">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9M4.5 6.5L8 10l3.5-3.5M2 12v2h12v-2"/></svg>
+            <span>Export</span>
+          </button>
+          <span class="darkboard-zoom-label" id="darkboard-zoom-label">100%</span>
+          <button class="darkboard-close-btn" id="postit-close" title="Close board">&#10005;</button>
+        </div>
       </div>
-      <div class="postit-canvas darkboard-canvas" id="postit-canvas">
-        <canvas id="darkboard-circles-canvas"></canvas>
-        <div class="postit-board-bg" id="postit-board-bg"></div>
+
+      <div class="darkboard-body">
+        <!-- Left Toolbar -->
+        <div class="darkboard-toolbar" id="darkboard-toolbar">
+          <button class="darkboard-tool-icon active" data-tool="select" title="Select (V)">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M4 2l10 8-4 1 2 6-2.5 1-2-6-3.5 3z"/></svg>
+          </button>
+          <button class="darkboard-tool-icon" data-tool="postit" title="Post-it (N)">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><rect x="3" y="3" width="14" height="14" rx="1.5"/><path d="M6 8h8M6 11h5" stroke="#0f0f1e" stroke-width="1.5" fill="none"/></svg>
+          </button>
+          <button class="darkboard-tool-icon" data-tool="pen" title="Pen (P)">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M3 17l1.5-5L14 2.5 17.5 6 8 15.5z"/><path d="M3 17l1-1" stroke="currentColor" stroke-width="2"/></svg>
+          </button>
+          <button class="darkboard-tool-icon" data-tool="shape" title="Shapes (S)">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="14" height="14" rx="2"/></svg>
+          </button>
+          <button class="darkboard-tool-icon" data-tool="text" title="Text (T)">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><text x="5" y="16" font-size="16" font-weight="bold" font-family="serif">T</text></svg>
+          </button>
+          <button class="darkboard-tool-icon" data-tool="circle" title="Group circle (G)">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"><ellipse cx="10" cy="10" rx="8" ry="6"/></svg>
+          </button>
+          <button class="darkboard-tool-icon" data-tool="eraser" title="Eraser (E)">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M7 17h10M3.5 13.5l4-8 7 3.5-4 8z"/><path d="M7 17l-3.5-3.5 4-8" fill="none" stroke="currentColor" stroke-width="0.5"/></svg>
+          </button>
+          <div class="darkboard-tool-divider"></div>
+          <!-- Color picker for pen/shapes -->
+          <div class="darkboard-tool-colors" id="darkboard-tool-colors">
+            <button class="darkboard-color-dot active" data-color="#FFFFFF" style="background:#FFFFFF;" title="White"></button>
+            <button class="darkboard-color-dot" data-color="#4a9eff" style="background:#4a9eff;" title="Blue"></button>
+            <button class="darkboard-color-dot" data-color="#4ecdc4" style="background:#4ecdc4;" title="Teal"></button>
+            <button class="darkboard-color-dot" data-color="#FF6B6B" style="background:#FF6B6B;" title="Red"></button>
+            <button class="darkboard-color-dot" data-color="#FFE066" style="background:#FFE066;" title="Yellow"></button>
+            <button class="darkboard-color-dot" data-color="#6BCB77" style="background:#6BCB77;" title="Green"></button>
+          </div>
+          <div class="darkboard-tool-divider"></div>
+          <!-- Pen width -->
+          <div class="darkboard-pen-widths" id="darkboard-pen-widths">
+            <button class="darkboard-width-btn active" data-width="2" title="Thin"><span style="width:4px;height:4px;"></span></button>
+            <button class="darkboard-width-btn" data-width="4" title="Medium"><span style="width:7px;height:7px;"></span></button>
+            <button class="darkboard-width-btn" data-width="8" title="Thick"><span style="width:11px;height:11px;"></span></button>
+          </div>
+          <div class="darkboard-tool-divider"></div>
+          <!-- Shape sub-tools -->
+          <div class="darkboard-shape-types" id="darkboard-shape-types" style="display:none;">
+            <button class="darkboard-shape-btn active" data-shape="rect" title="Rectangle">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"/></svg>
+            </button>
+            <button class="darkboard-shape-btn" data-shape="ellipse" title="Ellipse">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="8" rx="6" ry="5"/></svg>
+            </button>
+            <button class="darkboard-shape-btn" data-shape="line" title="Line">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="14" x2="14" y2="2"/></svg>
+            </button>
+            <button class="darkboard-shape-btn" data-shape="arrow" title="Arrow">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="14" x2="14" y2="2"/><polyline points="8,2 14,2 14,8"/></svg>
+            </button>
+          </div>
+          <!-- Post-it color picker -->
+          <div class="darkboard-postit-colors" id="darkboard-postit-colors" style="display:none;">
+            <button class="darkboard-postit-color active" data-color="#FFE066" style="background:#FFE066;" title="Yellow"></button>
+            <button class="darkboard-postit-color" data-color="#FF6B6B" style="background:#FF6B6B;" title="Red"></button>
+            <button class="darkboard-postit-color" data-color="#6BCB77" style="background:#6BCB77;" title="Green"></button>
+            <button class="darkboard-postit-color" data-color="#4D96FF" style="background:#4D96FF;" title="Blue"></button>
+            <button class="darkboard-postit-color" data-color="#FF78C4" style="background:#FF78C4;" title="Pink"></button>
+            <button class="darkboard-postit-color" data-color="#FFB347" style="background:#FFB347;" title="Orange"></button>
+          </div>
+        </div>
+
+        <!-- Main Canvas Area -->
+        <div class="darkboard-viewport" id="darkboard-viewport">
+          <div class="darkboard-transform-wrapper" id="darkboard-transform-wrapper">
+            <canvas id="darkboard-canvas" width="4000" height="4000"></canvas>
+            <div class="darkboard-postit-layer" id="darkboard-postit-layer"></div>
+            <div class="darkboard-cursors-layer" id="darkboard-cursors-layer"></div>
+            <div class="darkboard-template-layer" id="darkboard-template-layer"></div>
+          </div>
+          <!-- Minimap -->
+          <div class="darkboard-minimap" id="darkboard-minimap">
+            <canvas id="darkboard-minimap-canvas" width="180" height="120"></canvas>
+            <div class="darkboard-minimap-viewport" id="darkboard-minimap-vp"></div>
+          </div>
+        </div>
       </div>
-      <div class="darkboard-footer" id="darkboard-footer" style="display:none;">
-        <span class="darkboard-votes-info" id="darkboard-votes-info">Mode Dot Voting actif — Cliquez sur un post-it pour voter (3 votes max)</span>
+
+      <!-- Footer / Status bar -->
+      <div class="darkboard-statusbar" id="darkboard-statusbar">
+        <span class="darkboard-status-text" id="darkboard-status-text">Ready</span>
+        <span class="darkboard-votes-info" id="darkboard-votes-info" style="display:none;">Dot Voting active — click a post-it to vote (3 votes max)</span>
       </div>
     </div>
   </div>

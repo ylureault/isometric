@@ -102,6 +102,22 @@ const Environments = {
       name: 'Lampadaire', width: 1, height: 1, solid: true,
       color: '#C0C0C0', topColor: '#D0D0D0', drawHeight: 28, isLamp: true,
     },
+    door: {
+      name: 'Porte / Portail', width: 1, height: 1, solid: false,
+      color: '#9B59B6', topColor: '#A66BBE', drawHeight: 30, isDoor: true,
+    },
+    conferencePhone: {
+      name: 'Téléphone conf.', width: 1, height: 1, solid: true,
+      color: '#2a2a2a', topColor: '#3a3a3a', drawHeight: 10, isConfPhone: true,
+    },
+    trashBin: {
+      name: 'Corbeille', width: 1, height: 1, solid: true,
+      color: '#606060', topColor: '#707070', drawHeight: 8,
+    },
+    clock: {
+      name: 'Horloge murale', width: 1, height: 1, solid: true,
+      color: '#f5f5f5', topColor: '#ffffff', drawHeight: 30, isClock: true,
+    },
   },
 
   presets: {

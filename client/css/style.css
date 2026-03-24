@@ -14,8 +14,14 @@ body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   height: 100vh; gap: 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
-.landing-container h1 { font-size: 2.5rem; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+.landing-container h1 { font-size: 2.5rem; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.2); margin-top: 0; }
 .landing-container p { color: rgba(255,255,255,0.8); font-size: 1.1rem; max-width: 500px; text-align: center; }
+.insuffle-branding { text-align: center; margin-bottom: 8px; }
+.insuffle-logo { height: 48px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.15)); transition: transform 0.3s; }
+.insuffle-logo:hover { transform: scale(1.05); }
+.powered-by { color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-top: -12px; }
+.powered-by strong { color: rgba(255,255,255,0.75); }
+.hud-brand { padding: 2px 0; display: flex; align-items: center; }
 
 .form-group { display: flex; flex-direction: column; gap: 8px; width: 320px; }
 .form-group label { font-size: 0.9rem; color: #666; }
@@ -399,83 +405,352 @@ body {
   background: #fff; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
 }
 
-/* ===== Post-it Board ===== */
-.postit-canvas {
-  flex: 1; position: relative; overflow: hidden;
-  background: #c4a06a; /* cork background */
-  background-image: repeating-linear-gradient(0deg, transparent, transparent 20px, rgba(0,0,0,0.03) 20px, rgba(0,0,0,0.03) 21px),
-                    repeating-linear-gradient(90deg, transparent, transparent 20px, rgba(0,0,0,0.03) 20px, rgba(0,0,0,0.03) 21px);
-}
-.postit-board-bg { width: 100%; height: 100%; position: relative; }
-.postit-note {
-  position: absolute; width: 140px; min-height: 100px; padding: 10px;
-  border-radius: 2px; cursor: grab; user-select: none;
-  font-size: 0.85rem; line-height: 1.3; color: #333;
-  box-shadow: 2px 3px 8px rgba(0,0,0,0.15);
-  transform: rotate(-1deg);
-  display: flex; flex-direction: column;
-}
-.postit-note:nth-child(even) { transform: rotate(1deg); }
-.postit-note:nth-child(3n) { transform: rotate(-2deg); }
-.postit-note:active { cursor: grabbing; z-index: 10; box-shadow: 4px 6px 16px rgba(0,0,0,0.25); }
-.postit-note textarea {
-  flex: 1; border: none; background: transparent; color: #333;
-  font-size: 0.85rem; line-height: 1.3; resize: none; outline: none;
+/* ===== Dark Board — Professional Collaboration Board ===== */
+
+/* Overlay fullscreen */
+.darkboard-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 9999; display: flex; align-items: stretch; justify-content: stretch;
+  background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
   font-family: 'Segoe UI', sans-serif;
 }
-.postit-note .postit-delete {
-  position: absolute; top: 2px; right: 4px;
-  background: none; border: none; color: rgba(0,0,0,0.3); cursor: pointer;
-  font-size: 14px; line-height: 1;
+.darkboard-container {
+  flex: 1; display: flex; flex-direction: column;
+  background: #0f0f1e; overflow: hidden;
 }
-.postit-note .postit-delete:hover { color: #e74c3c; }
-.postit-note .postit-author {
-  font-size: 0.65rem; color: rgba(0,0,0,0.4); margin-top: 4px; text-align: right;
-}
-.postit-color-btn {
-  width: 24px; height: 24px; border-radius: 4px; border: 2px solid transparent;
-  cursor: pointer; transition: transform 0.15s;
-}
-.postit-color-btn:hover { transform: scale(1.15); }
-.postit-color-btn.active { border-color: #333; }
 
-/* Dark Board enhancements */
-.darkboard-popup { background: #1a1a2e; }
-.darkboard-header { background: #16213e; }
-.darkboard-header h3 { color: #e0e0e0; }
-.darkboard-canvas {
-  background: #1a1a2e !important;
-  background-image: repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(255,255,255,0.03) 30px, rgba(255,255,255,0.03) 31px),
-                    repeating-linear-gradient(90deg, transparent, transparent 30px, rgba(255,255,255,0.03) 30px, rgba(255,255,255,0.03) 31px) !important;
+/* ---- Top Bar ---- */
+.darkboard-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 48px; min-height: 48px; padding: 0 12px;
+  background: #161628; border-bottom: 1px solid rgba(74,158,255,0.15);
+  z-index: 10;
 }
-.darkboard-canvas #darkboard-circles-canvas {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  z-index: 1; pointer-events: none;
+.darkboard-topbar-left, .darkboard-topbar-center, .darkboard-topbar-right {
+  display: flex; align-items: center; gap: 8px;
 }
-.darkboard-canvas .postit-board-bg { z-index: 2; position: relative; }
-.darkboard-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.darkboard-actions { display: flex; gap: 4px; }
-.darkboard-tool-btn.active { background: #4D96FF !important; color: #fff !important; }
-.darkboard-footer {
-  padding: 8px 16px; background: rgba(77,150,255,0.1);
-  color: #4D96FF; font-size: 0.8rem; text-align: center;
+.darkboard-title {
+  color: #e0e6f0; font-size: 15px; font-weight: 700; margin: 0;
+  letter-spacing: 0.5px; white-space: nowrap;
 }
-.postit-vote-badge {
-  position: absolute; top: -8px; left: -8px;
-  width: 24px; height: 24px; border-radius: 50%;
-  background: #e74c3c; color: #fff; font-size: 11px; font-weight: bold;
+.darkboard-separator {
+  width: 1px; height: 24px; background: rgba(255,255,255,0.1); margin: 0 4px;
+}
+.darkboard-topbar-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+  color: #b0b8c8; padding: 5px 10px; border-radius: 6px; cursor: pointer;
+  font-size: 12px; transition: all 0.2s; white-space: nowrap;
+  font-family: 'Segoe UI', sans-serif;
+}
+.darkboard-topbar-btn:hover { background: rgba(74,158,255,0.15); color: #e0e6f0; border-color: rgba(74,158,255,0.3); }
+.darkboard-topbar-btn.active { background: #4a9eff; color: #fff; border-color: #4a9eff; }
+.darkboard-topbar-btn svg { flex-shrink: 0; }
+
+/* Dropdown */
+.darkboard-dropdown { position: relative; }
+.darkboard-dropdown-menu {
+  position: absolute; top: 100%; left: 0; margin-top: 4px;
+  background: #1c1c34; border: 1px solid rgba(74,158,255,0.2);
+  border-radius: 8px; padding: 4px 0; min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 100;
+}
+.darkboard-dropdown-item {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; color: #b0b8c8; padding: 8px 14px;
+  font-size: 12.5px; cursor: pointer; transition: background 0.15s;
+  font-family: 'Segoe UI', sans-serif;
+}
+.darkboard-dropdown-item:hover { background: rgba(74,158,255,0.12); color: #e0e6f0; }
+
+/* Close button */
+.darkboard-close-btn {
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+  color: #b0b8c8; border-radius: 6px; cursor: pointer; font-size: 16px;
+  transition: all 0.2s;
+}
+.darkboard-close-btn:hover { background: #e74c3c; color: #fff; border-color: #e74c3c; }
+
+/* Zoom label */
+.darkboard-zoom-label {
+  color: #b0b8c8; font-size: 11px; background: rgba(255,255,255,0.06);
+  padding: 3px 8px; border-radius: 4px; min-width: 40px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Timer widget ---- */
+.darkboard-timer {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 3px 10px;
+}
+.darkboard-timer-display {
+  color: #4ecdc4; font-size: 18px; font-weight: 700;
+  font-variant-numeric: tabular-nums; min-width: 52px; text-align: center;
+  letter-spacing: 1px;
+}
+.darkboard-timer-display.timer-warning { color: #FFE066; }
+.darkboard-timer-display.timer-danger { color: #FF6B6B; animation: timer-blink 0.5s ease infinite alternate; }
+@keyframes timer-blink { from { opacity: 1; } to { opacity: 0.4; } }
+.darkboard-timer-btn {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.08); border: none; color: #b0b8c8;
+  border-radius: 4px; cursor: pointer; font-size: 13px; transition: all 0.15s;
+}
+.darkboard-timer-btn:hover { background: rgba(74,158,255,0.2); color: #fff; }
+.darkboard-timer-btn.active { background: #4a9eff; color: #fff; }
+.darkboard-timer-preset {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+  color: #b0b8c8; border-radius: 4px; padding: 2px 4px; font-size: 11px;
+  cursor: pointer; font-family: 'Segoe UI', sans-serif;
+}
+.darkboard-timer-preset option { background: #1c1c34; color: #b0b8c8; }
+
+/* ---- Body: toolbar + viewport ---- */
+.darkboard-body {
+  flex: 1; display: flex; overflow: hidden; position: relative;
+}
+
+/* ---- Left Toolbar ---- */
+.darkboard-toolbar {
+  width: 52px; min-width: 52px; background: #161628;
+  border-right: 1px solid rgba(74,158,255,0.1);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 0; gap: 2px; z-index: 10; overflow-y: auto;
+}
+.darkboard-tool-icon {
+  width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none; color: #6b7280; border-radius: 8px;
+  cursor: pointer; transition: all 0.2s; position: relative;
+}
+.darkboard-tool-icon:hover { background: rgba(74,158,255,0.1); color: #b0b8c8; }
+.darkboard-tool-icon.active {
+  background: rgba(74,158,255,0.2); color: #4a9eff;
+  box-shadow: inset 0 0 0 1.5px rgba(74,158,255,0.4);
+}
+.darkboard-tool-divider {
+  width: 28px; height: 1px; background: rgba(255,255,255,0.08); margin: 4px 0;
+}
+
+/* Tool colors */
+.darkboard-tool-colors, .darkboard-pen-widths, .darkboard-shape-types, .darkboard-postit-colors {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 2px 0;
+}
+.darkboard-color-dot {
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; transition: all 0.15s;
+}
+.darkboard-color-dot:hover { transform: scale(1.2); }
+.darkboard-color-dot.active { border-color: #4a9eff; box-shadow: 0 0 6px rgba(74,158,255,0.5); }
+
+.darkboard-width-btn {
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none; cursor: pointer; border-radius: 6px;
+  transition: background 0.15s;
+}
+.darkboard-width-btn:hover { background: rgba(255,255,255,0.08); }
+.darkboard-width-btn.active { background: rgba(74,158,255,0.2); }
+.darkboard-width-btn span {
+  display: block; border-radius: 50%; background: #b0b8c8;
+}
+
+.darkboard-shape-btn {
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none; color: #6b7280; border-radius: 6px;
+  cursor: pointer; transition: all 0.15s;
+}
+.darkboard-shape-btn:hover { background: rgba(255,255,255,0.08); color: #b0b8c8; }
+.darkboard-shape-btn.active { background: rgba(74,158,255,0.2); color: #4a9eff; }
+
+.darkboard-postit-color {
+  width: 22px; height: 22px; border-radius: 4px; border: 2px solid transparent;
+  cursor: pointer; transition: all 0.15s;
+}
+.darkboard-postit-color:hover { transform: scale(1.15); }
+.darkboard-postit-color.active { border-color: #fff; box-shadow: 0 0 6px rgba(255,255,255,0.3); }
+
+/* ---- Viewport (infinite canvas area) ---- */
+.darkboard-viewport {
+  flex: 1; position: relative; overflow: hidden;
+  background: #0f0f1e;
+  cursor: default;
+}
+.darkboard-transform-wrapper {
+  position: absolute; top: 0; left: 0;
+  width: 4000px; height: 4000px;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+#darkboard-canvas {
+  position: absolute; top: 0; left: 0;
+  width: 4000px; height: 4000px;
+  z-index: 1;
+}
+.darkboard-postit-layer {
+  position: absolute; top: 0; left: 0;
+  width: 4000px; height: 4000px;
+  z-index: 2; pointer-events: none;
+}
+.darkboard-postit-layer .db-postit { pointer-events: auto; }
+.darkboard-cursors-layer {
+  position: absolute; top: 0; left: 0;
+  width: 4000px; height: 4000px;
+  z-index: 5; pointer-events: none;
+}
+.darkboard-template-layer {
+  position: absolute; top: 0; left: 0;
+  width: 4000px; height: 4000px;
+  z-index: 0; pointer-events: none;
+}
+
+/* ---- Post-it notes (DOM elements) ---- */
+.db-postit {
+  position: absolute; width: 160px; min-height: 120px; padding: 12px;
+  border-radius: 4px; cursor: grab; user-select: none;
+  font-size: 0.85rem; line-height: 1.35; color: #333;
+  box-shadow: 2px 4px 12px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.2);
+  display: flex; flex-direction: column;
+  transition: box-shadow 0.2s;
+  font-family: 'Segoe UI', sans-serif;
+}
+.db-postit:hover { box-shadow: 2px 4px 16px rgba(0,0,0,0.45), 0 0 12px rgba(74,158,255,0.15); }
+.db-postit:active { cursor: grabbing; z-index: 20; box-shadow: 4px 8px 24px rgba(0,0,0,0.5); }
+.db-postit.db-postit-selected {
+  box-shadow: 0 0 0 2px #4a9eff, 2px 4px 16px rgba(0,0,0,0.45);
+}
+.db-postit textarea {
+  flex: 1; border: none; background: transparent; color: #333;
+  font-size: 0.85rem; line-height: 1.35; resize: none; outline: none;
+  font-family: 'Segoe UI', sans-serif; min-height: 60px;
+}
+.db-postit .db-postit-delete {
+  position: absolute; top: 3px; right: 5px;
+  background: none; border: none; color: rgba(0,0,0,0.25); cursor: pointer;
+  font-size: 14px; line-height: 1; transition: color 0.15s; opacity: 0;
+}
+.db-postit:hover .db-postit-delete { opacity: 1; }
+.db-postit .db-postit-delete:hover { color: #e74c3c; }
+.db-postit .db-postit-author {
+  font-size: 0.6rem; color: rgba(0,0,0,0.35); margin-top: 4px; text-align: right;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.db-postit .db-postit-resize {
+  position: absolute; bottom: 0; right: 0; width: 14px; height: 14px;
+  cursor: nwse-resize; opacity: 0; transition: opacity 0.15s;
+}
+.db-postit:hover .db-postit-resize { opacity: 0.5; }
+.db-postit .db-postit-resize::after {
+  content: ''; position: absolute; bottom: 3px; right: 3px;
+  width: 8px; height: 8px; border-right: 2px solid rgba(0,0,0,0.25);
+  border-bottom: 2px solid rgba(0,0,0,0.25);
+}
+
+/* Vote badge */
+.db-vote-badge {
+  position: absolute; top: -10px; left: -10px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff;
+  font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 8px rgba(231,76,60,0.5);
+  z-index: 3;
 }
-.postit-voted { animation: postit-vote-pulse 0.3s ease; }
-@keyframes postit-vote-pulse {
+.db-postit-voted { animation: db-vote-pulse 0.35s ease; }
+@keyframes db-vote-pulse {
   0% { transform: scale(1); }
-  50% { transform: scale(1.15); }
+  50% { transform: scale(1.12); }
   100% { transform: scale(1); }
 }
-.vote-mode .postit-note { cursor: pointer !important; }
-.vote-mode .postit-note:hover { box-shadow: 0 0 12px rgba(77,150,255,0.5); }
-.vote-mode .postit-note textarea { pointer-events: none; }
+.darkboard-vote-mode .db-postit { cursor: pointer !important; }
+.darkboard-vote-mode .db-postit:hover {
+  box-shadow: 0 0 16px rgba(74,158,255,0.6), 2px 4px 12px rgba(0,0,0,0.35);
+}
+.darkboard-vote-mode .db-postit textarea { pointer-events: none; }
+
+/* Isoloir mode - hide other people's post-its */
+.darkboard-isoloir .db-postit.db-postit-other {
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.darkboard-isoloir .db-postit.db-postit-own { opacity: 1; }
+
+/* ---- Remote cursors ---- */
+.db-remote-cursor {
+  position: absolute; pointer-events: none; z-index: 10;
+  transition: left 0.1s linear, top 0.1s linear;
+}
+.db-remote-cursor svg { filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.db-remote-cursor-label {
+  position: absolute; top: 18px; left: 12px;
+  background: var(--cursor-color, #4a9eff); color: #fff;
+  font-size: 10px; padding: 1px 6px; border-radius: 3px;
+  white-space: nowrap; font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* ---- Minimap ---- */
+.darkboard-minimap {
+  position: absolute; bottom: 12px; right: 12px;
+  width: 180px; height: 120px;
+  background: rgba(15,15,30,0.9); border: 1px solid rgba(74,158,255,0.2);
+  border-radius: 8px; overflow: hidden; z-index: 15;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+#darkboard-minimap-canvas {
+  width: 100%; height: 100%; display: block;
+}
+.darkboard-minimap-viewport {
+  position: absolute; border: 1.5px solid #4a9eff;
+  background: rgba(74,158,255,0.08); border-radius: 2px;
+  pointer-events: none;
+}
+
+/* ---- Status bar ---- */
+.darkboard-statusbar {
+  height: 28px; min-height: 28px; display: flex; align-items: center;
+  padding: 0 12px; gap: 16px;
+  background: #161628; border-top: 1px solid rgba(74,158,255,0.1);
+  z-index: 10;
+}
+.darkboard-status-text {
+  color: #6b7280; font-size: 11px;
+}
+.darkboard-votes-info {
+  color: #4a9eff; font-size: 11px; font-weight: 600;
+}
+
+/* ---- Text labels on canvas ---- */
+.db-text-label {
+  position: absolute; pointer-events: auto;
+  color: #e0e6f0; font-size: 14px; font-family: 'Segoe UI', sans-serif;
+  cursor: move; padding: 4px 8px; border-radius: 4px;
+  background: transparent; outline: none; border: none;
+  min-width: 40px; min-height: 20px;
+}
+.db-text-label:focus {
+  background: rgba(74,158,255,0.1); box-shadow: 0 0 0 1px rgba(74,158,255,0.3);
+}
+
+/* ---- Template columns/quadrants ---- */
+.db-template-col {
+  position: absolute; border-right: 1px dashed rgba(255,255,255,0.08);
+  display: flex; flex-direction: column; align-items: center; padding-top: 20px;
+}
+.db-template-col-label {
+  color: rgba(255,255,255,0.25); font-size: 18px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 2px;
+  pointer-events: none; user-select: none;
+}
+.db-template-quadrant {
+  position: absolute;
+  border: 1px dashed rgba(255,255,255,0.06);
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 24px;
+}
+.db-template-quadrant-label {
+  color: rgba(255,255,255,0.2); font-size: 20px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 2px;
+  pointer-events: none; user-select: none;
+}
 
 /* ===== Timer on-screen ===== */
 .timer-display-global {
