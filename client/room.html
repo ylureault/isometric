@@ -64,10 +64,10 @@
   </div>
 
   <!-- Toolbar bottom -->
-  <div class="toolbar" id="toolbar" style="display: none;">
+  <div class="toolbar" id="toolbar" role="toolbar" aria-label="Barre d'outils" style="display: none;">
     <div class="toolbar-left">
-      <button class="toolbar-btn" id="btn-mute" title="Activer / Couper le micro (M)">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 1c1.9 0 3.5 1.6 3.5 3.5v7c0 1.9-1.6 3.5-3.5 3.5s-3.5-1.6-3.5-3.5v-7C8.5 2.6 10.1 1 12 1zm5.5 10.5c0 3-2.5 5.5-5.5 5.5s-5.5-2.5-5.5-5.5H5c0 3.5 2.7 6.2 6.2 6.7V22h1.5v-3.8c3.5-.5 6.2-3.2 6.2-6.7h-1.5z"/></svg>
+      <button class="toolbar-btn" id="btn-mute" title="Activer / Couper le micro (M)" aria-label="Basculer le microphone">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 1c1.9 0 3.5 1.6 3.5 3.5v7c0 1.9-1.6 3.5-3.5 3.5s-3.5-1.6-3.5-3.5v-7C8.5 2.6 10.1 1 12 1zm5.5 10.5c0 3-2.5 5.5-5.5 5.5s-5.5-2.5-5.5-5.5H5c0 3.5 2.7 6.2 6.2 6.7V22h1.5v-3.8c3.5-.5 6.2-3.2 6.2-6.7h-1.5z"/></svg>
       </button>
       <div class="toolbar-volume" title="Volume des voix">
         <span style="font-size:11px;color:#888;">🎙</span>
@@ -77,7 +77,7 @@
         <span style="font-size:11px;color:#888;">🔔</span>
         <input type="range" id="sfx-volume-slider" min="0" max="100" value="70" title="Volume des effets sonores">
       </div>
-      <button class="toolbar-btn" id="btn-hand" title="Lever la main (H)">✋</button>
+      <button class="toolbar-btn" id="btn-hand" title="Lever la main (H)" aria-label="Lever ou baisser la main">✋</button>
       <div class="toolbar-radius" title="Rayon d'interaction">
         <span style="font-size:11px;color:#888;">🔊</span>
         <input type="range" id="radius-slider" min="2" max="6" value="3" step="0.5">
@@ -249,7 +249,7 @@
   <div class="timer-display" id="timer-display" style="display: none;"></div>
   <!-- Timer display (global overlay - visible to all) -->
   <div class="timer-display-global" id="timer-display-global" style="display: none;">
-    <div class="timer-label" id="timer-global-label">Timer</div>
+    <div class="timer-label" id="timer-global-label">Minuteur</div>
     <span id="timer-global-time">00:00</span>
   </div>
 
@@ -480,20 +480,20 @@
         <tr><td><kbd>H</kbd></td><td>Lever / Baisser la main</td></tr>
         <tr><td><kbd>1</kbd>-<kbd>6</kbd></td><td>Réactions rapides</td></tr>
         <tr><td><kbd>Tab</kbd></td><td>Afficher / Masquer la minicarte</td></tr>
-        <tr><td><kbd>V</kbd></td><td>Basculer vue iso / dessus</td></tr>
-        <tr><td><kbd>E</kbd> (admin)</td><td>Mode édition mobilier</td></tr>
+        <tr><td><kbd>V</kbd></td><td>Basculer vue isométrique / vue de dessus</td></tr>
+        <tr><td><kbd>E</kbd> (admin)</td><td>Mode édition du mobilier</td></tr>
         <tr><td>Molette</td><td>Zoom avant / arrière</td></tr>
-        <tr><td><kbd>Espace</kbd> (admin)</td><td>Parler à tout le monde</td></tr>
-        <tr><td><kbd>Echap</kbd></td><td>Fermer la pop-in active</td></tr>
+        <tr><td><kbd>Espace</kbd> (admin)</td><td>Parler à tous les participants</td></tr>
+        <tr><td><kbd>Échap</kbd></td><td>Fermer la fenêtre active</td></tr>
         <tr><td><kbd>?</kbd></td><td>Afficher cette aide</td></tr>
       </table>
       <h4 style="margin-top:12px;font-size:0.85rem;">Interactions</h4>
       <table class="shortcuts-table">
-        <tr><td>Clic sur tableau blanc</td><td>Ouvrir le whiteboard</td></tr>
-        <tr><td>Clic sur tableau post-it</td><td>Ouvrir le Dark Board</td></tr>
-        <tr><td>Clic sur espace collab</td><td>Partage d'écran multi</td></tr>
-        <tr><td>Clic sur portail (violet)</td><td>Ouvrir une sous-salle</td></tr>
-        <tr><td>Clic droit sur mobilier</td><td>Options (admin)</td></tr>
+        <tr><td>Clic sur tableau blanc</td><td>Ouvrir le tableau blanc collaboratif</td></tr>
+        <tr><td>Clic sur tableau post-it</td><td>Ouvrir le tableau collaboratif</td></tr>
+        <tr><td>Clic sur espace collaboratif</td><td>Partage d'écran multi-participants</td></tr>
+        <tr><td>Clic sur portail (violet)</td><td>Accéder à une sous-salle</td></tr>
+        <tr><td>Clic droit sur mobilier</td><td>Options du mobilier (admin)</td></tr>
       </table>
       <button class="btn btn-secondary btn-sm" onclick="UI.toggleShortcutsModal();">Fermer</button>
     </div>

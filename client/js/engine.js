@@ -73,7 +73,7 @@ var Engine = {
 
     Network.onParticipantJoined = function(d) {
       self.initSfx(); self.playSfx('join');
-      UI.showNotification(d.pseudo + ' a rejoint');
+      UI.showNotification(d.pseudo + ' a rejoint la salle');
       // Send screen share stream to late joiners
       if (ScreenShare.isSharing && ScreenShare.localStream) {
         ScreenShare.sendStreamToPeer(d.socketId);
@@ -81,7 +81,7 @@ var Engine = {
     };
     Network.onParticipantLeft = function(d) {
       self.initSfx(); self.playSfx('leave');
-      UI.showNotification(d.pseudo + ' a quitté');
+      UI.showNotification(d.pseudo + ' a quitté la salle');
       // Clean up screen share connections for the leaving participant
       ScreenShare.removeShare(d.socketId);
       var outConn = ScreenShare.outgoingPeers.get(d.socketId);
@@ -89,7 +89,7 @@ var Engine = {
     };
     Network.onParticipantDisconnected = function(d) {
       self.initSfx(); self.playSfx('leave');
-      UI.showNotification(d.pseudo + ' déconnecté');
+      UI.showNotification(d.pseudo + ' s\'est déconnecté(e)');
     };
     Network.onReconnecting = function() { UI.showReconnecting(true); };
     Network.onReconnected = function() {
@@ -110,7 +110,7 @@ var Engine = {
           }, function(resp) {
             if (resp && !resp.error) {
               self.initSfx(); self.playSfx('join');
-              UI.showNotification('Reconnecté !');
+              UI.showNotification('Vous êtes de retour !');
             } else if (++attempts < maxRetries) {
               setTimeout(tryRejoin, 2000 * attempts);
             } else {
