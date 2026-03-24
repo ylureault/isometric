@@ -458,6 +458,16 @@ const Board = {
     this.drawIsoLine(ctx, [x,y+d,bz], [x,y+d,bz+bh], '#8a6a4a', 1.5);
     this.drawIsoLine(ctx, [x,y+d,bz+bh], [x,y,bz+bh], '#8a6a4a', 1.5);
     this.drawIsoLine(ctx, [x,y,bz+bh], [x,y,bz], '#8a6a4a', 1.5);
+
+    // Label above post-it board
+    var labelPos = this.iso(x, y + d / 2, bz + bh + 3);
+    ctx.font = 'bold 9px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(230,126,34,0.85)';
+    ctx.textAlign = 'center';
+    ctx.fillText('📌 Mur collaboratif', labelPos.x, labelPos.y - 2);
+    ctx.font = '7px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(230,126,34,0.55)';
+    ctx.fillText('Cliquez pour ouvrir', labelPos.x, labelPos.y + 8);
   },
 
   drawStage(ctx, item, def) {
@@ -590,6 +600,16 @@ const Board = {
 
     // Marker tray
     this.drawIsoBox(ctx, bx+0.2, by-0.08, bz-0.5, bw-0.4, 0.1, 0.5, '#e0e0e0', '#ccc', '#d5d5d5', null);
+
+    // Label above whiteboard
+    var labelPos = this.iso(bx + bw / 2, by, bz + 20);
+    ctx.font = 'bold 9px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(52,152,219,0.85)';
+    ctx.textAlign = 'center';
+    ctx.fillText('📋 Tableau collaboratif', labelPos.x, labelPos.y - 2);
+    ctx.font = '7px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(52,152,219,0.55)';
+    ctx.fillText('Cliquez pour ouvrir', labelPos.x, labelPos.y + 8);
   },
 
   drawZoneOverlay(ctx, item, def) {
@@ -882,12 +902,20 @@ const Board = {
     this.drawIsoLine(ctx, [item.x, item.y+h, 0.3], [item.x, item.y, 0.3], 'rgba(46,204,113,0.3)', 1.5);
     // Label
     var lp = this.iso(item.x + w/2, item.y + h/2, 1);
+    // Background pill for label
+    ctx.fillStyle = 'rgba(46,204,113,0.15)';
+    var pillW = 80, pillH = 26;
+    ctx.beginPath();
+    ctx.roundRect(lp.x - pillW/2, lp.y - 14, pillW, pillH, 6);
+    ctx.fill();
+
     ctx.font = 'bold 10px "Segoe UI", sans-serif';
-    ctx.fillStyle = 'rgba(46,204,113,0.6)';
+    ctx.fillStyle = 'rgba(46,204,113,0.85)';
     ctx.textAlign = 'center';
-    ctx.fillText('Espace Collaboratif', lp.x, lp.y - 4);
-    ctx.font = '8px "Segoe UI", sans-serif';
-    ctx.fillText('Cliquer pour rejoindre', lp.x, lp.y + 8);
+    ctx.fillText('🤝 Espace collaboratif', lp.x, lp.y - 2);
+    ctx.font = '7px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(46,204,113,0.55)';
+    ctx.fillText('Cliquez pour partager', lp.x, lp.y + 8);
   },
 
   // ===== UTILITIES =====

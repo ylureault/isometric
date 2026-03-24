@@ -183,6 +183,7 @@ var Engine = {
     UI.initAvatarConfig(function(config) {
       self.player.pseudo = config.pseudo;
       self.player.colors = config.colors;
+      self.player.accessory = config.accessory || 'none';
       Audio.requestMicrophone().then(function(mic) {
         self.player.isMuted = !mic;
         UI.updateMuteButton(self.player.isMuted);
@@ -466,7 +467,10 @@ var Engine = {
 
     function sendMessage() {
       if (!input || !input.value.trim()) return;
-      Network.socket.emit('chat-message', { text: input.value.trim() });
+      var text = input.value.trim();
+      Network.socket.emit('chat-message', { text: text });
+      // Show bubble above own character
+      self.player.chatBubble = { text: text, time: Date.now() };
       input.value = '';
     }
 
@@ -485,6 +489,12 @@ var Engine = {
       div.innerHTML = '<span class="chat-msg-author">' + (msg.pseudo || 'Anonyme') + ':</span> ' + self.escapeHtml(msg.text);
       messages.appendChild(div);
       messages.scrollTop = messages.scrollHeight;
+
+      // Show chat bubble above the sender's character
+      if (msg.socketId && msg.socketId !== Network.mySocketId) {
+        var rp = Network.remotePlayers.get(msg.socketId);
+        if (rp) rp.chatBubble = { text: msg.text, time: Date.now() };
+      }
 
       // Badge if collapsed
       if (container && container.classList.contains('chat-collapsed')) {
@@ -732,6 +742,10 @@ var Engine = {
         this.drawTable(ctx, e.t);
       } else if (e.type === 'me') {
         var onS = Board.isOnStage(Math.floor(this.player.x), Math.floor(this.player.y));
+        // Expire old chat bubbles (5 seconds)
+        var myChatBubble = this.player.chatBubble;
+        if (myChatBubble && Date.now() - myChatBubble.time > 5000) { myChatBubble = null; this.player.chatBubble = null; }
+
         Character.draw(ctx, this.player.x, this.player.y, 0, 0, {
           colors: this.player.colors, direction: this.player.direction,
           walkPhase: this.player.walkPhase, isWalking: this.player.isWalking,
@@ -739,9 +753,14 @@ var Engine = {
           isMuted: this.player.isMuted, handRaised: this.player.handRaised,
           isBroadcasting: this.player.isBroadcasting,
           isSpeaking: Audio.isSpeaking(),
+          accessory: this.player.accessory || 'none',
+          chatBubble: myChatBubble,
         });
       } else if (e.type === 'r') {
         var p = e.p;
+        // Expire old chat bubbles
+        if (p.chatBubble && Date.now() - p.chatBubble.time > 5000) p.chatBubble = null;
+
         ctx.save();
         ctx.globalAlpha = p.opacity;
         if (self.spotlight && self.spotlight !== e.sid) ctx.globalAlpha *= 0.4;
@@ -752,6 +771,8 @@ var Engine = {
           isAdmin: p.isAdmin, disconnected: p.disconnected, isMuted: p.isMuted,
           handRaised: p.handRaised, isBroadcasting: p.isBroadcasting,
           isSpeaking: p.isSpeaking,
+          accessory: p.accessory || 'none',
+          chatBubble: p.chatBubble,
         });
         ctx.restore();
       }

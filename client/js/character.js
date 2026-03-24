@@ -8,6 +8,8 @@ const Character = {
       walkPhase = 0,
       isWalking = false,
       pseudo = '',
+      accessory = 'none',
+      chatBubble = null,
       isAdmin = false,
       isMuted = false,
       handRaised = false,
@@ -62,6 +64,16 @@ const Character = {
     // Admin crown
     if (isAdmin) {
       this.drawCrown(ctx, sx, baseY - 44 * S, S);
+    }
+
+    // Accessory on head
+    if (accessory && accessory !== 'none') {
+      this.drawAccessory(ctx, sx, baseY, S, accessory);
+    }
+
+    // Chat bubble (message above head)
+    if (chatBubble) {
+      this.drawChatBubble(ctx, sx, baseY, S, chatBubble);
     }
 
     // Muted icon
@@ -329,6 +341,173 @@ const Character = {
     ctx.strokeStyle = '#d4a00a';
     ctx.lineWidth = 0.5;
     ctx.stroke();
+  },
+
+  drawAccessory: function(ctx, sx, baseY, S, accessory) {
+    var hx = sx;
+    var hy = baseY - 46 * S;
+
+    if (accessory === 'tophat') {
+      // Top hat
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.ellipse(hx, hy + 2 * S, 9 * S, 3 * S, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(hx - 5 * S, hy - 10 * S, 10 * S, 12 * S);
+      ctx.beginPath();
+      ctx.ellipse(hx, hy - 10 * S, 5 * S, 2 * S, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Band
+      ctx.fillStyle = '#c0392b';
+      ctx.fillRect(hx - 5 * S, hy - 2 * S, 10 * S, 2 * S);
+    } else if (accessory === 'cap') {
+      // Baseball cap
+      ctx.fillStyle = '#2980b9';
+      ctx.beginPath();
+      ctx.ellipse(hx, hy + 2 * S, 9 * S, 4 * S, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      // Visor
+      ctx.beginPath();
+      ctx.ellipse(hx + 4 * S, hy + 3 * S, 7 * S, 2.5 * S, 0.2, -0.3, Math.PI * 0.6);
+      ctx.fillStyle = '#1a6596';
+      ctx.fill();
+    } else if (accessory === 'beanie') {
+      // Beanie
+      ctx.fillStyle = '#e74c3c';
+      ctx.beginPath();
+      ctx.ellipse(hx, hy - 1 * S, 8 * S, 6 * S, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      // Fold
+      ctx.fillStyle = '#c0392b';
+      ctx.fillRect(hx - 8 * S, hy - 1 * S, 16 * S, 3 * S);
+      // Pompom
+      ctx.beginPath();
+      ctx.arc(hx, hy - 7 * S, 2.5 * S, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+    } else if (accessory === 'glasses') {
+      // Glasses
+      var ey = baseY - 35 * S;
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1 * S;
+      ctx.beginPath();
+      ctx.arc(hx - 4 * S, ey, 3.5 * S, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(hx + 4 * S, ey, 3.5 * S, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(hx - 0.5 * S, ey);
+      ctx.lineTo(hx + 0.5 * S, ey);
+      ctx.stroke();
+      // Lens shine
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath();
+      ctx.arc(hx - 5 * S, ey - 1 * S, 1.5 * S, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (accessory === 'headphones') {
+      // Headphones
+      var ey2 = baseY - 36 * S;
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2 * S;
+      ctx.beginPath();
+      ctx.arc(hx, ey2 - 6 * S, 9 * S, Math.PI * 0.85, Math.PI * 0.15, true);
+      ctx.stroke();
+      // Ear cups
+      ctx.fillStyle = '#444';
+      ctx.beginPath();
+      ctx.ellipse(hx - 9 * S, ey2, 3 * S, 4 * S, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(hx + 9 * S, ey2, 3 * S, 4 * S, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Cushion
+      ctx.fillStyle = '#666';
+      ctx.beginPath();
+      ctx.ellipse(hx - 9 * S, ey2, 2 * S, 3 * S, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(hx + 9 * S, ey2, 2 * S, 3 * S, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (accessory === 'party') {
+      // Party hat
+      ctx.fillStyle = '#e74c3c';
+      ctx.beginPath();
+      ctx.moveTo(hx - 6 * S, hy + 2 * S);
+      ctx.lineTo(hx, hy - 12 * S);
+      ctx.lineTo(hx + 6 * S, hy + 2 * S);
+      ctx.closePath();
+      ctx.fill();
+      // Stripes
+      ctx.fillStyle = '#f1c40f';
+      ctx.beginPath();
+      ctx.moveTo(hx - 3 * S, hy - 2 * S);
+      ctx.lineTo(hx, hy - 6 * S);
+      ctx.lineTo(hx + 3 * S, hy - 2 * S);
+      ctx.closePath();
+      ctx.fill();
+      // Pompom
+      ctx.beginPath();
+      ctx.arc(hx, hy - 12 * S, 2 * S, 0, Math.PI * 2);
+      ctx.fillStyle = '#3498db';
+      ctx.fill();
+    }
+  },
+
+  drawChatBubble: function(ctx, sx, baseY, S, message) {
+    if (!message || !message.text) return;
+    var maxW = 120;
+    var padding = 6;
+    ctx.font = Math.max(8, Math.round(9 * S)) + 'px "Segoe UI", sans-serif';
+
+    // Word wrap
+    var words = message.text.split(' ');
+    var lines = [];
+    var line = '';
+    for (var i = 0; i < words.length; i++) {
+      var test = line + (line ? ' ' : '') + words[i];
+      if (ctx.measureText(test).width > maxW - padding * 2) {
+        if (line) lines.push(line);
+        line = words[i];
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    if (lines.length > 3) lines = lines.slice(0, 3);
+
+    var lineH = 12;
+    var bw = maxW;
+    var bh = lines.length * lineH + padding * 2;
+    var bx = sx - bw / 2;
+    var by = baseY - 60 * S - bh;
+
+    // Bubble background
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Bubble tail
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath();
+    ctx.moveTo(sx - 5, by + bh);
+    ctx.lineTo(sx, by + bh + 6);
+    ctx.lineTo(sx + 5, by + bh);
+    ctx.closePath();
+    ctx.fill();
+
+    // Text
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (var j = 0; j < lines.length; j++) {
+      ctx.fillText(lines[j], sx, by + padding + j * lineH);
+    }
+    ctx.textBaseline = 'alphabetic';
   },
 
   drawPreview: function(ctx, canvasW, canvasH, colors, time) {

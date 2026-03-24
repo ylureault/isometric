@@ -51,7 +51,9 @@ const UI = {
       document.getElementById('minimap-container').style.display = 'block';
       document.getElementById('toolbar').style.display = 'flex';
 
-      onEnter({ pseudo, colors: { ...this.currentColors } });
+      var accessorySelect = document.getElementById('accessory-select');
+      var accessory = accessorySelect ? accessorySelect.value : 'none';
+      onEnter({ pseudo, colors: { ...this.currentColors }, accessory: accessory });
     });
   },
 
