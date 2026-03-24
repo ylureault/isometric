@@ -175,6 +175,12 @@ io.on('connection', (socket) => {
       }
     }
 
+    // Clean up screen share if this user was sharing
+    if (room && room.activeScreenShare && room.activeScreenShare.socketId === socket.id) {
+      room.activeScreenShare = null;
+      socket.to(currentRoomId).emit('screen-share-stopped', { socketId: socket.id });
+    }
+
     socket.to(currentRoomId).emit('participant-disconnected', {
       socketId: socket.id,
       pseudo: p.pseudo,

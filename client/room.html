@@ -415,8 +415,8 @@
 
       <!-- Footer / Status bar -->
       <div class="darkboard-statusbar" id="darkboard-statusbar">
-        <span class="darkboard-status-text" id="darkboard-status-text">Ready</span>
-        <span class="darkboard-votes-info" id="darkboard-votes-info" style="display:none;">Dot Voting active — click a post-it to vote (3 votes max)</span>
+        <span class="darkboard-status-text" id="darkboard-status-text">Prêt</span>
+        <span class="darkboard-votes-info" id="darkboard-votes-info" style="display:none;">Vote par points actif — cliquez sur un post-it pour voter (3 votes max.)</span>
       </div>
     </div>
   </div>
@@ -441,10 +441,10 @@
             <button class="wb-width-btn" data-width="6">L</button>
             <button class="wb-width-btn" data-width="12">XL</button>
           </div>
-          <button class="btn btn-secondary btn-sm" id="wb-undo">↩ Annuler</button>
-          <button class="btn btn-secondary btn-sm" id="wb-clear" style="color:#e74c3c;">🗑 Effacer</button>
+          <button class="btn btn-secondary btn-sm" id="wb-undo" title="Annuler le dernier trait">↩ Annuler</button>
+          <button class="btn btn-secondary btn-sm" id="wb-clear" style="color:#e74c3c;" title="Effacer tout le tableau">🗑 Tout effacer</button>
         </div>
-        <button class="whiteboard-close-btn" id="wb-close">✕</button>
+        <button class="whiteboard-close-btn" id="wb-close" title="Fermer le tableau blanc">✕</button>
       </div>
       <div class="whiteboard-canvas-container">
         <canvas id="whiteboard-canvas"></canvas>
@@ -464,8 +464,8 @@
     </div>
     <div class="collab-space-grid" id="collab-space-grid">
       <div class="collab-screen-tile collab-screen-empty">
-        <p>Aucun partage d'écran actif</p>
-        <p style="font-size:0.75rem;color:#666;">Cliquez sur "Partager mon écran" pour commencer</p>
+        <p>Aucun partage d'écran en cours</p>
+        <p style="font-size:0.75rem;color:#666;">Cliquez sur « Partager mon écran » pour commencer</p>
       </div>
     </div>
   </div>
@@ -476,10 +476,10 @@
       <h3>Raccourcis clavier</h3>
       <table class="shortcuts-table">
         <tr><td><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd> / Flèches</td><td>Déplacement</td></tr>
-        <tr><td><kbd>M</kbd></td><td>Mute / Unmute micro</td></tr>
+        <tr><td><kbd>M</kbd></td><td>Activer / Couper le micro</td></tr>
         <tr><td><kbd>H</kbd></td><td>Lever / Baisser la main</td></tr>
         <tr><td><kbd>1</kbd>-<kbd>6</kbd></td><td>Réactions rapides</td></tr>
-        <tr><td><kbd>Tab</kbd></td><td>Minimap on/off</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Afficher / Masquer la minicarte</td></tr>
         <tr><td><kbd>V</kbd></td><td>Basculer vue iso / dessus</td></tr>
         <tr><td><kbd>E</kbd> (admin)</td><td>Mode édition mobilier</td></tr>
         <tr><td>Molette</td><td>Zoom avant / arrière</td></tr>
