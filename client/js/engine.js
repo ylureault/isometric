@@ -114,7 +114,7 @@ var Engine = {
             } else if (++attempts < maxRetries) {
               setTimeout(tryRejoin, 2000 * attempts);
             } else {
-              UI.showNotification('Reconnexion échouée — rechargez la page');
+              UI.showNotification('Impossible de se reconnecter. Veuillez recharger la page.');
             }
           });
         }
@@ -138,15 +138,15 @@ var Engine = {
     s.on('screen-rtc-offer', function(d) { ScreenShare.handleScreenOffer(d.fromSocketId, d.offer); });
     s.on('screen-rtc-answer', function(d) { ScreenShare.handleScreenAnswer(d.fromSocketId, d.answer); });
     s.on('screen-rtc-ice-candidate', function(d) { ScreenShare.handleScreenIceCandidate(d.fromSocketId, d.candidate); });
-    s.on('screen-share-started', function(d) { ScreenShare.activeGlobalShare = { socketId: d.socketId, pseudo: d.pseudo }; UI.showNotification(d.pseudo + ' partage son écran'); });
+    s.on('screen-share-started', function(d) { ScreenShare.activeGlobalShare = { socketId: d.socketId, pseudo: d.pseudo }; UI.showNotification(d.pseudo + ' partage son écran avec vous'); });
     s.on('screen-share-stopped', function(d) { ScreenShare.removeShare(d.socketId); });
     s.on('role-changed', function(d) {
       if (d.socketId === Network.mySocketId) { self.player.isAdmin = d.isAdmin; UI.updateAdminUI(d.isAdmin); }
       var rp = Network.remotePlayers.get(d.socketId); if (rp) rp.isAdmin = d.isAdmin;
     });
-    s.on('kicked', function(d) { alert(d.reason || 'Exclu'); window.location.href = '/client/index.html'; });
+    s.on('kicked', function(d) { alert(d.reason || 'Vous avez été exclu(e) de cette salle.'); window.location.href = '/client/index.html'; });
     s.on('participant-kicked', function(d) { Network.remotePlayers.delete(d.socketId); });
-    s.on('room-closed', function(d) { alert('Room fermée'); window.location.href = '/client/index.html'; });
+    s.on('room-closed', function(d) { alert('Cette salle a été fermée par l\'administrateur.'); window.location.href = '/client/index.html'; });
     s.on('participant-mute-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isMuted = d.muted; });
     s.on('table-created', function(t) { self.tables.set(t.id, t); });
     s.on('table-deleted', function(d) { self.tables.delete(d.tableId); });
@@ -174,9 +174,9 @@ var Engine = {
     s.on('vote-updated', function(v) { UI.updateVotePopup(v); });
     s.on('vote-ended', function(v) { UI.updateVotePopup(v); setTimeout(function() { UI.hideVotePopup(); }, 5000); });
     s.on('timer-created', function(t) { UI.showTimer(t); });
-    s.on('timer-ended', function() { self.initSfx(); self.playSfx('notification'); UI.showNotification('Timer terminé !'); });
+    s.on('timer-ended', function() { self.initSfx(); self.playSfx('notification'); UI.showNotification('Le minuteur est terminé !'); });
     s.on('timer-paused', function(d) { if (UI.activeTimer) UI.activeTimer.paused = d.paused; });
-    s.on('timer-cancelled', function(d) { UI.activeTimer = null; UI.hideTimer(); UI.showNotification('Timer annulé'); });
+    s.on('timer-cancelled', function(d) { UI.activeTimer = null; UI.hideTimer(); UI.showNotification('Minuteur annulé'); });
     s.on('furniture-added', function(i) { Board.furniture.push(i); Board.buildCollisionMap(); });
     s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); });
     s.on('furniture-moved', function(d) {
@@ -189,7 +189,7 @@ var Engine = {
       if (d1) { d1.linkedDoorId = d.door2Id; d1.doorLabel = d.label; }
       if (d2) { d2.linkedDoorId = d.door1Id; d2.doorLabel = d.label; }
     });
-    s.on('admin-broadcast-start', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = true; self.initSfx(); self.playSfx('notification'); UI.showNotification(d.pseudo + ' parle à tous'); });
+    s.on('admin-broadcast-start', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = true; self.initSfx(); self.playSfx('notification'); UI.showNotification(d.pseudo + ' s\'adresse à tous les participants'); });
     s.on('admin-broadcast-stop', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = false; });
     s.on('participant-speaking-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isSpeaking = d.speaking; });
 
@@ -218,7 +218,7 @@ var Engine = {
 
   checkRoom: function() {
     var self = this;
-    if (!this.roomConfig.roomId) { UI.showError('Aucun ID de room'); return; }
+    if (!this.roomConfig.roomId) { UI.showError('Aucun identifiant de salle fourni. Veuillez utiliser un lien valide.'); return; }
     if (!this.roomConfig.isCreator) {
       fetch('/api/rooms/' + this.roomConfig.roomId).then(function(resp) {
         if (!resp.ok) { UI.showError('Room introuvable'); return; }

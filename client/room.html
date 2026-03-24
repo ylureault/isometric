@@ -84,25 +84,25 @@
       </div>
     </div>
     <div class="toolbar-center">
-      <button class="toolbar-btn" id="btn-screen-share" title="Partager mon écran">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
+      <button class="toolbar-btn" id="btn-screen-share" title="Partager mon écran" aria-label="Partager l'ecran">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
       </button>
-      <div class="reaction-bar" id="reaction-bar">
-        <button class="reaction-btn" data-emoji="👍" title="Touche 1">👍</button>
-        <button class="reaction-btn" data-emoji="👏" title="Touche 2">👏</button>
-        <button class="reaction-btn" data-emoji="❓" title="Touche 3">❓</button>
-        <button class="reaction-btn" data-emoji="💡" title="Touche 4">💡</button>
-        <button class="reaction-btn" data-emoji="❤️" title="Touche 5">❤️</button>
-        <button class="reaction-btn" data-emoji="😂" title="Touche 6">😂</button>
+      <div class="reaction-bar" id="reaction-bar" role="group" aria-label="Reactions rapides">
+        <button class="reaction-btn" data-emoji="👍" title="Pouce (1)" aria-label="Reaction pouce">👍</button>
+        <button class="reaction-btn" data-emoji="👏" title="Bravo (2)" aria-label="Reaction bravo">👏</button>
+        <button class="reaction-btn" data-emoji="❓" title="Question (3)" aria-label="Reaction question">❓</button>
+        <button class="reaction-btn" data-emoji="💡" title="Idee (4)" aria-label="Reaction idee">💡</button>
+        <button class="reaction-btn" data-emoji="❤️" title="Coeur (5)" aria-label="Reaction coeur">❤️</button>
+        <button class="reaction-btn" data-emoji="😂" title="Rire (6)" aria-label="Reaction rire">😂</button>
       </div>
     </div>
     <div class="toolbar-right">
-      <button class="toolbar-btn" id="btn-view-toggle" title="Changer de vue (V)">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5zM12 17c-2.8 0-5-2.2-5-5s2.2-5 5-5 5 2.2 5 5-2.2 5-5 5zm0-8c-1.7 0-3 1.3-3 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3z"/></svg>
+      <button class="toolbar-btn" id="btn-view-toggle" title="Changer de vue (V)" aria-label="Basculer vue isometrique">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5zM12 17c-2.8 0-5-2.2-5-5s2.2-5 5-5 5 2.2 5 5-2.2 5-5 5zm0-8c-1.7 0-3 1.3-3 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3z"/></svg>
       </button>
-      <button class="toolbar-btn admin-only" id="btn-edit-mode" title="Mode édition (admin)">✏️</button>
-      <button class="toolbar-btn admin-only" id="btn-admin" title="Panneau d'administration">⚙️</button>
-      <button class="toolbar-btn toolbar-btn-danger" id="btn-leave" title="Quitter la salle">✕</button>
+      <button class="toolbar-btn admin-only" id="btn-edit-mode" title="Mode edition (admin)" aria-label="Mode edition du mobilier">✏️</button>
+      <button class="toolbar-btn admin-only" id="btn-admin" title="Panneau d'administration" aria-label="Ouvrir le panneau admin">⚙️</button>
+      <button class="toolbar-btn toolbar-btn-danger" id="btn-leave" title="Quitter la salle" aria-label="Quitter la room">✕</button>
     </div>
   </div>
 
@@ -128,13 +128,13 @@
   </div>
 
   <!-- Context menu -->
-  <div class="context-menu" id="context-menu" style="display: none;"></div>
+  <div class="context-menu" id="context-menu" role="menu" style="display: none;"></div>
 
   <!-- Admin Panel (sidebar) -->
   <div class="admin-panel" id="admin-panel">
     <div class="admin-panel-header">
       <h3>Administration</h3>
-      <button class="admin-close-btn" onclick="UI.toggleAdminPanel()">✕</button>
+      <button class="admin-close-btn" onclick="UI.toggleAdminPanel()" aria-label="Fermer le panneau admin">✕</button>
     </div>
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="participants" onclick="this.parentElement.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');document.querySelectorAll('.admin-tab-content').forEach(c=>c.style.display='none');document.getElementById('tab-participants').style.display='block';UI.refreshParticipantsList();">Participants</button>
@@ -264,7 +264,9 @@
       <span>Chat</span>
       <span class="chat-badge" id="chat-badge" style="display:none;">0</span>
     </div>
-    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-messages" id="chat-messages" role="log" aria-live="polite">
+      <div class="chat-empty-state" id="chat-empty-state">Aucun message. Dites bonjour !</div>
+    </div>
     <div class="chat-input-row">
       <input type="text" id="chat-input" placeholder="Écrivez votre message ici..." maxlength="200" autocomplete="off">
       <button class="chat-send-btn" id="chat-send">→</button>
@@ -325,7 +327,7 @@
             <span>Exporter</span>
           </button>
           <span class="darkboard-zoom-label" id="darkboard-zoom-label">100%</span>
-          <button class="darkboard-close-btn" id="postit-close" title="Fermer le tableau">&#10005;</button>
+          <button class="darkboard-close-btn" id="postit-close" title="Fermer le tableau" aria-label="Fermer le Dark Board">&#10005;</button>
         </div>
       </div>
 
@@ -444,7 +446,7 @@
           <button class="btn btn-secondary btn-sm" id="wb-undo" title="Annuler le dernier trait">↩ Annuler</button>
           <button class="btn btn-secondary btn-sm" id="wb-clear" style="color:#e74c3c;" title="Effacer tout le tableau">🗑 Tout effacer</button>
         </div>
-        <button class="whiteboard-close-btn" id="wb-close" title="Fermer le tableau blanc">✕</button>
+        <button class="whiteboard-close-btn" id="wb-close" title="Fermer le tableau blanc" aria-label="Fermer le tableau blanc">✕</button>
       </div>
       <div class="whiteboard-canvas-container">
         <canvas id="whiteboard-canvas"></canvas>
@@ -471,7 +473,7 @@
   </div>
 
   <!-- Shortcuts modal -->
-  <div class="shortcuts-modal" id="shortcuts-modal" style="display: none;">
+  <div class="shortcuts-modal" id="shortcuts-modal" role="dialog" aria-label="Raccourcis clavier" style="display: none;">
     <div class="shortcuts-inner">
       <h3>Raccourcis clavier</h3>
       <table class="shortcuts-table">

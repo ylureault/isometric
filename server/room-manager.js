@@ -1,4 +1,4 @@
-// Room Manager: complete server-side room state management
+// Room Manager: complete server-side room state management (hardened)
 
 const CONSTANTS = require('../shared/constants');
 const Environments = require('../client/js/environments');
@@ -6,16 +6,92 @@ const Environments = require('../client/js/environments');
 class RoomManager {
   constructor() {
     this.rooms = new Map();
+    this._cleanupTimers = new Map(); // roomId -> timeoutId for empty room cleanup
+
+    // Periodic sweep: clean up stale rooms, disconnected zombies, orphaned timers
+    this._sweepInterval = setInterval(() => this._periodicSweep(), CONSTANTS.ROOM_CLEANUP_INTERVAL);
+  }
+
+  // --- Periodic maintenance ---
+  _periodicSweep() {
+    const now = Date.now();
+    for (const [roomId, room] of this.rooms) {
+      // Clean up zombie disconnected participants (older than 2x the reconnect timeout)
+      for (const [sid, p] of room.participants) {
+        if (p.disconnected && p.disconnectedAt && (now - p.disconnectedAt > CONSTANTS.DISCONNECTED_CLEANUP_TIMEOUT * 2)) {
+          this.leaveRoom(roomId, sid);
+        }
+      }
+
+      // Clean up orphaned timers (running but room is empty or very old)
+      for (const [timerId, timer] of room.timers) {
+        if (timer.running && !timer.paused) {
+          const elapsed = (now - timer.startedAt) / 1000;
+          if (elapsed > timer.duration + 60) {
+            timer.running = false;
+          }
+        }
+      }
+
+      // Clean up stale votes
+      for (const [voteId, vote] of room.votes) {
+        if (vote.active && (now - vote.createdAt > (vote.duration + 300) * 1000)) {
+          vote.active = false;
+        }
+      }
+
+      // Remove truly empty rooms older than cleanup timeout
+      if (room.participants.size === 0 && (now - room.createdAt > CONSTANTS.EMPTY_ROOM_CLEANUP_TIMEOUT)) {
+        this._destroyRoom(roomId);
+      }
+    }
+  }
+
+  _destroyRoom(roomId) {
+    const timerId = this._cleanupTimers.get(roomId);
+    if (timerId) {
+      clearTimeout(timerId);
+      this._cleanupTimers.delete(roomId);
+    }
+    this.rooms.delete(roomId);
+  }
+
+  _scheduleRoomCleanup(roomId) {
+    const existing = this._cleanupTimers.get(roomId);
+    if (existing) clearTimeout(existing);
+
+    const tid = setTimeout(() => {
+      this._cleanupTimers.delete(roomId);
+      const r = this.rooms.get(roomId);
+      if (r && r.participants.size === 0) {
+        this._destroyRoom(roomId);
+      }
+    }, CONSTANTS.EMPTY_ROOM_CLEANUP_TIMEOUT);
+
+    this._cleanupTimers.set(roomId, tid);
+  }
+
+  _cancelRoomCleanup(roomId) {
+    const existing = this._cleanupTimers.get(roomId);
+    if (existing) {
+      clearTimeout(existing);
+      this._cleanupTimers.delete(roomId);
+    }
   }
 
   createRoom(roomId, config) {
     if (this.rooms.has(roomId)) return null;
+    if (this.rooms.size >= CONSTANTS.MAX_ROOMS) return null;
+
+    const name = (config.name || 'Room').toString().trim().slice(0, 60) || 'Room';
+    const environment = CONSTANTS.ENVIRONMENTS.includes(config.environment) ? config.environment : 'open-space';
+    const gridSize = Math.min(CONSTANTS.GRID_MAX, Math.max(CONSTANTS.GRID_MIN, parseInt(config.gridSize) || CONSTANTS.GRID_DEFAULT));
 
     const room = {
       id: roomId,
-      name: config.name || 'Room',
-      environment: config.environment || 'open-space',
-      gridSize: Math.min(CONSTANTS.GRID_MAX, Math.max(CONSTANTS.GRID_MIN, config.gridSize || CONSTANTS.GRID_DEFAULT)),
+      name,
+      environment,
+      gridSize,
       creatorSocketId: null,
       participants: new Map(),
       tables: new Map(),
@@ -56,10 +132,11 @@ class RoomManager {
     if (room.closed) return { error: 'room_closed' };
     if (room.participants.size >= CONSTANTS.MAX_PARTICIPANTS) return { error: 'room_full' };
 
+    this._cancelRoomCleanup(roomId);
+
     const pseudo = (data.pseudo || '').toString().trim().slice(0, 30) || 'Anonyme';
     let isCreator = !!(data.isCreator && !room.creatorSocketId);
 
-    // Check if rejoining creator (same pseudo as disconnected creator)
     if (!isCreator && room.creatorSocketId) {
       const oldCreator = room.participants.get(room.creatorSocketId);
       if (oldCreator && oldCreator.disconnected && oldCreator.pseudo === pseudo) {
@@ -69,13 +146,29 @@ class RoomManager {
       }
     }
 
+    const defaultColors = CONSTANTS.DEFAULT_COLORS;
+    let colors = defaultColors;
+    if (data.colors && typeof data.colors === 'object') {
+      colors = {};
+      for (const key of ['skin', 'hair', 'shirt', 'pants', 'shoes']) {
+        const val = data.colors[key];
+        colors[key] = (typeof val === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(val)) ? val : defaultColors[key];
+      }
+    }
+
+    const accessory = (typeof data.accessory === 'string' && data.accessory.length <= 30) ? data.accessory : 'none';
+
+    const gs = room.gridSize;
+    const x = (typeof data.x === 'number' && isFinite(data.x)) ? Math.max(0, Math.min(gs - 0.5, data.x)) : Math.floor(gs / 2);
+    const y = (typeof data.y === 'number' && isFinite(data.y)) ? Math.max(0, Math.min(gs - 0.5, data.y)) : Math.floor(gs / 2);
+
     const participant = {
       socketId,
       pseudo,
-      colors: data.colors,
-      accessory: data.accessory || 'none',
-      x: data.x || Math.floor(room.gridSize / 2),
-      y: data.y || Math.floor(room.gridSize / 2),
+      colors,
+      accessory,
+      x,
+      y,
       direction: { dx: 0, dy: 1 },
       isWalking: false,
       walkPhase: 0,
@@ -108,27 +201,41 @@ class RoomManager {
     const participant = room.participants.get(socketId);
     if (!participant) return null;
 
-    // Clean up table association
     if (participant.tableId) {
       const table = room.tables.get(participant.tableId);
       if (table) table.participants.delete(socketId);
     }
 
-    // Clean up raised hand
     room.raisedHands.delete(socketId);
 
-    // Clean up screen share
     if (room.activeScreenShare && room.activeScreenShare.socketId === socketId) {
       room.activeScreenShare = null;
+    }
+
+    // Clean up whiteboard active users
+    for (const [, wb] of room.whiteboards) {
+      wb.activeUsers.delete(socketId);
+    }
+
+    // Clean up collab spaces
+    if (room.collabSpaces) {
+      for (const [, space] of room.collabSpaces) {
+        space.users.delete(socketId);
+        space.screens.delete(socketId);
+      }
+    }
+
+    // Clean up sub-rooms
+    if (room.subRooms) {
+      for (const [, sr] of room.subRooms) {
+        sr.participants.delete(socketId);
+      }
     }
 
     room.participants.delete(socketId);
 
     if (room.participants.size === 0) {
-      setTimeout(() => {
-        const r = this.rooms.get(roomId);
-        if (r && r.participants.size === 0) this.rooms.delete(roomId);
-      }, 60000);
+      this._scheduleRoomCleanup(roomId);
     }
 
     return participant;
@@ -161,18 +268,27 @@ class RoomManager {
     const p = room.participants.get(socketId);
     if (!p) return null;
 
-    // Validate position bounds
-    var gs = room.gridSize || 100;
-    p.x = Math.max(0, Math.min(gs - 0.5, typeof data.x === 'number' ? data.x : p.x));
-    p.y = Math.max(0, Math.min(gs - 0.5, typeof data.y === 'number' ? data.y : p.y));
-    p.direction = data.direction || p.direction;
+    const gs = room.gridSize || 100;
+    if (typeof data.x === 'number' && isFinite(data.x)) {
+      p.x = Math.max(0, Math.min(gs - 0.5, data.x));
+    }
+    if (typeof data.y === 'number' && isFinite(data.y)) {
+      p.y = Math.max(0, Math.min(gs - 0.5, data.y));
+    }
+
+    if (data.direction && typeof data.direction === 'object') {
+      const dx = Number(data.direction.dx);
+      const dy = Number(data.direction.dy);
+      if (isFinite(dx) && isFinite(dy)) {
+        p.direction = { dx: Math.max(-1, Math.min(1, dx)), dy: Math.max(-1, Math.min(1, dy)) };
+      }
+    }
+
     p.isWalking = !!data.isWalking;
-    p.walkPhase = data.walkPhase || 0;
+    p.walkPhase = (typeof data.walkPhase === 'number' && isFinite(data.walkPhase)) ? data.walkPhase : 0;
     p.lastSeen = Date.now();
 
-    // Check table proximity — return table change result
-    var tableResult = this.updateTableAssociation(roomId, socketId);
-
+    const tableResult = this.updateTableAssociation(roomId, socketId);
     return tableResult;
   }
 
@@ -223,7 +339,8 @@ class RoomManager {
     for (const [, p] of room.participants) {
       occupied.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     }
-    for (let radius = 0; radius < room.gridSize; radius++) {
+    const maxRadius = Math.min(room.gridSize, 20);
+    for (let radius = 0; radius < maxRadius; radius++) {
       for (let dx = -radius; dx <= radius; dx++) {
         for (let dy = -radius; dy <= radius; dy++) {
           if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
@@ -249,6 +366,7 @@ class RoomManager {
     const target = room.participants.get(targetId);
     if (!requester || !target) return { error: 'participant_not_found' };
     if (!requester.isAdmin) return { error: 'not_admin' };
+    if (target.isAdmin) return { error: 'already_admin' };
     target.isAdmin = true;
     return { success: true, pseudo: target.pseudo };
   }
@@ -273,6 +391,7 @@ class RoomManager {
     if (!requester || !target) return { error: 'participant_not_found' };
     if (!requester.isAdmin) return { error: 'not_admin' };
     if (target.role === 'creator') return { error: 'cannot_kick_creator' };
+    if (requesterId === targetId) return { error: 'cannot_kick_self' };
     return { success: true, participant: target };
   }
 
@@ -291,17 +410,18 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (room.tables.size >= CONSTANTS.MAX_TABLES_PER_ROOM) return { error: 'too_many_tables' };
 
     const gs = room.gridSize;
     const tableId = `table_${room.nextTableId++}`;
     const table = {
       id: tableId,
       name: (tableData.name || `Table ${room.nextTableId - 1}`).toString().slice(0, 50),
-      x: Math.max(0, Math.min(gs - 1, tableData.x || 0)),
-      y: Math.max(0, Math.min(gs - 1, tableData.y || 0)),
-      width: Math.max(1, Math.min(10, tableData.width || 3)),
-      height: Math.max(1, Math.min(10, tableData.height || 3)),
-      radius: Math.max(1, Math.min(15, tableData.radius || 3)),
+      x: Math.max(0, Math.min(gs - 1, Number(tableData.x) || 0)),
+      y: Math.max(0, Math.min(gs - 1, Number(tableData.y) || 0)),
+      width: Math.max(1, Math.min(10, parseInt(tableData.width) || 3)),
+      height: Math.max(1, Math.min(10, parseInt(tableData.height) || 3)),
+      radius: Math.max(1, Math.min(15, Number(tableData.radius) || 3)),
       participants: new Set(),
       screenShare: null,
     };
@@ -317,7 +437,8 @@ class RoomManager {
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
     const table = room.tables.get(tableId);
     if (!table) return { error: 'table_not_found' };
-    table.name = newName;
+    if (typeof newName !== 'string') return { error: 'invalid_name' };
+    table.name = newName.toString().trim().slice(0, 50);
     return { success: true };
   }
 
@@ -329,7 +450,6 @@ class RoomManager {
     const table = room.tables.get(tableId);
     if (!table) return { error: 'table_not_found' };
 
-    // Remove participants from table
     for (const sid of table.participants) {
       const p = room.participants.get(sid);
       if (p) p.tableId = null;
@@ -346,8 +466,9 @@ class RoomManager {
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
     const table = room.tables.get(tableId);
     if (!table) return { error: 'table_not_found' };
-    table.x = newX;
-    table.y = newY;
+    const gs = room.gridSize;
+    table.x = Math.max(0, Math.min(gs - 1, Number(newX) || 0));
+    table.y = Math.max(0, Math.min(gs - 1, Number(newY) || 0));
     return { success: true };
   }
 
@@ -373,13 +494,11 @@ class RoomManager {
     const newTableId = closestTable ? closestTable.id : null;
 
     if (newTableId !== p.tableId) {
-      const oldTableId = p.tableId; // Capture BEFORE overwrite
-      // Leave old table
+      const oldTableId = p.tableId;
       if (p.tableId) {
         const oldTable = room.tables.get(p.tableId);
         if (oldTable) oldTable.participants.delete(socketId);
       }
-      // Join new table
       if (closestTable) {
         closestTable.participants.add(socketId);
       }
@@ -420,7 +539,16 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
-    Object.assign(room.theme, themeData);
+
+    const allowedKeys = ['floorColor1', 'floorColor2', 'bgColor', 'glowColor', 'mode', 'preset'];
+    for (const key of allowedKeys) {
+      if (themeData[key] !== undefined) {
+        const val = themeData[key];
+        if (val === null || (typeof val === 'string' && val.length <= 60)) {
+          room.theme[key] = val;
+        }
+      }
+    }
     return { success: true, theme: room.theme };
   }
 
@@ -431,6 +559,7 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (typeof newEnv !== 'string' || newEnv.length > 50) return { error: 'invalid_environment' };
     room.environment = newEnv;
     return { success: true };
   }
@@ -441,11 +570,10 @@ class RoomManager {
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
 
-    const size = Math.min(CONSTANTS.GRID_MAX, Math.max(CONSTANTS.GRID_MIN, newSize));
+    const size = Math.min(CONSTANTS.GRID_MAX, Math.max(CONSTANTS.GRID_MIN, parseInt(newSize) || CONSTANTS.GRID_DEFAULT));
     const oldSize = room.gridSize;
     room.gridSize = size;
 
-    // Reposition out-of-bounds participants
     const repositioned = [];
     for (const [sid, p] of room.participants) {
       if (p.x >= size || p.y >= size) {
@@ -464,14 +592,24 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (room.furniture.length >= CONSTANTS.MAX_FURNITURE_PER_ROOM) return { error: 'too_many_furniture' };
+
     const gs = room.gridSize;
     const id = `furn_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+
     const item = {
       id,
-      ...furnitureData,
-      x: Math.max(0, Math.min(gs - 1, furnitureData.x || 0)),
-      y: Math.max(0, Math.min(gs - 1, furnitureData.y || 0)),
+      type: (typeof furnitureData.type === 'string') ? furnitureData.type.slice(0, 50) : 'unknown',
+      x: Math.max(0, Math.min(gs - 1, Number(furnitureData.x) || 0)),
+      y: Math.max(0, Math.min(gs - 1, Number(furnitureData.y) || 0)),
     };
+    if (typeof furnitureData.rotation === 'number') item.rotation = furnitureData.rotation;
+    if (typeof furnitureData.variant === 'string') item.variant = furnitureData.variant.slice(0, 50);
+    if (typeof furnitureData.label === 'string') item.label = furnitureData.label.slice(0, 100);
+    if (typeof furnitureData.linkedDoorId === 'string') item.linkedDoorId = furnitureData.linkedDoorId.slice(0, 100);
+    if (typeof furnitureData.doorLabel === 'string') item.doorLabel = furnitureData.doorLabel.slice(0, 100);
+    if (typeof furnitureData.whiteboardId === 'string') item.whiteboardId = furnitureData.whiteboardId.slice(0, 100);
+
     room.furniture.push(item);
     return { success: true, item };
   }
@@ -481,6 +619,7 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (typeof furnitureId !== 'string') return { error: 'invalid_id' };
     room.furniture = room.furniture.filter(f => f.id !== furnitureId);
     return { success: true };
   }
@@ -492,14 +631,15 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (room.whiteboards.size >= CONSTANTS.MAX_WHITEBOARDS_PER_ROOM) return { error: 'too_many_whiteboards' };
 
     const id = `wb_${room.nextWhiteboardId++}`;
     const wb = {
       id,
-      x: data.x,
-      y: data.y,
-      radius: data.radius || 3,
-      tableId: data.tableId || null,
+      x: Number(data.x) || 0,
+      y: Number(data.y) || 0,
+      radius: Math.max(1, Math.min(20, Number(data.radius) || 3)),
+      tableId: (typeof data.tableId === 'string') ? data.tableId : null,
       strokes: [],
       texts: [],
       postits: [],
@@ -519,8 +659,10 @@ class RoomManager {
   }
 
   getOrCreateWhiteboard(room, wbId) {
+    if (typeof wbId !== 'string' || wbId.length > 100) return null;
     let wb = room.whiteboards.get(wbId);
     if (!wb) {
+      if (room.whiteboards.size >= CONSTANTS.MAX_WHITEBOARDS_PER_ROOM) return null;
       wb = {
         id: wbId, x: 0, y: 0, radius: 5, tableId: null,
         strokes: [], texts: [], postits: [], activeUsers: new Set(),
@@ -534,6 +676,10 @@ class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return null;
     const wb = this.getOrCreateWhiteboard(room, wbId);
+    if (!wb) return null;
+    if (wb.strokes.length >= CONSTANTS.MAX_WB_STROKES) {
+      wb.strokes = wb.strokes.slice(Math.floor(CONSTANTS.MAX_WB_STROKES * 0.1));
+    }
     wb.strokes.push(strokeData);
     return strokeData;
   }
@@ -542,6 +688,8 @@ class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return null;
     const wb = this.getOrCreateWhiteboard(room, wbId);
+    if (!wb) return null;
+    if (wb.texts.length >= CONSTANTS.MAX_WB_TEXTS) return null;
     wb.texts.push(textData);
     return textData;
   }
@@ -550,11 +698,12 @@ class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return null;
     const wb = this.getOrCreateWhiteboard(room, wbId);
-    // Update existing postit or add new
+    if (!wb) return null;
     const existing = wb.postits.findIndex(p => p.id === postitData.id);
     if (existing >= 0) {
       wb.postits[existing] = postitData;
     } else {
+      if (wb.postits.length >= CONSTANTS.MAX_WB_POSTITS) return null;
       wb.postits.push(postitData);
     }
     return postitData;
@@ -564,7 +713,7 @@ class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return null;
     const wb = this.getOrCreateWhiteboard(room, wbId);
-    // Find last stroke by this user
+    if (!wb) return null;
     for (let i = wb.strokes.length - 1; i >= 0; i--) {
       if (wb.strokes[i].socketId === socketId) {
         wb.strokes.splice(i, 1);
@@ -580,6 +729,7 @@ class RoomManager {
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
     const wb = this.getOrCreateWhiteboard(room, wbId);
+    if (!wb) return { error: 'whiteboard_not_found' };
     wb.strokes = [];
     wb.texts = [];
     wb.postits = [];
@@ -605,18 +755,22 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (room.votes.size >= CONSTANTS.MAX_VOTES_PER_ROOM) return { error: 'too_many_votes' };
+
+    if (!voteData.question || typeof voteData.question !== 'string') return { error: 'invalid_question' };
+    if (!Array.isArray(voteData.options) || voteData.options.length < 2 || voteData.options.length > 20) return { error: 'invalid_options' };
 
     const id = `vote_${room.nextVoteId++}`;
     const vote = {
       id,
-      question: voteData.question,
-      options: voteData.options.map(o => ({ text: o, votes: 0 })),
-      anonymous: voteData.anonymous || false,
-      scope: voteData.scope || 'global',
-      tableId: voteData.tableId || null,
+      question: voteData.question.toString().slice(0, 300),
+      options: voteData.options.map(o => ({ text: (o || '').toString().slice(0, 100), votes: 0 })),
+      anonymous: !!voteData.anonymous,
+      scope: (voteData.scope === 'table') ? 'table' : 'global',
+      tableId: (typeof voteData.tableId === 'string') ? voteData.tableId : null,
       voters: new Map(),
       active: true,
-      duration: voteData.duration || 60,
+      duration: Math.max(5, Math.min(3600, parseInt(voteData.duration) || 60)),
       createdAt: Date.now(),
     };
     room.votes.set(id, vote);
@@ -626,13 +780,15 @@ class RoomManager {
   castVote(roomId, socketId, voteId, optionIndex) {
     const room = this.rooms.get(roomId);
     if (!room) return { error: 'room_not_found' };
+    if (typeof voteId !== 'string') return { error: 'invalid_vote_id' };
     const vote = room.votes.get(voteId);
     if (!vote || !vote.active) return { error: 'vote_not_found' };
     if (vote.voters.has(socketId)) return { error: 'already_voted' };
-    if (optionIndex < 0 || optionIndex >= vote.options.length) return { error: 'invalid_option' };
+    const idx = parseInt(optionIndex);
+    if (!isFinite(idx) || idx < 0 || idx >= vote.options.length) return { error: 'invalid_option' };
 
-    vote.options[optionIndex].votes++;
-    vote.voters.set(socketId, optionIndex);
+    vote.options[idx].votes++;
+    vote.voters.set(socketId, idx);
     return { success: true, results: this.serializeVote(vote) };
   }
 
@@ -665,15 +821,16 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (room.timers.size >= CONSTANTS.MAX_TIMERS_PER_ROOM) return { error: 'too_many_timers' };
 
     const duration = Math.max(5, Math.min(3600, Math.round(Number(timerData.duration) || 300)));
     const id = `timer_${room.nextTimerId++}`;
     const timer = {
       id,
-      duration, // seconds (validated: 5-3600)
+      duration,
       remaining: duration,
-      scope: timerData.scope || 'global',
-      tableId: timerData.tableId || null,
+      scope: (timerData.scope === 'table') ? 'table' : 'global',
+      tableId: (typeof timerData.tableId === 'string') ? timerData.tableId : null,
       running: true,
       paused: false,
       startedAt: Date.now(),
@@ -687,8 +844,10 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (typeof timerId !== 'string') return { error: 'invalid_timer_id' };
     const timer = room.timers.get(timerId);
     if (!timer) return { error: 'not_found' };
+    if (!timer.running) return { error: 'timer_not_running' };
     timer.paused = !timer.paused;
     if (timer.paused) {
       timer.remaining = Math.max(0, timer.remaining - (Date.now() - timer.startedAt) / 1000);
@@ -698,25 +857,16 @@ class RoomManager {
     return { success: true, timer };
   }
 
-  cancelTimer(roomId, requesterId, timerId) {
-    const room = this.rooms.get(roomId);
-    if (!room) return { error: 'room_not_found' };
-    const requester = room.participants.get(requesterId);
-    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
-    const timer = room.timers.get(timerId);
-    if (!timer) return { error: 'not_found' };
-    room.timers.delete(timerId);
-    return { success: true, timerId };
-  }
-
   // ===== TABLE NOTES =====
 
   updateTableNotes(roomId, tableId, content) {
     const room = this.rooms.get(roomId);
     if (!room) return null;
+    if (typeof tableId !== 'string') return null;
     const notes = room.tableNotes.get(tableId);
     if (!notes) return null;
-    notes.content = content;
+    if (typeof content !== 'string') return null;
+    notes.content = content.slice(0, CONSTANTS.MAX_TABLE_NOTES_LENGTH);
     notes.lastUpdated = Date.now();
     return notes;
   }
@@ -763,8 +913,20 @@ class RoomManager {
     if (!room) return null;
     const p = room.participants.get(socketId);
     if (!p) return null;
-    p.isMuted = muted;
+    p.isMuted = !!muted;
     return { isMuted: p.isMuted };
+  }
+
+  // Cleanup on shutdown
+  destroy() {
+    if (this._sweepInterval) {
+      clearInterval(this._sweepInterval);
+      this._sweepInterval = null;
+    }
+    for (const [, tid] of this._cleanupTimers) {
+      clearTimeout(tid);
+    }
+    this._cleanupTimers.clear();
   }
 }
 
