@@ -350,6 +350,22 @@ var Engine = {
             }
           }
 
+          // Check if right-clicking on a sub-room portal (admin)
+          if (self.player.isAdmin) {
+            var sClickX = Math.floor(gp.x);
+            var sClickY = Math.floor(gp.y);
+            var foundSubRoom = false;
+            self.subRooms.forEach(function(sr, srId) {
+              if (foundSubRoom) return;
+              var srw = sr.width || 3, srh = sr.height || 3;
+              if (sClickX >= sr.x && sClickX < sr.x + srw && sClickY >= sr.y && sClickY < sr.y + srh) {
+                foundSubRoom = true;
+                UI.showSubRoomMenu(e.clientX, e.clientY, srId, sr);
+              }
+            });
+            if (foundSubRoom) return;
+          }
+
           // Otherwise show player context menu
           Network.remotePlayers.forEach(function(rp, sid) {
             var dist = Math.sqrt((gp.x - rp.renderX) * (gp.x - rp.renderX) + (gp.y - rp.renderY) * (gp.y - rp.renderY));

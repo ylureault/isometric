@@ -1497,6 +1497,57 @@ const UI = {
 
   // ===== SUB-ROOMS =====
 
+  showSubRoomMenu: function(x, y, subRoomId, sr) {
+    this.hideContextMenu();
+    var menu = document.getElementById('context-menu');
+    if (!menu) return;
+    var self = this;
+
+    var html = '<div class="ctx-menu-header">🚪 ' + (sr.name || 'Sous-salle') + '</div>';
+    html += '<div class="ctx-menu-item" data-action="enter-subroom">Entrer dans la salle</div>';
+    html += '<div class="ctx-menu-item" data-action="move-subroom">Déplacer devant moi</div>';
+    html += '<div class="ctx-menu-item" data-action="rename-subroom">Renommer</div>';
+    html += '<div class="ctx-menu-item ctx-menu-danger" data-action="delete-subroom">Supprimer</div>';
+
+    menu.innerHTML = html;
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.display = 'block';
+    this.contextMenuOpen = true;
+
+    menu.querySelectorAll('.ctx-menu-item').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var action = el.dataset.action;
+        if (action === 'enter-subroom') {
+          var subUrl = '/client/room.html?room=' + Engine.roomConfig.roomId + '_' + subRoomId + '&name=' + encodeURIComponent(sr.name) + '&env=' + Engine.roomConfig.environment + '&size=15&creator=true';
+          Network.socket.emit('join-sub-room', { subRoomId: subRoomId });
+          window.open(subUrl, '_blank');
+        } else if (action === 'move-subroom') {
+          sr.x = Math.floor(Engine.player.x) + 2;
+          sr.y = Math.floor(Engine.player.y);
+          self.showNotification('Sous-salle déplacée');
+        } else if (action === 'rename-subroom') {
+          var newName = prompt('Nouveau nom:', sr.name);
+          if (newName) {
+            sr.name = newName;
+            self.showNotification('Sous-salle renommée: ' + newName);
+          }
+        } else if (action === 'delete-subroom') {
+          if (confirm('Supprimer la sous-salle "' + sr.name + '" ?')) {
+            Network.socket.emit('delete-sub-room', { subRoomId: subRoomId }, function(r) {
+              if (r && r.success) {
+                Engine.subRooms.delete(subRoomId);
+                self.showNotification('Sous-salle supprimée');
+                self.refreshSubRoomsList();
+              }
+            });
+          }
+        }
+        self.hideContextMenu();
+      });
+    });
+  },
+
   openSubRoomDialog: function() {
     var name = prompt('Nom de la sous-salle:');
     if (!name) return;
