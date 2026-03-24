@@ -116,6 +116,7 @@ io.on('connection', (socket) => {
       tables: result.tables,
       theme: result.theme,
       furniture: furnitureState,
+      activeScreenShare: room.activeScreenShare || null,
       you: {
         socketId: socket.id,
         x: result.participant.x,

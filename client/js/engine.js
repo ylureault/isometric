@@ -82,6 +82,10 @@ var Engine = {
     Network.onParticipantLeft = function(d) {
       self.initSfx(); self.playSfx('leave');
       UI.showNotification(d.pseudo + ' a quitté');
+      // Clean up screen share connections for the leaving participant
+      ScreenShare.removeShare(d.socketId);
+      var outConn = ScreenShare.outgoingPeers.get(d.socketId);
+      if (outConn) { try { outConn.close(); } catch (e) {} ScreenShare.outgoingPeers.delete(d.socketId); }
     };
     Network.onParticipantDisconnected = function(d) {
       self.initSfx(); self.playSfx('leave');
@@ -323,6 +327,10 @@ var Engine = {
       if (r.tables) r.tables.forEach(function(t) { self.tables.set(t.id, t); });
       UI.showCopyLink(self.roomConfig.roomId);
       UI.updateAdminUI(self.player.isAdmin);
+      // Restore active screen share if one is in progress
+      if (r.activeScreenShare) {
+        ScreenShare.activeGlobalShare = { socketId: r.activeScreenShare.socketId, pseudo: r.activeScreenShare.pseudo };
+      }
       // Set camera immediately to player
       var ps = Board.iso(self.player.x, self.player.y);
       self.camera.x = self.canvas.width / 2 - ps.x * self.zoom;
