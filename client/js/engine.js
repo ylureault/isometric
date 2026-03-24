@@ -56,7 +56,11 @@ var Engine = {
     window.addEventListener('keydown', function(e) { self.onKeyDown(e); });
     window.addEventListener('keyup', function(e) { self.onKeyUp(e); });
     window.addEventListener('wheel', function(e) { self.onWheel(e); }, { passive: false });
-    window.addEventListener('beforeunload', function() { Audio.destroy(); Network.leaveRoom(); });
+    window.addEventListener('beforeunload', function() {
+      if (self.sfxCtx) { try { self.sfxCtx.close(); } catch(e) {} self.sfxCtx = null; }
+      Audio.destroy();
+      Network.leaveRoom();
+    });
     window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
     this.canvas.addEventListener('mousedown', function(e) { self.onMouseDown(e); });
     this.canvas.addEventListener('mousemove', function(e) { self.onMouseMove(e); });
@@ -70,6 +74,10 @@ var Engine = {
     Network.onParticipantJoined = function(d) {
       self.initSfx(); self.playSfx('join');
       UI.showNotification(d.pseudo + ' a rejoint');
+      // Send screen share stream to late joiners
+      if (ScreenShare.isSharing && ScreenShare.localStream) {
+        ScreenShare.sendStreamToPeer(d.socketId);
+      }
     };
     Network.onParticipantLeft = function(d) {
       self.initSfx(); self.playSfx('leave');

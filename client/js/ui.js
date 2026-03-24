@@ -163,6 +163,7 @@ const UI = {
         try { localStorage.removeItem('insuffle_session'); } catch (e) {}
         Network.leaveRoom();
         Audio.destroy();
+        if (Engine.sfxCtx) { try { Engine.sfxCtx.close(); } catch(e) {} Engine.sfxCtx = null; }
         ScreenShare.destroy();
         window.location.href = '/client/index.html';
       }
