@@ -1797,9 +1797,9 @@ const UI = {
     var self = this;
 
     var html = '<div class="ctx-menu-header">🚪 ' + (sr.name || 'Sous-salle') + '</div>';
-    html += '<div class="ctx-menu-item" data-action="enter-subroom">Entrer dans la salle</div>';
-    html += '<div class="ctx-menu-item" data-action="move-subroom">Déplacer devant moi</div>';
-    html += '<div class="ctx-menu-item" data-action="rename-subroom">Renommer</div>';
+    html += '<div class="ctx-menu-item" data-action="enter-subroom">Entrer dans la sous-salle</div>';
+    html += '<div class="ctx-menu-item" data-action="move-subroom">Déplacer devant mon avatar</div>';
+    html += '<div class="ctx-menu-item" data-action="rename-subroom">Renommer la sous-salle</div>';
     html += '<div class="ctx-menu-item ctx-menu-danger" data-action="delete-subroom">Supprimer</div>';
 
     menu.innerHTML = html;
@@ -1818,15 +1818,15 @@ const UI = {
         } else if (action === 'move-subroom') {
           sr.x = Math.floor(Engine.player.x) + 2;
           sr.y = Math.floor(Engine.player.y);
-          self.showNotification('Sous-salle déplacée');
+          self.showNotification('Sous-salle déplacée avec succès');
         } else if (action === 'rename-subroom') {
-          var newName = prompt('Nouveau nom:', sr.name);
+          var newName = prompt('Nouveau nom de la sous-salle :', sr.name);
           if (newName) {
             sr.name = newName;
-            self.showNotification('Sous-salle renommée: ' + newName);
+            self.showNotification('Sous-salle renommée : « ' + newName + ' »');
           }
         } else if (action === 'delete-subroom') {
-          if (confirm('Supprimer la sous-salle "' + sr.name + '" ?')) {
+          if (confirm('Voulez-vous vraiment supprimer la sous-salle « ' + sr.name + ' » ?')) {
             Network.socket.emit('delete-sub-room', { subRoomId: subRoomId }, function(r) {
               if (r && r.success) {
                 Engine.subRooms.delete(subRoomId);
