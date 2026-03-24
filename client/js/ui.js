@@ -629,7 +629,7 @@ const UI = {
       html += '<button class="admin-action-btn danger" data-action="delete-subroom" data-id="' + id + '" title="Supprimer">✕</button>';
       html += '</div>';
     });
-    if (!html) html = '<p style="font-size:0.75rem;color:#999;">Aucune sous-salle</p>';
+    if (!html) html = '<p style="font-size:0.75rem;color:#999;">Aucune sous-salle créée pour le moment</p>';
     list.innerHTML = html;
 
     list.querySelectorAll('[data-action="delete-subroom"]').forEach(function(btn) {
@@ -963,7 +963,7 @@ const UI = {
       else el.classList.add('db-postit-other');
 
       var textarea = document.createElement('textarea');
-      textarea.value = postit.text || ''; textarea.placeholder = 'Écrire ici...';
+      textarea.value = postit.text || ''; textarea.placeholder = 'Saisissez votre idée...';
       textarea.addEventListener('input', function() { postit.text = textarea.value; broadcastPostit(postit); });
       textarea.addEventListener('keydown', function(e) { e.stopPropagation(); });
 
@@ -1172,7 +1172,7 @@ const UI = {
         } else if (drawState.type === 'circle') {
           var cw2 = drawState.endX-drawState.startX, ch2 = drawState.endY-drawState.startY;
           if (Math.abs(cw2)>20 && Math.abs(ch2)>20) {
-            var label = prompt('Nom du groupe (optionnel):') || '';
+            var label = prompt('Donnez un nom à ce groupe (facultatif) :') || '';
             var circ = { id:'c_'+Date.now(), cx:drawState.startX+cw2/2, cy:drawState.startY+ch2/2, rx:Math.abs(cw2/2), ry:Math.abs(ch2/2), color:'rgba(255,255,255,0.5)', label:label };
             circles.push(circ); Network.socket.emit('wb-stroke', { whiteboardId:boardId, strokeData:{type:'circle',circle:circ} });
           }
@@ -1842,14 +1842,14 @@ const UI = {
   },
 
   openSubRoomDialog: function() {
-    var name = prompt('Nom de la sous-salle:');
+    var name = prompt('Donnez un nom à la nouvelle sous-salle :');
     if (!name) return;
     var px = Math.floor(Engine.player.x) + 2;
     var py = Math.floor(Engine.player.y);
     Network.socket.emit('create-sub-room', { name: name, x: px, y: py, width: 3, height: 3 }, function(r) {
       if (r && r.success) {
         Engine.subRooms.set(r.subRoom.id, r.subRoom);
-        UI.showNotification('Sous-salle "' + name + '" créée');
+        UI.showNotification('Sous-salle « ' + name + ' » créée avec succès');
       }
     });
   },
@@ -1877,7 +1877,7 @@ const UI = {
     var select = document.getElementById('edit-catalog-select');
     if (!select) return;
 
-    var html = '<option value="">-- Choisir un mobilier --</option>';
+    var html = '<option value="">-- Choisir un type de mobilier --</option>';
     for (var type in Environments.furnitureTypes) {
       var def = Environments.furnitureTypes[type];
       if (def.isZone) continue;
@@ -1971,7 +1971,7 @@ const UI = {
     const timeStr = mins + ':' + secs.toString().padStart(2, '0');
 
     if (el) {
-      el.innerHTML = '<span class="timer-text">' + (t.paused ? 'EN PAUSE — ' : '') + timeStr + '</span>';
+      el.innerHTML = '<span class="timer-text">' + (t.paused ? 'En pause — ' : '') + timeStr + '</span>';
     }
 
     if (globalEl && globalTime) {
@@ -1996,7 +1996,7 @@ const UI = {
       if (!stopBtn) {
         stopBtn = document.createElement('button');
         stopBtn.className = 'timer-stop-btn';
-        stopBtn.title = 'Arrêter le timer';
+        stopBtn.title = 'Arrêter le minuteur';
         stopBtn.textContent = '✕';
         stopBtn.style.cssText = 'margin-left:8px;background:#e74c3c;color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;line-height:24px;padding:0;vertical-align:middle;';
         stopBtn.addEventListener('click', function() {
