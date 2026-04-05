@@ -215,7 +215,17 @@ const UI = {
     else if (relX > 0.75) areaName = 'Zone est';
     else areaName = 'Centre';
     if (el2) el2.textContent = `${areaName} (${Math.floor(playerX)}, ${Math.floor(playerY)})  \u00b7  x${(zoom || 1).toFixed(1)}`;
-    if (el3) el3.textContent = `${participantCount} participant${participantCount > 1 ? 's' : ''}`;
+    // #31 Smooth number counting for participant count
+    if (el3) {
+      var prevCount = this._lastParticipantCount || 0;
+      if (prevCount !== participantCount) {
+        this._lastParticipantCount = participantCount;
+        el3.style.transition = 'transform 0.2s ease';
+        el3.style.transform = 'scale(1.05)';
+        setTimeout(function() { el3.style.transform = 'scale(1)'; }, 200);
+      }
+      el3.textContent = `${participantCount} participant${participantCount > 1 ? 's' : ''}`;
+    }
 
     // #14 Minimap badge with player count
     var minimapBadge = document.getElementById('minimap-badge');
@@ -288,6 +298,8 @@ const UI = {
     document.getElementById('btn-view-toggle')?.addEventListener('click', () => {
       Engine.viewMode = Engine.viewMode === 'iso' ? 'topdown' : 'iso';
       this.showNotification('Vue : ' + (Engine.viewMode === 'iso' ? 'Isom\u00e9trique' : 'Vue de dessus'));
+      // #40 Smooth view mode transition
+      if (typeof UXEnhancements !== 'undefined') UXEnhancements.fadeViewTransition();
       // #12 Update compass rotation for view mode
       var compass = document.getElementById('compass-indicator');
       if (compass) compass.style.transform = Engine.viewMode === 'topdown' ? 'rotate(0deg)' : 'rotate(45deg)';
@@ -1250,6 +1262,10 @@ const UI = {
           drawCtx.stroke(); drawCtx.setLineDash([]);
         }
       }
+      // #47 Draw cursor trail in darkboard
+      if (typeof UXEnhancements !== 'undefined') {
+        UXEnhancements.drawDarkboardCursorTrail(drawCtx);
+      }
       updateMinimap();
     }
 
@@ -1258,6 +1274,8 @@ const UI = {
       Network.socket.emit('wb-postit', { whiteboardId: boardId,
         postitData: { id: p.id, text: p.text, x: p.x, y: p.y, color: p.color, pseudo: p.pseudo, votes: p.votes || 0 }
       });
+      // #18, #19, #22 Save indicator
+      if (typeof UXEnhancements !== 'undefined') UXEnhancements.markDarkboardSaved();
     }
 
     function createPostItEl(postit) {
@@ -1440,6 +1458,11 @@ const UI = {
     }
 
     function onMove(e) {
+      // #47 Smooth cursor trail in Dark Board
+      if (typeof UXEnhancements !== 'undefined' && drawState) {
+        var trailPos = canvasPos(e);
+        UXEnhancements.updateDarkboardCursorTrail(trailPos.x, trailPos.y);
+      }
       if (resizeState) {
         var dw = (e.clientX - resizeState.startX) / zoom, dh = (e.clientY - resizeState.startY) / zoom;
         resizeState.el.style.width = Math.max(100, resizeState.origW + dw) + 'px';

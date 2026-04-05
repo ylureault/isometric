@@ -595,15 +595,28 @@
   <script src="js/audio.js"></script>
   <script src="js/screen-share.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/ux-enhancements.js"></script>
   <script src="js/engine.js"></script>
   <script>
     document.getElementById('btn-copy-link')?.addEventListener('click', () => {
       const url = document.getElementById('room-url-display').textContent;
       navigator.clipboard.writeText(url).then(() => {
-        const btn = document.getElementById('btn-copy-link');
-        btn.textContent = 'Copié !';
-        setTimeout(() => { btn.textContent = 'Copier'; }, 2000);
+        // #20 Green flash feedback on copy
+        if (typeof UXEnhancements !== 'undefined') {
+          UXEnhancements.flashCopyButton();
+        } else {
+          const btn = document.getElementById('btn-copy-link');
+          btn.textContent = 'Copie !';
+          setTimeout(() => { btn.textContent = 'Copier'; }, 2000);
+        }
       });
+    });
+
+    // #41 Preload commonly needed DOM elements at startup
+    document.addEventListener('DOMContentLoaded', function() {
+      // Touch up cached references
+      var preload = ['game-canvas', 'hud', 'toolbar', 'chat-messages', 'notifications-container', 'minimap-canvas'];
+      preload.forEach(function(id) { document.getElementById(id); });
     });
   </script>
 </body>

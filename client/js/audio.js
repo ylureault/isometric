@@ -174,7 +174,15 @@ const Audio = {
 
     connection.onconnectionstatechange = () => {
       const state = connection.connectionState;
-      if (state === 'failed' || state === 'closed') {
+      if (state === 'failed') {
+        // #28 Auto-reconnect: attempt to re-establish connection
+        this.disconnectPeer(socketId);
+        setTimeout(() => {
+          if (this.localStream && Network.remotePlayers.has(socketId)) {
+            this.connectToPeer(socketId);
+          }
+        }, 3000);
+      } else if (state === 'closed') {
         this.disconnectPeer(socketId);
       }
     };

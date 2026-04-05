@@ -135,6 +135,28 @@ const Character = {
       ctx.stroke();
     }
 
+    // #14 Voice activity: pulsing green ring at base of avatar
+    if (isSpeaking && !isMuted) {
+      var ringTime = typeof performance !== 'undefined' ? performance.now() / 500 : 0;
+      var ringPulse = 0.6 + Math.sin(ringTime) * 0.4;
+      var ringR = 12 * S;
+      ctx.save();
+      ctx.translate(sx, baseY + 2 * S);
+      ctx.scale(1, 0.5); // flatten to isometric ellipse
+      ctx.beginPath();
+      ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(46,204,113,' + (0.5 * ringPulse) + ')';
+      ctx.lineWidth = 2.5 * S;
+      ctx.stroke();
+      // Outer glow ring
+      ctx.beginPath();
+      ctx.arc(0, 0, ringR + 3 * S, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(46,204,113,' + (0.2 * ringPulse) + ')';
+      ctx.lineWidth = 1.5 * S;
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Speaking indicator — animated sound waves above head
     if (isSpeaking && !isMuted) {
       var spkX = sx;

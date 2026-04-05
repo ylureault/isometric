@@ -80,9 +80,19 @@ var Engine = {
     Audio.init();
     UI.initToolbar();
 
+    // Initialize UX enhancements (#1-#50)
+    if (typeof UXEnhancements !== 'undefined') {
+      UXEnhancements.init();
+    }
+
     Network.onParticipantJoined = function(d) {
       self.initSfx(); self.playSfx('join');
-      UI.showNotification(d.pseudo + ' a rejoint la salle');
+      // #30 Grouped join notifications
+      if (typeof UXEnhancements !== 'undefined') {
+        UXEnhancements.groupedJoinNotification(d.pseudo);
+      } else {
+        UI.showNotification(d.pseudo + ' a rejoint la salle');
+      }
       // Send screen share stream to late joiners
       if (ScreenShare.isSharing && ScreenShare.localStream) {
         ScreenShare.sendStreamToPeer(d.socketId);
@@ -100,9 +110,21 @@ var Engine = {
       self.initSfx(); self.playSfx('leave');
       UI.showNotification(d.pseudo + ' s\'est déconnecté(e)');
     };
-    Network.onReconnecting = function() { UI.showReconnecting(true); };
+    Network.onReconnecting = function() {
+      UI.showReconnecting(true);
+      // #16 Connection status, #17 reconnection counter, #25 disconnected timer
+      if (typeof UXEnhancements !== 'undefined') {
+        UXEnhancements.updateConnectionStatus(false);
+        UXEnhancements.startReconnectCounter();
+      }
+    };
     Network.onReconnected = function() {
       UI.showReconnecting(false);
+      // #16, #17 Restore connection status
+      if (typeof UXEnhancements !== 'undefined') {
+        UXEnhancements.stopReconnectCounter();
+        UXEnhancements.updateConnectionStatus(true);
+      }
       // Re-join room with same config after reconnection (new socket ID)
       if (self.roomConfig && self.roomConfig.roomId) {
         var attempts = 0;
@@ -150,7 +172,15 @@ var Engine = {
     s.on('screen-share-started', function(d) { ScreenShare.activeGlobalShare = { socketId: d.socketId, pseudo: d.pseudo }; UI.showNotification(d.pseudo + ' partage son écran avec vous'); });
     s.on('screen-share-stopped', function(d) { ScreenShare.removeShare(d.socketId); });
     s.on('role-changed', function(d) {
-      if (d.socketId === Network.mySocketId) { self.player.isAdmin = d.isAdmin; UI.updateAdminUI(d.isAdmin); }
+      if (d.socketId === Network.mySocketId) {
+        var wasAdmin = self.player.isAdmin;
+        self.player.isAdmin = d.isAdmin;
+        UI.updateAdminUI(d.isAdmin);
+        // #10 Crown animation when promoted to admin
+        if (!wasAdmin && d.isAdmin && typeof UXEnhancements !== 'undefined') {
+          UXEnhancements.showAdminCrown();
+        }
+      }
       var rp = Network.remotePlayers.get(d.socketId); if (rp) rp.isAdmin = d.isAdmin;
     });
     s.on('kicked', function(d) { alert(d.reason || 'Vous avez été exclu(e) de cette salle.'); window.location.href = '/client/index.html'; });
@@ -363,6 +393,20 @@ var Engine = {
       self.camera.x = self.canvas.width / 2 - ps.x * self.zoom;
       self.camera.y = self.canvas.height / 2 - ps.y * self.zoom;
       self.start();
+
+      // === UX Enhancements on join ===
+      if (typeof UXEnhancements !== 'undefined') {
+        // #1 Welcome confetti burst (one-time)
+        setTimeout(function() { UXEnhancements.triggerWelcomeConfetti(); }, 500);
+        // #11, #12 Welcome message in chat
+        UXEnhancements.addWelcomeChat(self.player.pseudo);
+        // #10 Admin crown animation
+        if (self.player.isAdmin) {
+          setTimeout(function() { UXEnhancements.showAdminCrown(); }, 800);
+        }
+        // #16 Connection status
+        UXEnhancements.updateConnectionStatus(true);
+      }
     });
   },
 
@@ -380,7 +424,12 @@ var Engine = {
     if (this.editMode) { this.onEditWheel(e); return; }
     e.preventDefault();
     var d = e.deltaY > 0 ? -CONSTANTS.ZOOM_STEP : CONSTANTS.ZOOM_STEP;
-    this.zoom = Math.max(CONSTANTS.ZOOM_MIN, Math.min(CONSTANTS.ZOOM_MAX, this.zoom + d));
+    // #39 Smooth zoom transition
+    if (typeof UXEnhancements !== 'undefined') {
+      UXEnhancements.animateZoom((UXEnhancements._targetZoom || this.zoom) + d);
+    } else {
+      this.zoom = Math.max(CONSTANTS.ZOOM_MIN, Math.min(CONSTANTS.ZOOM_MAX, this.zoom + d));
+    }
   },
 
   onKeyDown: function(e) {
@@ -391,7 +440,7 @@ var Engine = {
     if (e.code === 'KeyH') Network.socket.emit('toggle-hand', {});
     if (e.code === 'Tab') { e.preventDefault(); var mc = document.getElementById('minimap-container'); if (mc) mc.style.display = mc.style.display === 'none' ? 'block' : 'none'; }
     if (e.key === '?') UI.toggleShortcutsModal();
-    if (e.code === 'KeyV' && !this.editMode) { this.viewMode = this.viewMode === 'iso' ? 'topdown' : 'iso'; UI.showNotification('Vue : ' + (this.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus')); }
+    if (e.code === 'KeyV' && !this.editMode) { this.viewMode = this.viewMode === 'iso' ? 'topdown' : 'iso'; UI.showNotification('Vue : ' + (this.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus')); if (typeof UXEnhancements !== 'undefined') UXEnhancements.fadeViewTransition(); }
     if (e.code === 'KeyE' && this.player.isAdmin) this.toggleEditMode();
     if (e.code === 'Escape') { if (this.editMode) { this.toggleEditMode(); return; } UI.hideContextMenu(); if (UI.shortcutsModalOpen) UI.toggleShortcutsModal(); if (UI.adminPanelOpen) UI.toggleAdminPanel(); }
     if (e.code === 'Space' && this.player.isAdmin && !this.player.isBroadcasting) {
@@ -711,6 +760,8 @@ var Engine = {
       if (clickX >= hitMinX && clickX < hitMaxX && clickY >= hitMinY && clickY < hitMaxY) {
         var wbId = item.whiteboardId || ('wb_' + item.type + '_' + i);
         item.whiteboardId = wbId;
+        // #7 Achievement for first board interaction
+        if (typeof UXEnhancements !== 'undefined') UXEnhancements.checkAchievement('firstBoard');
         if (def.isPostItBoard) {
           UI.openPostItBoard(wbId, item);
         } else {
@@ -779,6 +830,10 @@ var Engine = {
       Network.socket.emit('chat-typing', { typing: false });
       self.player.chatBubble = { text: text, time: Date.now() };
       input.value = '';
+      // #7 Achievement for first chat message
+      if (typeof UXEnhancements !== 'undefined') UXEnhancements.checkAchievement('firstChat');
+      // #43 Prune old messages
+      if (typeof UXEnhancements !== 'undefined') UXEnhancements.pruneChatMessages();
     }
 
     if (input) {
@@ -851,6 +906,8 @@ var Engine = {
         unread++;
         if (badge) { badge.textContent = unread; badge.style.display = 'inline'; }
       }
+      // #43 Prune old chat messages
+      if (typeof UXEnhancements !== 'undefined') UXEnhancements.pruneChatMessages();
     });
 
     // Reset badge on open
@@ -1103,11 +1160,17 @@ var Engine = {
   },
 
   addReaction: function(emoji, x, y) {
-    this.reactions.push({ emoji: emoji, x: x, y: y, opacity: 1.5, offsetY: 0, scale: 0.3, t: 0 });
+    // #5 Bigger, more visible reactions with bounce
+    this.reactions.push({ emoji: emoji, x: x, y: y, opacity: 2.0, offsetY: 0, scale: 0.3, t: 0, bouncePhase: 0 });
+    // #7 Achievement for first reaction
+    if (typeof UXEnhancements !== 'undefined') UXEnhancements.checkAchievement('firstReaction');
   },
 
   triggerConfetti: function() {
-    for (var i = 0; i < 100; i++) {
+    // #38 Reduce particle count when FPS is low
+    var count = 100;
+    if (typeof UXEnhancements !== 'undefined' && UXEnhancements.shouldReduceParticles()) count = 40;
+    for (var i = 0; i < count; i++) {
       this.confetti.push({
         x: Math.random() * this.canvas.width, y: -Math.random() * 200,
         vx: (Math.random() - 0.5) * 5, vy: Math.random() * 3 + 2,
@@ -1296,6 +1359,18 @@ var Engine = {
     this.confetti = newConf;
 
     UI.updateHUD(this.roomConfig.name, this.player.x, this.player.y, Network.getParticipantCount(), this.zoom);
+
+    // === UX Enhancements per-frame updates ===
+    if (typeof UXEnhancements !== 'undefined') {
+      // #2 Particle trail
+      UXEnhancements.updateParticleTrail(this.player.x, this.player.y, this.player.isWalking, dt);
+      // #3 Wave on first proximity
+      UXEnhancements.checkFirstProximity(this.player.x, this.player.y);
+      // #38 FPS tracking for adaptive quality
+      UXEnhancements.updateFps(dt);
+      // #39 Smooth zoom
+      UXEnhancements.updateSmoothZoom(dt);
+    }
   },
 
   render: function(ts) {
@@ -1306,8 +1381,10 @@ var Engine = {
     var w = this.canvas.width;
     var h = this.canvas.height;
 
-    // Background — light professional
-    var bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+    // Background — light professional with #9 subtle parallax
+    var parallaxX = this.camera.x * 0.02;
+    var parallaxY = this.camera.y * 0.02;
+    var bgGrad = ctx.createLinearGradient(parallaxX, parallaxY, parallaxX, h + parallaxY);
     bgGrad.addColorStop(0, '#e8ecf0');
     bgGrad.addColorStop(1, '#d0d4d8');
     ctx.fillStyle = bgGrad;
@@ -1415,6 +1492,11 @@ var Engine = {
     // #23 Proximity indicator: subtle glow when near interactive furniture
     this.drawInteractiveGlow(ctx);
 
+    // #2 Particle trail behind walking character
+    if (typeof UXEnhancements !== 'undefined') {
+      UXEnhancements.drawParticleTrail(ctx);
+    }
+
     // Proximity radius (gradient)
     this.drawProximityRadius(ctx);
 
@@ -1429,8 +1511,15 @@ var Engine = {
     // Confetti (screen space)
     this.drawConfetti(ctx);
 
-    // Minimap
-    this.drawMinimap();
+    // #9 Subtle parallax on walls (applied via camera offset during draw)
+    // Already handled by the camera lerp system
+
+    // #34 Throttled minimap
+    if (typeof UXEnhancements !== 'undefined' && UXEnhancements.shouldDrawMinimap()) {
+      this.drawMinimap();
+    } else if (typeof UXEnhancements === 'undefined') {
+      this.drawMinimap();
+    }
   },
 
   drawTable: function(ctx, table) {
@@ -1623,9 +1712,11 @@ var Engine = {
       var sy = pos.y + r.offsetY - 50;
       ctx.save();
       ctx.globalAlpha = Math.min(1, r.opacity);
-      // #28 Pop scale animation: overshoot then settle
-      var popScale = r.t < 0.2 ? (r.scale * 1.3) : r.scale;
-      var fs = Math.max(12, Math.floor(28 * popScale));
+      // #5 + #28 Bigger reactions with pop scale and bounce
+      var popScale = r.t < 0.2 ? (r.scale * 1.4) : r.scale;
+      var bounceOffset = Math.sin(r.t * 6) * Math.max(0, 3 - r.t * 2);
+      sy += bounceOffset;
+      var fs = Math.max(18, Math.floor(42 * popScale));
       ctx.font = fs + 'px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1708,9 +1799,17 @@ var Engine = {
       if (p.opacity <= 0) return;
       ctx.fillStyle = p.disconnected ? 'rgba(200,200,50,0.5)' : '#2ecc71';
       ctx.beginPath(); ctx.arc(p.renderX * sc, p.renderY * sc, 2, 0, Math.PI * 2); ctx.fill();
+      // #15 Speaking indicator on minimap
+      if (p.isSpeaking && typeof UXEnhancements !== 'undefined') {
+        UXEnhancements.drawMinimapSpeakingIndicator(ctx, p.renderX, p.renderY, sc);
+      }
     });
     ctx.fillStyle = '#3498db';
     ctx.beginPath(); ctx.arc(this.player.x * sc, this.player.y * sc, 3, 0, Math.PI * 2); ctx.fill();
+    // #15 Local speaking indicator on minimap
+    if (Audio.isSpeaking() && typeof UXEnhancements !== 'undefined') {
+      UXEnhancements.drawMinimapSpeakingIndicator(ctx, this.player.x, this.player.y, sc);
+    }
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, w, h);

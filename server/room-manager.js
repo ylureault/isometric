@@ -1217,7 +1217,8 @@ class RoomManager {
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
     if (!requester || !requester.isAdmin) return { error: 'not_admin' };
-    const r = Math.max(CONSTANTS.AUDIO_RADIUS_MIN, Math.min(CONSTANTS.AUDIO_RADIUS_MAX, Number(radius) || CONSTANTS.AUDIO_RADIUS));
+    const numRadius = typeof radius === 'number' && isFinite(radius) ? radius : CONSTANTS.AUDIO_RADIUS;
+    const r = Math.max(CONSTANTS.AUDIO_RADIUS_MIN, Math.min(CONSTANTS.AUDIO_RADIUS_MAX, numRadius));
     room.audioRadius = r;
     return { success: true, audioRadius: r };
   }

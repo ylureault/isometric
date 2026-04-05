@@ -847,6 +847,35 @@ io.on('connection', (socket) => {
     io.to(currentRoomId).emit('chat-message', msg);
   });
 
+  // ===== #13 TYPING INDICATOR =====
+  socket.on('chat-typing', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p) return;
+    socket.to(currentRoomId).emit('chat-typing', {
+      socketId: socket.id,
+      pseudo: p.pseudo,
+      typing: !!data.typing,
+    });
+  });
+
+  // Also handle 'typing' event for backward compatibility
+  socket.on('typing', () => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p) return;
+    socket.to(currentRoomId).emit('user-typing', { pseudo: p.pseudo });
+  });
+
+  // ===== #21 PING MEASUREMENT =====
+  socket.on('ping-measure', (data, callback) => {
+    if (typeof callback === 'function') callback();
+  });
+
   // ===== RAISED HAND =====
 
   socket.on('toggle-hand', (data, callback) => {
