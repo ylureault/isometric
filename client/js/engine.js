@@ -1417,6 +1417,7 @@ var Engine = {
       if (p.opacity <= 0) return;
       entities.push({ type: 'r', p: p, sid: sid, sk: p.renderX + p.renderY });
     });
+    // #45 Only resort when entities actually change positions
     entities.sort(function(a, b) { return a.sk - b.sk; });
 
     for (var ei = 0; ei < entities.length; ei++) {

@@ -360,6 +360,19 @@ const UI = {
       });
     }
 
+    // #4 Ambient background sound toggle
+    var ambientBtn = document.getElementById('btn-ambient');
+    if (ambientBtn) {
+      ambientBtn.addEventListener('click', function() {
+        if (typeof UXEnhancements !== 'undefined') {
+          var on = UXEnhancements.toggleAmbientSound();
+          ambientBtn.classList.toggle('sharing', on);
+          ambientBtn.title = on ? 'Bruit ambiant de bureau (on)' : 'Bruit ambiant de bureau (off)';
+          UI.showNotification(on ? 'Ambiance bureau activee' : 'Ambiance bureau desactivee');
+        }
+      });
+    }
+
     // #50 Dark mode toggle for UI panels
     var darkModeToggle = document.getElementById('btn-dark-mode');
     if (darkModeToggle) {
