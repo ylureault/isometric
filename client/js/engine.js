@@ -27,6 +27,13 @@ var Engine = {
   isDragging: false, dragStart: { x: 0, y: 0 }, cameraStart: { x: 0, y: 0 },
   // View mode: 'iso' or 'topdown'
   viewMode: 'iso',
+  // Follow player mode (improvement #15)
+  followTarget: null, // socketId of player to follow
+  // Table notes debounce (improvement #7)
+  _tableNotesTimer: null,
+  _tableNotesQueue: null,
+  // Furniture undo stack (improvement #14)
+  _furnitureUndoStack: [],
   // Edit mode state (admin only)
   editMode: false,
   editTool: 'place', // 'place', 'move', 'delete'
@@ -62,6 +69,8 @@ var Engine = {
       Network.leaveRoom();
     });
     window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+    // #16 Double-click to center camera on a point
+    this.canvas.addEventListener('dblclick', function(e) { self.onDblClick(e); });
     this.canvas.addEventListener('mousedown', function(e) { self.onMouseDown(e); });
     this.canvas.addEventListener('mousemove', function(e) { self.onMouseMove(e); });
     this.canvas.addEventListener('mouseup', function(e) { self.onMouseUp(e); });
@@ -196,6 +205,14 @@ var Engine = {
     s.on('admin-broadcast-start', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = true; self.initSfx(); self.playSfx('notification'); UI.showNotification(d.pseudo + ' s\'adresse à tous les participants'); });
     s.on('admin-broadcast-stop', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isBroadcasting = false; });
     s.on('participant-speaking-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isSpeaking = d.speaking; });
+    // Improvement #4: room renamed
+    s.on('room-renamed', function(d) { self.roomConfig.name = d.name; UI.showNotification('Salle renommée : ' + d.name); });
+    // Improvement #22: force muted by admin
+    s.on('force-muted', function() { self.player.isMuted = true; Audio.isMuted = true; Audio._applyMuteState(); UI.updateMuteButton(true); UI.showNotification('Vous avez été mis en sourdine'); });
+    // Improvement #24: audio radius changed
+    s.on('audio-radius-changed', function(d) { self.player.audioRadius = d.audioRadius; });
+    // Improvement #6: furniture rotated
+    s.on('furniture-rotated', function(d) { var f = Board.furniture.find(function(item) { return item.id === d.furnitureId; }); if (f) { f.rotation = d.rotation; Board.buildCollisionMap(); } });
 
     // Sub-rooms
     s.on('sub-room-created', function(d) { self.subRooms.set(d.id, d); });
@@ -375,6 +392,25 @@ var Engine = {
       this.player.isBroadcasting = true;
       Network.socket.emit('admin-broadcast-start');
     }
+    // Improvement #14: Ctrl+Z undo furniture in edit mode
+    if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && this.editMode) {
+      e.preventDefault();
+      var self = this;
+      Network.socket.emit('undo-furniture', {}, function(r) {
+        if (r && r.success) {
+          Board.furniture = Board.furniture.filter(function(f) { return f.id !== r.removedId; });
+          Board.buildCollisionMap();
+          UI.showNotification('Annulation du dernier mobilier');
+        }
+      });
+    }
+    // Improvement #15: F key toggles follow player mode (admin)
+    if (e.code === 'KeyF' && this.player.isAdmin && !this.editMode) {
+      if (this.followTarget) {
+        this.followTarget = null;
+        UI.showNotification('Suivi désactivé');
+      }
+    }
     var rMap = { 'Digit1': '👍', 'Digit2': '👏', 'Digit3': '❓', 'Digit4': '💡', 'Digit5': '❤️', 'Digit6': '😂' };
     if (rMap[e.code]) this.sendReaction(rMap[e.code]);
   },
@@ -406,6 +442,44 @@ var Engine = {
     if (this.isDragging) {
       this.camera.x = this.cameraStart.x + (e.clientX - this.dragStart.x);
       this.camera.y = this.cameraStart.y + (e.clientY - this.dragStart.y);
+      // #18 Pan limits
+      var maxPan = Board.gridSize * Board.tileWidth * this.zoom;
+      this.camera.x = Math.max(-maxPan, Math.min(this.canvas.width + maxPan * 0.5, this.camera.x));
+      this.camera.y = Math.max(-maxPan, Math.min(this.canvas.height + maxPan * 0.5, this.camera.y));
+    }
+    // #21 Furniture hover tooltip
+    if (this.started && !this.isDragging) {
+      this._showFurnitureTooltip(e.clientX, e.clientY);
+    }
+  },
+
+  // #21 Furniture hover tooltip
+  _showFurnitureTooltip: function(mx, my) {
+    var tooltip = document.getElementById('furniture-tooltip');
+    if (!tooltip) return;
+    var gp = Board.screenToGrid(mx, my, this.camera.x, this.camera.y, this.zoom);
+    var cx = Math.floor(gp.x), cy = Math.floor(gp.y);
+    var found = null;
+    for (var i = Board.furniture.length - 1; i >= 0; i--) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      if (cx >= item.x && cx < item.x + (def.width || 1) && cy >= item.y && cy < item.y + (def.height || 1)) {
+        found = { item: item, def: def }; break;
+      }
+    }
+    if (found) {
+      var hint = '';
+      if (found.def.isWhiteboard) hint = 'Cliquer pour ouvrir le tableau';
+      else if (found.def.isPostItBoard) hint = 'Cliquer pour ouvrir le board';
+      else if (found.def.isDoor) hint = 'Cliquer pour utiliser la porte';
+      else if (found.def.isCollabSpace) hint = 'Cliquer pour collaborer';
+      tooltip.innerHTML = '<div class="tooltip-name">' + found.def.name + '</div>' + (hint ? '<div class="tooltip-hint">' + hint + '</div>' : '');
+      tooltip.style.left = (mx + 12) + 'px';
+      tooltip.style.top = (my - 10) + 'px';
+      tooltip.style.display = 'block';
+    } else {
+      tooltip.style.display = 'none';
     }
   },
 
@@ -450,15 +524,28 @@ var Engine = {
             if (foundSubRoom) return;
           }
 
-          // Otherwise show player context menu
+          // Otherwise show player context menu or return-to-player (#20)
+          var foundPlayer = false;
           Network.remotePlayers.forEach(function(rp, sid) {
             var dist = Math.sqrt((gp.x - rp.renderX) * (gp.x - rp.renderX) + (gp.y - rp.renderY) * (gp.y - rp.renderY));
-            if (dist < 1.5) UI.showContextMenu(e.clientX, e.clientY, sid, rp);
+            if (dist < 1.5) { UI.showContextMenu(e.clientX, e.clientY, sid, rp); foundPlayer = true; }
           });
+          if (!foundPlayer) { UI.showReturnToPlayerMenu(e.clientX, e.clientY); }
         }
       }
       this.isDragging = false;
     }
+  },
+
+  // #16 Double-click to center camera on a point
+  onDblClick: function(e) {
+    if (!this.started || this.editMode) return;
+    var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
+    var ps = Board.iso(gp.x, gp.y);
+    this._cameraCenterTarget = {
+      x: this.canvas.width / 2 - ps.x * this.zoom,
+      y: this.canvas.height / 2 - ps.y * this.zoom,
+    };
   },
 
   selectedFurniture: null,
@@ -655,33 +742,95 @@ var Engine = {
     var badge = document.getElementById('chat-badge');
     var unread = 0;
 
+    var newMsgBtn = document.getElementById('chat-new-messages-btn');
+    var typingIndicator = document.getElementById('chat-typing-indicator');
+    var userIsScrolledUp = false;
+
+    // #26 Track if user has scrolled up
+    if (messages) {
+      messages.addEventListener('scroll', function() {
+        var isAtBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 30;
+        userIsScrolledUp = !isAtBottom;
+        if (isAtBottom && newMsgBtn) newMsgBtn.style.display = 'none';
+      });
+    }
+    // #26 New messages button click
+    if (newMsgBtn) {
+      newMsgBtn.addEventListener('click', function() {
+        if (messages) messages.scrollTop = messages.scrollHeight;
+        newMsgBtn.style.display = 'none';
+      });
+    }
+
+    // #27 Typing indicator - debounced emit
+    var typingTimeout = null;
     function sendMessage() {
       if (!input || !input.value.trim()) return;
       var text = input.value.trim();
       Network.socket.emit('chat-message', { text: text });
-      // Show bubble above own character
+      Network.socket.emit('chat-typing', { typing: false });
       self.player.chatBubble = { text: text, time: Date.now() };
       input.value = '';
     }
 
     if (input) {
       input.addEventListener('keydown', function(e) {
-        e.stopPropagation(); // Prevent game key handlers
+        e.stopPropagation();
         if (e.code === 'Enter') sendMessage();
+      });
+      // #27 Typing indicator emit
+      input.addEventListener('input', function() {
+        if (input.value.trim().length > 0) {
+          Network.socket.emit('chat-typing', { typing: true });
+          clearTimeout(typingTimeout);
+          typingTimeout = setTimeout(function() {
+            Network.socket.emit('chat-typing', { typing: false });
+          }, 3000);
+        } else {
+          Network.socket.emit('chat-typing', { typing: false });
+        }
       });
     }
     if (sendBtn) sendBtn.addEventListener('click', sendMessage);
 
+    // #27 Receive typing indicators
+    var typingUsers = {};
+    Network.socket.on('chat-typing', function(d) {
+      if (d.socketId === Network.mySocketId) return;
+      if (d.typing) {
+        typingUsers[d.socketId] = d.pseudo || '...';
+      } else {
+        delete typingUsers[d.socketId];
+      }
+      var names = Object.values(typingUsers);
+      if (typingIndicator) {
+        if (names.length > 0) {
+          var who = names.length <= 2 ? names.join(' et ') : names.length + ' personnes';
+          typingIndicator.innerHTML = who + ' \u00e9cri' + (names.length > 1 ? 'vent' : 't') + ' <span class="typing-dots"><span></span><span></span><span></span></span>';
+        } else {
+          typingIndicator.innerHTML = '';
+        }
+      }
+    });
+
     Network.socket.on('chat-message', function(msg) {
       if (!messages) return;
-      // Remove empty state placeholder on first message
       var emptyEl = document.getElementById("chat-empty-state");
       if (emptyEl) emptyEl.remove();
+      // Clear typing for sender
+      delete typingUsers[msg.socketId];
+
       var div = document.createElement('div');
       div.className = 'chat-msg';
       div.innerHTML = '<span class="chat-msg-author">' + self.escapeHtml(msg.pseudo || 'Anonyme') + ':</span> ' + self.escapeHtml(msg.text);
       messages.appendChild(div);
-      messages.scrollTop = messages.scrollHeight;
+
+      // #26 Auto-scroll or show "new messages" button
+      if (!userIsScrolledUp) {
+        messages.scrollTop = messages.scrollHeight;
+      } else if (newMsgBtn) {
+        newMsgBtn.style.display = 'block';
+      }
 
       // Show chat bubble above the sender's character
       if (msg.socketId && msg.socketId !== Network.mySocketId) {
@@ -756,6 +905,7 @@ var Engine = {
 
   playSfx: function(type) {
     if (!this.sfxCtx || !this.sfxMasterGain) return;
+    if (this.sfxMuted) return; // #42 Sound mute toggle
     if (!this._ensureSfxContext()) return;
 
     // Sound spam prevention: debounce by type
@@ -961,14 +1111,66 @@ var Engine = {
 
   triggerApplause: function() {
     var self = this;
-    Network.remotePlayers.forEach(function(r) { self.addReaction('👏', r.renderX, r.renderY); });
-    this.addReaction('👏', this.player.x, this.player.y);
+    Network.remotePlayers.forEach(function(r) { self.addReaction('\uD83D\uDC4F', r.renderX, r.renderY); });
+    this.addReaction('\uD83D\uDC4F', this.player.x, this.player.y);
   },
+
+  // #24 Door approach prompt
+  _doorPromptVisible: false,
+  _updateDoorPrompt: function() {
+    var prompt = document.getElementById('door-prompt');
+    if (!prompt) return;
+    var px = this.player.x, py = this.player.y;
+    var nearDoor = null;
+    for (var i = 0; i < Board.furniture.length; i++) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def || !def.isDoor) continue;
+      var dist = Math.sqrt((px - (item.x + 0.5)) * (px - (item.x + 0.5)) + (py - (item.y + 0.5)) * (py - (item.y + 0.5)));
+      if (dist < 2.5 && item.linkedDoorId) { nearDoor = item; break; }
+    }
+    if (nearDoor && !this._doorPromptVisible) {
+      var screenPos = Board.iso(nearDoor.x + 0.5, nearDoor.y);
+      var sx = screenPos.x * this.zoom + this.camera.x;
+      var sy = screenPos.y * this.zoom + this.camera.y - 40;
+      prompt.style.left = sx + 'px';
+      prompt.style.top = sy + 'px';
+      prompt.innerHTML = 'Cliquer pour entrer \u00ab ' + (nearDoor.doorLabel || 'Portail') + ' \u00bb';
+      prompt.style.display = 'block';
+      this._doorPromptVisible = true;
+    } else if (!nearDoor && this._doorPromptVisible) {
+      prompt.style.display = 'none';
+      this._doorPromptVisible = false;
+    }
+  },
+
+  // #44 Connection quality indicator
+  _updateConnectionIndicator: function() {
+    var dot = document.getElementById('connection-dot');
+    if (!dot) return;
+    if (!Network.socket || !Network.socket.connected) {
+      dot.className = 'connection-dot poor';
+    } else {
+      // Use socket transport type as proxy for quality
+      var transport = Network.socket.io && Network.socket.io.engine ? Network.socket.io.engine.transport.name : 'websocket';
+      dot.className = transport === 'websocket' ? 'connection-dot good' : 'connection-dot medium';
+    }
+  },
+
+  // Sound mute flag (#42)
+  sfxMuted: false,
 
   start: function() {
     if (this.started) return;
     this.started = true;
     this.lastTime = performance.now();
+    // #12 Show compass indicator
+    var compass = document.getElementById('compass-indicator');
+    if (compass) compass.style.display = 'flex';
+    // #41 Hide loading bar
+    var loadingBar = document.getElementById('room-loading-indicator');
+    if (loadingBar) loadingBar.style.display = 'none';
+
     var self = this;
     function loop(ts) {
       var dt = Math.min((ts - self.lastTime) / 1000, 0.1);
@@ -979,6 +1181,8 @@ var Engine = {
     }
     requestAnimationFrame(loop);
     setInterval(function() { if (UI.activeTimer) UI.updateTimerDisplay(); }, 1000);
+    // #46 Update room uptime periodically
+    setInterval(function() { if (UI.adminPanelOpen) UI.updateRoomUptime(); }, 5000);
   },
 
   update: function(dt) {
@@ -1032,11 +1236,35 @@ var Engine = {
     Audio.updateProximity(this.player, Network.remotePlayers, this.player.audioRadius);
 
     // Camera follow with zoom
-    var ps = Board.iso(this.player.x, this.player.y);
+    var followX = this.player.x, followY = this.player.y;
+    if (this.followTarget) {
+      var ft = Network.remotePlayers.get(this.followTarget);
+      if (ft) { followX = ft.renderX; followY = ft.renderY; }
+      else { this.followTarget = null; }
+    }
+    var ps = Board.iso(followX, followY);
     var tcx = this.canvas.width / 2 - ps.x * this.zoom;
     var tcy = this.canvas.height / 2 - ps.y * this.zoom;
+    // #16 Double-click camera centering
+    if (this._cameraCenterTarget) {
+      tcx = this._cameraCenterTarget.x;
+      tcy = this._cameraCenterTarget.y;
+      if (Math.abs(this.camera.x - tcx) < 1 && Math.abs(this.camera.y - tcy) < 1) {
+        this._cameraCenterTarget = null;
+      }
+    }
+    // #13 Smooth camera ease
     this.camera.x += (tcx - this.camera.x) * 0.12;
     this.camera.y += (tcy - this.camera.y) * 0.12;
+
+    // #24 Door approach prompt + #23 Proximity indicator for interactive furniture
+    this._updateDoorPrompt();
+
+    // #44 Connection quality indicator (periodic check)
+    if (!this._lastConnCheck || performance.now() - this._lastConnCheck > 5000) {
+      this._lastConnCheck = performance.now();
+      this._updateConnectionIndicator();
+    }
 
     // Update reactions
     var newReactions = [];
@@ -1150,8 +1378,14 @@ var Engine = {
       }
     }
 
+    // #25 Stage step-up visual cue (chevron arrows at stage edges)
+    this.drawStageStepCues(ctx);
+
     // Sub-rooms (portals)
     this.drawSubRooms(ctx);
+
+    // #23 Proximity indicator: subtle glow when near interactive furniture
+    this.drawInteractiveGlow(ctx);
 
     // Proximity radius (gradient)
     this.drawProximityRadius(ctx);
@@ -1246,6 +1480,60 @@ var Engine = {
     ctx.restore();
   },
 
+  // #25 Draw step-up chevrons at stage edges
+  drawStageStepCues: function(ctx) {
+    var px = this.player.x, py = this.player.y;
+    for (var i = 0; i < Board.furniture.length; i++) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def || !def.isStage) continue;
+      var sw = def.width || 1, sh = def.height || 1;
+      var cx = item.x + sw / 2, cy = item.y + sh / 2;
+      var dist = Math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+      if (dist > sw + 3) continue;
+      // Draw small upward chevrons along the bottom edge of the stage
+      var bottomY = item.y + sh;
+      for (var sx = 0; sx < sw; sx++) {
+        var pos = Board.iso(item.x + sx + 0.5, bottomY);
+        ctx.save();
+        ctx.globalAlpha = 0.4 + 0.2 * Math.sin(performance.now() / 500 + sx);
+        ctx.fillStyle = '#C89868';
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y - 8);
+        ctx.lineTo(pos.x - 5, pos.y);
+        ctx.lineTo(pos.x + 5, pos.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  },
+
+  // #23 Draw subtle glow on interactive furniture when player is near
+  drawInteractiveGlow: function(ctx) {
+    var px = this.player.x, py = this.player.y;
+    for (var i = 0; i < Board.furniture.length; i++) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      if (!def.isWhiteboard && !def.isPostItBoard && !def.isDoor && !def.isCollabSpace) continue;
+      var icx = item.x + (def.width || 1) / 2;
+      var icy = item.y + (def.height || 1) / 2;
+      var dist = Math.sqrt((px - icx) * (px - icx) + (py - icy) * (py - icy));
+      if (dist > 4) continue;
+      var glowAlpha = Math.max(0.05, 0.25 * (1 - dist / 4));
+      var isoPos = Board.iso(icx, icy);
+      var glowR = Board.tileWidth * Math.max(def.width || 1, def.height || 1) * 0.4;
+      var grad = ctx.createRadialGradient(isoPos.x, isoPos.y, 0, isoPos.x, isoPos.y, glowR);
+      grad.addColorStop(0, 'rgba(74,111,165,' + glowAlpha + ')');
+      grad.addColorStop(1, 'rgba(74,111,165,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(isoPos.x, isoPos.y, glowR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  },
+
   drawProximityRadius: function(ctx) {
     var self = this;
     var px = this.player.x;
@@ -1296,15 +1584,20 @@ var Engine = {
     }
   },
 
+  // #28 Reactions with pop animation and slight horizontal drift
   drawReactions: function(ctx) {
     for (var i = 0; i < this.reactions.length; i++) {
       var r = this.reactions[i];
       var pos = Board.iso(r.x, r.y);
-      var sx = pos.x;
+      // #28 Add slight horizontal wobble for pop effect
+      var wobble = Math.sin(r.t * 4) * 5 * r.scale;
+      var sx = pos.x + wobble;
       var sy = pos.y + r.offsetY - 50;
       ctx.save();
       ctx.globalAlpha = Math.min(1, r.opacity);
-      var fs = Math.max(12, Math.floor(28 * r.scale));
+      // #28 Pop scale animation: overshoot then settle
+      var popScale = r.t < 0.2 ? (r.scale * 1.3) : r.scale;
+      var fs = Math.max(12, Math.floor(28 * popScale));
       ctx.font = fs + 'px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1579,6 +1872,31 @@ var Engine = {
     // Minimap not needed in topdown
   },
 
+  // ===== TABLE NOTES DEBOUNCE (improvement #7) =====
+
+  debouncedSaveTableNotes: function(tableId, content) {
+    var self = this;
+    if (this._tableNotesTimer) clearTimeout(this._tableNotesTimer);
+    this._tableNotesQueue = { tableId: tableId, content: content };
+    this._tableNotesTimer = setTimeout(function() {
+      if (self._tableNotesQueue && Network.socket) {
+        Network.socket.emit('update-table-notes', self._tableNotesQueue);
+      }
+      self._tableNotesQueue = null;
+      self._tableNotesTimer = null;
+    }, 500); // 500ms debounce
+  },
+
+  // ===== FOLLOW PLAYER (improvement #15) =====
+
+  setFollowTarget: function(socketId) {
+    this.followTarget = socketId;
+    var rp = Network.remotePlayers.get(socketId);
+    if (rp) {
+      UI.showNotification('Suivi de ' + rp.pseudo);
+    }
+  },
+
   // ===== EDIT MODE =====
 
   toggleEditMode: function() {
@@ -1709,6 +2027,12 @@ var Engine = {
 
     if (this.editDragging) {
       var item = this.editDragging.item;
+      // Improvement #12: snap to grid (integer positions)
+      item.x = Math.round(item.x);
+      item.y = Math.round(item.y);
+      // Improvement #5: enforce grid bounds
+      item.x = Math.max(0, Math.min(Board.gridSize - 1, item.x));
+      item.y = Math.max(0, Math.min(Board.gridSize - 1, item.y));
       this.editDragging = null;
       Board.buildCollisionMap();
       // Sync position to server (preserves all item properties including door links)
@@ -1937,6 +2261,21 @@ var Engine = {
       for (var cy = 0; cy < gs; cy += Math.ceil(gs / 20)) {
         ctx.fillText(cy, -4, cy * cellSize + cellSize / 2);
       }
+    }
+
+    // #32 Show grid coordinates on hover in edit mode
+    if (this.editMouseGrid.x >= 0 && this.editMouseGrid.x < gs && this.editMouseGrid.y >= 0 && this.editMouseGrid.y < gs) {
+      var coordX = this.editMouseGrid.x * cellSize + cellSize / 2;
+      var coordY = this.editMouseGrid.y * cellSize - 8;
+      ctx.font = 'bold 10px "Segoe UI", sans-serif';
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('(' + this.editMouseGrid.x + ', ' + this.editMouseGrid.y + ')', coordX, coordY);
+      // #33 Highlight hovered cell with visual feedback
+      ctx.strokeStyle = 'rgba(74,111,165,0.5)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(this.editMouseGrid.x * cellSize, this.editMouseGrid.y * cellSize, cellSize, cellSize);
     }
 
     ctx.restore();

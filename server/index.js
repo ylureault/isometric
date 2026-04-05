@@ -256,11 +256,12 @@ io.on('connection', (socket) => {
 
   socket.on('kick-participant', (data, callback) => {
     if (!currentRoomId) return callback({ error: 'not_in_room' });
-    const result = roomManager.kickParticipant(currentRoomId, socket.id, data.targetSocketId);
+    // Improvement #3: kick with custom reason
+    const result = roomManager.kickParticipant(currentRoomId, socket.id, data.targetSocketId, data.reason);
     if (result.error) return callback(result);
 
-    // Notify the kicked participant
-    io.to(data.targetSocketId).emit('kicked', { reason: 'Exclu par un administrateur' });
+    // Notify the kicked participant with custom reason
+    io.to(data.targetSocketId).emit('kicked', { reason: result.reason });
     // Remove from room
     roomManager.leaveRoom(currentRoomId, data.targetSocketId);
     // Notify others
@@ -846,16 +847,6 @@ io.on('connection', (socket) => {
     io.to(currentRoomId).emit('chat-message', msg);
   });
 
-  // ===== REACTIONS =====
-
-  socket.on('reaction', (data) => {
-    if (!currentRoomId) return;
-    socket.to(currentRoomId).emit('reaction', {
-      socketId: socket.id,
-      emoji: data.emoji,
-    });
-  });
-
   // ===== RAISED HAND =====
 
   socket.on('toggle-hand', (data, callback) => {
@@ -923,6 +914,71 @@ io.on('connection', (socket) => {
     io.to(currentRoomId).emit('spotlight-changed', {
       targetSocketId: data.targetSocketId || null,
       active: data.active,
+    });
+  });
+
+  // ===== ROOM NAME CHANGE (improvement #4) =====
+  socket.on('rename-room', (data, callback) => {
+    if (!currentRoomId) return callback({ error: 'not_in_room' });
+    const result = roomManager.renameRoom(currentRoomId, socket.id, data.name);
+    if (result.error) return callback(result);
+    io.to(currentRoomId).emit('room-renamed', { name: result.name });
+    callback(result);
+  });
+
+  // ===== MUTE ALL (improvement #22) =====
+  socket.on('mute-all', (data, callback) => {
+    if (!currentRoomId) return callback({ error: 'not_in_room' });
+    const result = roomManager.muteAll(currentRoomId, socket.id);
+    if (result.error) return callback(result);
+    for (const sid of result.muted) {
+      io.to(sid).emit('force-muted');
+    }
+    io.to(currentRoomId).emit('all-muted', { by: socket.id });
+    callback(result);
+  });
+
+  // ===== AUDIO RADIUS (improvement #24) =====
+  socket.on('set-audio-radius', (data, callback) => {
+    if (!currentRoomId) return callback({ error: 'not_in_room' });
+    const result = roomManager.setAudioRadius(currentRoomId, socket.id, data.radius);
+    if (result.error) return callback(result);
+    io.to(currentRoomId).emit('audio-radius-changed', { audioRadius: result.audioRadius });
+    callback(result);
+  });
+
+  // ===== FURNITURE ROTATION (improvement #6) =====
+  socket.on('rotate-furniture', (data, callback) => {
+    if (!currentRoomId) return callback({ error: 'not_in_room' });
+    const result = roomManager.rotateFurniture(currentRoomId, socket.id, data.furnitureId, data.rotation);
+    if (result.error) return callback(result);
+    io.to(currentRoomId).emit('furniture-rotated', { furnitureId: data.furnitureId, rotation: result.item.rotation });
+    callback(result);
+  });
+
+  // ===== UNDO FURNITURE (improvement #14) =====
+  socket.on('undo-furniture', (data, callback) => {
+    if (!currentRoomId) return callback({ error: 'not_in_room' });
+    const result = roomManager.undoLastFurniture(currentRoomId, socket.id);
+    if (result.error) return callback(result);
+    io.to(currentRoomId).emit('furniture-removed', { furnitureId: result.removedId });
+    callback(result);
+  });
+
+  // ===== INVITE CODE LOOKUP =====
+  socket.on('find-room-by-code', (data, callback) => {
+    const roomId = roomManager.findRoomByInviteCode(data.code);
+    if (!roomId) return callback({ error: 'not_found' });
+    callback({ success: true, roomId });
+  });
+
+  // ===== REACTION TRACKING (improvement #10) =====
+  socket.on('reaction', (data) => {
+    if (!currentRoomId) return;
+    roomManager.incrementStat(currentRoomId, 'reactionsCount');
+    socket.to(currentRoomId).emit('reaction', {
+      socketId: socket.id,
+      emoji: data.emoji,
     });
   });
 });

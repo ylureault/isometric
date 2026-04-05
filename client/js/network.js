@@ -121,6 +121,7 @@ const Network = {
       roomName: config.roomName,
       environment: config.environment,
       gridSize: config.gridSize,
+      password: config.password || undefined, // improvement #2
     }, (response) => {
       if (response.error) {
         if (this.onError) this.onError(response.error);

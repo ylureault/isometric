@@ -54,19 +54,52 @@
   <!-- Game Canvas -->
   <canvas id="game-canvas"></canvas>
 
+  <!-- #46 Vignette effect for premium feel -->
+  <div class="canvas-vignette" id="canvas-vignette"></div>
+
+  <!-- Room loading indicator (#41) -->
+  <div class="room-loading-indicator" id="room-loading-indicator" style="display: none;"></div>
+
   <!-- HUD top-left -->
   <div class="hud" id="hud" style="display: none;">
     <div class="hud-item hud-brand">
       <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" style="height:20px;vertical-align:middle;margin-right:6px;opacity:0.8;">
     </div>
     <div class="hud-item hud-room-name" id="hud-room-name"></div>
-    <div class="hud-item hud-coords" id="hud-coords">0, 0</div>
-    <div class="hud-item hud-participants" id="hud-participants">1 participant</div>
+    <div class="hud-item hud-coords" id="hud-coords">Zone 0, 0</div>
+    <div class="hud-item hud-participants" id="hud-participants">
+      <span class="connection-indicator"><span class="connection-dot good" id="connection-dot"></span></span>
+      <span id="hud-participants-text">1 participant</span>
+    </div>
+    <div class="hud-item hud-admin-badge" id="hud-admin-badge" style="display: none;">&#9733; Administrateur</div>
+    <!-- #21 Ping indicator -->
+    <div class="hud-item hud-ping" id="hud-ping" style="display:none;"></div>
+    <!-- #29 Admin presence indicator -->
+    <div class="hud-item admin-presence-badge" id="admin-presence" style="display:none;">
+      <span>&#9733;</span> <span id="admin-presence-text">Admin present</span>
+    </div>
+    <!-- #50 Version number -->
+    <div class="hud-item hud-version" id="hud-version">v1.0</div>
     <div class="hud-item copy-link-container" id="copy-link-container" style="display: none;">
       <span id="room-url-display" class="room-url-display"></span>
       <button class="btn-copy" id="btn-copy-link" title="Copier le lien d'invitation">Copier le lien</button>
     </div>
   </div>
+
+  <!-- Compass indicator (#12) -->
+  <div class="compass-indicator" id="compass-indicator" style="display: none;">
+    <span class="compass-n">N</span>
+    <svg viewBox="0 0 24 24"><polygon points="12,2 15,10 12,8 9,10" fill="#e74c3c"/><polygon points="12,22 9,14 12,16 15,14" fill="#999"/></svg>
+  </div>
+
+  <!-- Zoom level indicator (#19) -->
+  <div class="zoom-indicator" id="zoom-indicator">x1.0</div>
+
+  <!-- Furniture hover tooltip (#21) -->
+  <div class="furniture-tooltip" id="furniture-tooltip" style="display: none;"></div>
+
+  <!-- Door approach prompt (#24) -->
+  <div class="door-prompt" id="door-prompt" style="display: none;">Cliquer pour entrer</div>
 
   <!-- Toolbar bottom -->
   <div class="toolbar" id="toolbar" role="toolbar" aria-label="Barre d'outils" style="display: none;">
@@ -107,7 +140,9 @@
       </button>
       <button class="toolbar-btn admin-only" id="btn-edit-mode" title="Mode édition (admin)" aria-label="Mode édition du mobilier">✏️</button>
       <button class="toolbar-btn admin-only" id="btn-admin" title="Panneau d'administration" aria-label="Ouvrir le panneau d'administration">⚙️</button>
-      <button class="toolbar-btn toolbar-btn-danger" id="btn-leave" title="Quitter la salle" aria-label="Quitter la salle">✕</button>
+      <button class="toolbar-btn" id="btn-sound-toggle" title="Activer / Couper les sons (notifications)" aria-label="Basculer les sons">&#128264;</button>
+      <button class="toolbar-btn dark-mode-toggle" id="btn-dark-mode" title="Mode sombre UI (D)" aria-label="Basculer mode sombre">&#9789;</button>
+      <button class="toolbar-btn toolbar-btn-danger" id="btn-leave" title="Quitter la salle" aria-label="Quitter la salle">&#10005;</button>
     </div>
   </div>
 
@@ -150,6 +185,7 @@
 
     <!-- Participants tab -->
     <div class="admin-tab-content" id="tab-participants" style="display: block;">
+      <div class="room-uptime" id="room-uptime"></div>
       <div id="admin-participants-list"></div>
       <div style="margin-top: 12px;">
         <button class="btn btn-secondary btn-sm" onclick="Network.socket.emit('lower-all-hands',{},()=>{});">Baisser toutes les mains levées</button>
@@ -213,6 +249,9 @@
         </select>
         <button class="btn btn-secondary btn-sm" style="margin-top:4px;" id="btn-apply-env">Changer</button>
       </div>
+      <div class="form-group" style="margin-bottom: 12px;">
+        <button class="btn btn-secondary btn-sm" id="btn-export-config" style="margin-top:8px;">&#128190; Exporter la configuration (JSON)</button>
+      </div>
       <div class="form-group" style="margin-bottom: 12px;" id="close-room-section">
         <button class="btn btn-sm" style="background:#e74c3c;color:#fff;margin-top:12px;" onclick="if(confirm('Voulez-vous vraiment fermer cette salle ? Tous les participants seront déconnectés.')){Network.socket.emit('close-room',{},(r)=>{if(r.success)window.location.href='/client/index.html'});}">Fermer la salle</button>
       </div>
@@ -239,9 +278,13 @@
     <button class="btn btn-primary btn-sm" onclick="Audio.requestMicrophone().then(function(ok){if(ok){Engine.player.isMuted=false;UI.updateMuteButton(false);UI.hideMicPermissionHint();UI.showNotification('Microphone activé avec succès !');}});">Autoriser le micro</button>
   </div>
 
-  <!-- Reconnecting -->
+  <!-- Reconnecting (#17 attempt counter, #25 disconnected timer) -->
   <div class="reconnecting-indicator" id="reconnecting-indicator" role="alert" aria-live="assertive" style="display: none;">
-    <div class="reconnecting-spinner"></div><span>Reconnexion en cours, veuillez patienter...</span>
+    <div class="reconnecting-spinner"></div>
+    <div>
+      <span>Reconnexion en cours, veuillez patienter...</span>
+      <div class="reconnect-counter" id="reconnect-counter"></div>
+    </div>
   </div>
 
   <!-- Notifications -->
@@ -259,7 +302,8 @@
   </div>
 
   <!-- Minimap -->
-  <div class="minimap-container" id="minimap-container" style="display: none;">
+  <div class="minimap-container" id="minimap-container" style="display: none; position: relative;">
+    <span class="minimap-badge" id="minimap-badge">1</span>
     <canvas id="minimap-canvas" width="160" height="160"></canvas>
   </div>
 
@@ -269,12 +313,14 @@
       <span>Chat</span>
       <span class="chat-badge" id="chat-badge" style="display:none;">0</span>
     </div>
-    <div class="chat-messages" id="chat-messages" role="log" aria-live="polite">
+    <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" style="position: relative;">
       <div class="chat-empty-state" id="chat-empty-state">Aucun message. Dites bonjour !</div>
     </div>
+    <button class="chat-new-messages-btn" id="chat-new-messages-btn" style="display: none;">&#8595; Nouveaux messages</button>
+    <div class="chat-typing-indicator" id="chat-typing-indicator"></div>
     <div class="chat-input-row">
-      <input type="text" id="chat-input" placeholder="Écrivez votre message ici..." maxlength="200" autocomplete="off">
-      <button class="chat-send-btn" id="chat-send">→</button>
+      <input type="text" id="chat-input" placeholder="&#201;crivez votre message ici..." maxlength="200" autocomplete="off">
+      <button class="chat-send-btn" id="chat-send">&#8594;</button>
     </div>
   </div>
 
@@ -475,6 +521,17 @@
         <p style="font-size:0.75rem;color:#666;">Cliquez sur « Partager mon écran » pour commencer</p>
       </div>
     </div>
+  </div>
+
+  <!-- Keyboard hint overlay on first join (#17) -->
+  <div class="keyboard-hint-overlay" id="keyboard-hint-overlay" style="display: none;">
+    <div class="hint-title">Raccourcis essentiels</div>
+    <div class="hint-row"><span><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Se d&#233;placer</span></div>
+    <div class="hint-row"><span><kbd>M</kbd></span><span>Micro on/off</span></div>
+    <div class="hint-row"><span><kbd>Tab</kbd></span><span>Minicarte</span></div>
+    <div class="hint-row"><span><kbd>V</kbd></span><span>Vue iso/dessus</span></div>
+    <div class="hint-row"><span><kbd>?</kbd></span><span>Tous les raccourcis</span></div>
+    <div class="hint-dismiss" id="keyboard-hint-dismiss">Compris, ne plus afficher</div>
   </div>
 
   <!-- Shortcuts modal -->

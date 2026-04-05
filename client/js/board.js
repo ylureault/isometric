@@ -142,7 +142,7 @@ const Board = {
       this.drawIsoLine(ctx, [0, i, 0], [gs, i, 0], 'rgba(0,0,0,0.04)', 0.5);
     }
 
-    // Alternating tile shading
+    // Alternating tile shading with #36 subtle texture variation
     for (var y = 0; y < gs; y++) {
       for (var x = 0; x < gs; x++) {
         if ((x + y) % 2 === 1) {
@@ -150,6 +150,18 @@ const Board = {
             [[x,y,0],[x+1,y,0],[x+1,y+1,0],[x,y+1,0]],
             this.floorColor2, null, 0
           );
+        }
+        // #36 Per-tile brightness variation (deterministic noise)
+        var tileSeed = ((x * 7 + y * 13 + x * y * 3) & 0xFF);
+        var tileVariation = (tileSeed % 5 - 2) * 0.008; // ~+-2% brightness
+        if (Math.abs(tileVariation) > 0.003) {
+          ctx.save();
+          ctx.globalAlpha = Math.abs(tileVariation);
+          this.drawIsoPoly(ctx,
+            [[x,y,0],[x+1,y,0],[x+1,y+1,0],[x,y+1,0]],
+            tileVariation > 0 ? '#fff' : '#000', null, 0
+          );
+          ctx.restore();
         }
       }
     }
@@ -191,7 +203,20 @@ const Board = {
       this.darken(this.wallColor, 0.05), 'rgba(0,0,0,0.05)', 0.5
     );
 
-    // Wall tops
+    // #37 Baseboards along walls (thin darker line at wall-floor junction)
+    this.drawIsoPoly(ctx,
+      [[0,0,0],[0,gs,0],[0,gs,3],[0,0,3]],
+      this.darken(this.wallColor, 0.15), 'rgba(0,0,0,0.06)', 0.3
+    );
+    this.drawIsoPoly(ctx,
+      [[0,0,0],[gs,0,0],[gs,0,3],[0,0,3]],
+      this.darken(this.wallColor, 0.2), 'rgba(0,0,0,0.06)', 0.3
+    );
+    // Baseboard top edge highlight
+    this.drawIsoLine(ctx, [0, 0, 3], [0, gs, 3], 'rgba(255,255,255,0.06)', 0.4);
+    this.drawIsoLine(ctx, [0, 0, 3], [gs, 0, 3], 'rgba(255,255,255,0.06)', 0.4);
+
+    // #38 Ceiling line at top of walls for depth
     this.drawIsoPoly(ctx,
       [[0,0,WH],[gs,0,WH],[gs,0,WH+3],[0,0,WH+3]],
       '#fff', 'rgba(0,0,0,0.05)', 0.3
@@ -200,6 +225,37 @@ const Board = {
       [[0,0,WH],[0,gs,WH],[0,gs,WH+3],[0,0,WH+3]],
       '#f8f8f8', 'rgba(0,0,0,0.05)', 0.3
     );
+    // Ceiling shadow line beneath the cap
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    this.drawIsoPoly(ctx, [[0,0,WH-2],[gs,0,WH-2],[gs,0,WH],[0,0,WH]], '#000', null, 0);
+    this.drawIsoPoly(ctx, [[0,0,WH-2],[0,gs,WH-2],[0,gs,WH],[0,0,WH]], '#000', null, 0);
+    ctx.restore();
+
+    // #39 Subtle window reflections on the floor near walls
+    ctx.save();
+    ctx.globalAlpha = 0.025;
+    // Reflection patches (simulate light from windows on back-right wall)
+    for (var wr = 0; wr < 3; wr++) {
+      var wx = 2 + wr * Math.floor(gs / 3);
+      if (wx + 2 < gs) {
+        this.drawIsoPoly(ctx,
+          [[wx, 0.5, 0.1], [wx + 2, 0.5, 0.1], [wx + 2.5, 2, 0.1], [wx + 0.5, 2, 0.1]],
+          '#fff', null, 0
+        );
+      }
+    }
+    // Reflection patches on left wall
+    for (var wr2 = 0; wr2 < 3; wr2++) {
+      var wy = 2 + wr2 * Math.floor(gs / 3);
+      if (wy + 2 < gs) {
+        this.drawIsoPoly(ctx,
+          [[0.5, wy, 0.1], [0.5, wy + 2, 0.1], [2, wy + 2.5, 0.1], [2, wy + 0.5, 0.1]],
+          '#fff', null, 0
+        );
+      }
+    }
+    ctx.restore();
   },
 
   drawEdges(ctx, offsetX, offsetY) {
@@ -313,6 +369,22 @@ const Board = {
 
     // Mouse
     this.drawIsoBox(ctx, x+0.75, y+0.58, mz, 0.12, 0.08, 0.3, '#e8e8e8', '#d0d0d0', '#ddd', null);
+
+    // #17 Small coffee mug on desk
+    var mugX = x + w - 0.35, mugY = y + 0.5;
+    this.drawIsoBox(ctx, mugX, mugY, mz, 0.12, 0.12, 2.5, '#f5f5f5', '#ddd', '#eee', 'rgba(0,0,0,0.06)');
+    // Mug handle
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    var mhp = this.iso(mugX + 0.12, mugY + 0.06, mz + 1.5);
+    ctx.beginPath();
+    ctx.arc(mhp.x + 2, mhp.y, 1.8, -Math.PI * 0.5, Math.PI * 0.5);
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.restore();
+    // Coffee inside
+    this.drawIsoPoly(ctx, [[mugX+0.01,mugY+0.01,mz+2.4],[mugX+0.11,mugY+0.01,mz+2.4],[mugX+0.11,mugY+0.11,mz+2.4],[mugX+0.01,mugY+0.11,mz+2.4]], '#6B4226', null, 0);
   },
 
   drawChair(ctx, item, def) {
@@ -352,6 +424,18 @@ const Board = {
     ctx.restore();
     // Seat with cushion shading
     this.drawIsoBox(ctx, x-0.02, y-0.02, seatH, 0.55, 0.55, 1.2, '#5a6d7a', '#4a5d6a', '#506370', null);
+    // #18 Cushion center gradient (darker center for depth)
+    ctx.save();
+    var cushCenter = this.iso(x + 0.25, y + 0.25, seatH + 1.25);
+    var cushGrad = ctx.createRadialGradient(cushCenter.x, cushCenter.y, 0, cushCenter.x, cushCenter.y, 8);
+    cushGrad.addColorStop(0, 'rgba(0,0,0,0.08)');
+    cushGrad.addColorStop(0.6, 'rgba(0,0,0,0.03)');
+    cushGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.arc(cushCenter.x, cushCenter.y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = cushGrad;
+    ctx.fill();
+    ctx.restore();
     // Cushion highlight
     ctx.save();
     ctx.globalAlpha = 0.08;
@@ -418,6 +502,16 @@ const Board = {
       this.drawIsoPoly(ctx, [[hx,y+0.2,1+h*0.56],[hx+hw,y+0.2,1+h*0.56],[hx+hw,y+d*0.5,1+h*0.56],[hx,y+d*0.5,1+h*0.56]], '#fff', null, 0);
     }
     ctx.restore();
+
+    // #24 Throw pillow detail
+    var pillowZ = 1 + h * 0.55 + 1;
+    var pillowX = x + 0.25;
+    this.drawIsoBox(ctx, pillowX, y + 0.2, pillowZ, 0.3, 0.25, 2.5, '#FFD700', '#E6BE00', '#F0C800', null);
+    // Pillow highlight
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    this.drawIsoPoly(ctx, [[pillowX+0.05,y+0.2,pillowZ+2.5],[pillowX+0.2,y+0.2,pillowZ+2.5],[pillowX+0.2,y+0.35,pillowZ+2.5],[pillowX+0.05,y+0.35,pillowZ+2.5]], '#fff', null, 0);
+    ctx.restore();
   },
 
   drawCoffeeTable(ctx, item, def) {
@@ -429,6 +523,15 @@ const Board = {
     this.drawIsoBox(ctx, x+0.8, y+0.8, 0, 0.08, 0.08, 3, '#bbb', '#aaa', '#b0b0b0', null);
     // Glass top
     this.drawIsoBox(ctx, x+0.05, y+0.05, 3, 0.9, 0.9, 0.8, 'rgba(220,230,240,0.7)', 'rgba(200,210,220,0.5)', 'rgba(210,220,230,0.6)', 'rgba(0,0,0,0.08)');
+    // #34 Small book/magazine on top
+    this.drawIsoBox(ctx, x+0.3, y+0.25, 3.85, 0.35, 0.25, 0.3, '#e74c3c', this.darken('#e74c3c', 0.15), this.darken('#e74c3c', 0.08), null);
+    // Book title line
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    this.drawIsoLine(ctx, [x+0.35, y+0.25, 4.2], [x+0.6, y+0.25, 4.2], '#fff', 0.4);
+    ctx.restore();
+    // Small second book stacked slightly
+    this.drawIsoBox(ctx, x+0.55, y+0.45, 3.85, 0.25, 0.2, 0.2, '#2980b9', this.darken('#2980b9', 0.15), this.darken('#2980b9', 0.08), null);
   },
 
   drawLargeTable(ctx, item, def) {
@@ -510,6 +613,24 @@ const Board = {
     ctx.globalAlpha = 0.04;
     this.drawIsoPoly(ctx, edgePts, '#000', null, 0);
     ctx.restore();
+
+    // #25 Centerpiece — small vase with flower
+    var vaseZ = legH + 1;
+    this.drawIsoBox(ctx, cx - 0.06, cy - 0.06, vaseZ, 0.12, 0.12, 3, '#87CEEB', this.darken('#87CEEB', 0.15), '#87CEEB', null);
+    // Flower stems
+    var vaseTop = this.iso(cx, cy, vaseZ + 3);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(vaseTop.x, vaseTop.y); ctx.lineTo(vaseTop.x - 2, vaseTop.y - 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(vaseTop.x, vaseTop.y); ctx.lineTo(vaseTop.x + 2, vaseTop.y - 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(vaseTop.x, vaseTop.y); ctx.lineTo(vaseTop.x, vaseTop.y - 7); ctx.stroke();
+    // Flower heads
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(vaseTop.x - 2, vaseTop.y - 5, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f39c12';
+    ctx.beginPath(); ctx.arc(vaseTop.x + 2, vaseTop.y - 6, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e91e63';
+    ctx.beginPath(); ctx.arc(vaseTop.x, vaseTop.y - 7, 1.5, 0, Math.PI * 2); ctx.fill();
   },
 
   drawBookshelf(ctx, item, def) {
@@ -531,6 +652,24 @@ const Board = {
       this.drawIsoPoly(ctx, [[x+0.05,y,sz+0.3],[x+w-0.05,y,sz+0.3],[x+w-0.05,y+d*0.3,sz+0.3],[x+0.05,y+d*0.3,sz+0.3]], '#000', null, 0);
       ctx.restore();
     }
+
+    // #21 Small picture frame on top of bookshelf
+    var frameX = x + w * 0.35, frameY = y;
+    this.drawIsoPoly(ctx, [[frameX,frameY,h+0.1],[frameX+0.4,frameY,h+0.1],[frameX+0.4,frameY,h+5],[frameX,frameY,h+5]], '#8B6914', '#7A5A0A', 0.5);
+    // Frame inner (picture)
+    this.drawIsoPoly(ctx, [[frameX+0.04,frameY,h+0.5],[frameX+0.36,frameY,h+0.5],[frameX+0.36,frameY,h+4.5],[frameX+0.04,frameY,h+4.5]], '#87CEEB', null, 0);
+    // Mountain in picture
+    ctx.save();
+    var picBase = this.iso(frameX + 0.2, frameY, h + 1.5);
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#2ecc71';
+    ctx.beginPath();
+    ctx.moveTo(picBase.x - 3, picBase.y + 1);
+    ctx.lineTo(picBase.x, picBase.y - 3);
+    ctx.lineTo(picBase.x + 3, picBase.y + 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
 
     // Books on shelves — varied sizes, some horizontal, with labels
     var bookColors = ['#c0392b','#2980b9','#8e6e47','#e67e22','#27ae60','#8e44ad','#2c3e50','#d4a04a'];
@@ -607,6 +746,24 @@ const Board = {
     this.drawIsoPoly(ctx, [[x,y+0.08,1.5],[x,y+d-0.04,1.5],[x,y+d-0.04,h-1],[x,y+0.08,h-1]], '#b8e0ec', '#98c8d8', 0.8);
     ctx.restore();
 
+    // #28 Frosted glass noise pattern (subtle dots)
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    var noSeed = (item.x * 11 + item.y * 17) | 0;
+    for (var ni = 0; ni < 20; ni++) {
+      noSeed = (noSeed * 1103515245 + 12345) & 0x7fffffff;
+      var nrand = (noSeed % 1000) / 1000;
+      var ny = y + 0.1 + nrand * (d - 0.2);
+      noSeed = (noSeed * 1103515245 + 12345) & 0x7fffffff;
+      var nz = 2 + ((noSeed % 1000) / 1000) * (h - 4);
+      var np = this.iso(x, ny, nz);
+      ctx.fillStyle = nrand > 0.5 ? '#fff' : '#8ac';
+      ctx.beginPath();
+      ctx.arc(np.x, np.y, 0.8 + nrand, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
     // Frame lines
     this.drawIsoLine(ctx, [x,y,0.3], [x,y,h], '#a8c0c8', 1.5);
     this.drawIsoLine(ctx, [x,y+d,0.3], [x,y+d,h], '#a8c0c8', 1.5);
@@ -641,11 +798,13 @@ const Board = {
       [x, y, bz+bh]
     ], '#c4a06a', '#a08050', 1);
 
-    // Post-its (colorful squares on the cork)
+    // #27 Post-its with varied rotation (slight offsets for natural look)
     var postItColors = ['#FFE066','#FF6B6B','#6BCB77','#4D96FF','#FF78C4','#FFB347'];
+    var postItOffsets = [0.03, -0.02, 0.04, -0.03, 0.02, -0.04]; // #27 varied rotation
+    var postItZOffsets = [0.1, -0.05, 0.08, -0.1, 0.05, -0.02];
     for (var i = 0; i < 6; i++) {
-      var py = y + 0.15 + (i % 3) * (d - 0.3) / 3;
-      var pz = bz + 2 + Math.floor(i / 3) * (bh - 4) / 2;
+      var py = y + 0.15 + (i % 3) * (d - 0.3) / 3 + postItOffsets[i];
+      var pz = bz + 2 + Math.floor(i / 3) * (bh - 4) / 2 + postItZOffsets[i];
       var pw = (d - 0.3) / 3 - 0.1;
       var ph = (bh - 4) / 2 - 1;
       this.drawIsoPoly(ctx, [
@@ -654,6 +813,17 @@ const Board = {
         [x, py+pw, pz+ph],
         [x, py, pz+ph]
       ], postItColors[i], null, 0);
+      // Post-it text scribble lines
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      for (var sl = 0; sl < 2; sl++) {
+        this.drawIsoLine(ctx, [x, py + 0.05, pz + 1 + sl * 1.5], [x, py + pw - 0.08, pz + 1 + sl * 1.5], '#000', 0.3);
+      }
+      ctx.restore();
+      // Pin dot at top
+      var pinPos = this.iso(x, py + pw * 0.5, pz + ph - 0.3);
+      ctx.fillStyle = '#333';
+      ctx.beginPath(); ctx.arc(pinPos.x, pinPos.y, 0.8, 0, Math.PI * 2); ctx.fill();
     }
 
     // Frame
@@ -675,6 +845,21 @@ const Board = {
 
   drawStage(ctx, item, def) {
     var h = def.drawHeight;
+
+    // #22 Subtle spotlight glow from above (cone shape)
+    var spotCx = item.x + def.width / 2;
+    var spotCy = item.y + def.height / 2;
+    var spotPos = this.iso(spotCx, spotCy, h);
+    ctx.save();
+    var spotGrad = ctx.createRadialGradient(spotPos.x, spotPos.y - 15, 2, spotPos.x, spotPos.y, 35);
+    spotGrad.addColorStop(0, 'rgba(255,240,200,0.08)');
+    spotGrad.addColorStop(0.5, 'rgba(255,240,200,0.03)');
+    spotGrad.addColorStop(1, 'rgba(255,240,200,0)');
+    ctx.beginPath();
+    ctx.ellipse(spotPos.x, spotPos.y, 35, 20, 0, 0, Math.PI * 2);
+    ctx.fillStyle = spotGrad;
+    ctx.fill();
+    ctx.restore();
 
     for (var dy = 0; dy < def.height; dy++) {
       for (var dx = 0; dx < def.width; dx++) {
@@ -713,6 +898,19 @@ const Board = {
         if (dx === def.width - 1) {
           this.drawIsoPoly(ctx, [[tx+1,ty,h],[tx+1,ty+1,h],[tx+1,ty+1,0],[tx+1,ty,0]], '#7A5838', 'rgba(0,0,0,0.06)', 0.3);
         }
+
+        // #40 Step-up chevron markers at front edge
+        if (dy === def.height - 1) {
+          ctx.save();
+          ctx.globalAlpha = 0.12;
+          var chevY = ty + 1;
+          for (var chev = 0; chev < 2; chev++) {
+            var cz = h - 1.5 - chev * 1.5;
+            this.drawIsoLine(ctx, [tx + 0.3, chevY, cz], [tx + 0.5, chevY, cz + 0.8], '#fff', 0.6);
+            this.drawIsoLine(ctx, [tx + 0.5, chevY, cz + 0.8], [tx + 0.7, chevY, cz], '#fff', 0.6);
+          }
+          ctx.restore();
+        }
       }
     }
   },
@@ -739,6 +937,11 @@ const Board = {
     // Decorative pot rim with lip
     this.drawIsoBox(ctx, x-0.24, y-0.24, 5, 0.48, 0.48, 0.5, '#f8f8f8', '#eee', '#f2f2f2', null);
     this.drawIsoBox(ctx, x-0.23, y-0.23, 5.5, 0.46, 0.46, 0.4, '#f5f5f5', '#e8e8e8', '#eee', null);
+    // #20 Pot rim highlight (bright gleam on near edge)
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    this.drawIsoPoly(ctx, [[x+0.24,y-0.24,5.5],[x+0.24,y+0.24,5.5],[x+0.24,y+0.24,5.9],[x+0.24,y-0.24,5.9]], '#fff', null, 0);
+    ctx.restore();
     // Pot rim accent line
     ctx.save();
     ctx.globalAlpha = 0.08;
@@ -836,6 +1039,23 @@ const Board = {
       // Top highlight
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
       ctx.beginPath(); ctx.arc(fp.x - 1, fp.y - 9, 4, 0, Math.PI * 2); ctx.fill();
+
+      // #19 Small flowers on some plants (using position as seed)
+      var flowerSeed = (item.x * 13 + item.y * 7) | 0;
+      if (flowerSeed % 3 !== 0) {
+        var flowerColors = ['#FF6B6B', '#FFE066', '#FF78C4', '#fff'];
+        for (var fi = 0; fi < 3; fi++) {
+          var fa = fi * 2.1 + flowerSeed * 0.5;
+          var fr = 5 + (fi % 2) * 3;
+          var ffx = fp.x + Math.cos(fa) * fr * 0.5;
+          var ffy = fp.y - 4 + Math.sin(fa) * fr * 0.25;
+          ctx.fillStyle = flowerColors[(flowerSeed + fi) % flowerColors.length];
+          ctx.beginPath(); ctx.arc(ffx, ffy, 1.5, 0, Math.PI * 2); ctx.fill();
+          // Flower center
+          ctx.fillStyle = '#f1c40f';
+          ctx.beginPath(); ctx.arc(ffx, ffy, 0.6, 0, Math.PI * 2); ctx.fill();
+        }
+      }
     }
   },
 
@@ -869,13 +1089,29 @@ const Board = {
       [cx-0.7, cy, def.drawHeight+8]
     ], '#1a1a1a', '#111', 0.5);
 
-    // Screen content
+    // #23 Animated screen content (slowly changing color bars)
+    var screenTime = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
     this.drawIsoPoly(ctx, [
       [cx-0.62, cy, def.drawHeight-4],
       [cx+0.62, cy, def.drawHeight-4],
       [cx+0.62, cy, def.drawHeight+7],
       [cx-0.62, cy, def.drawHeight+7]
     ], '#4488cc', '#336699', 0.3);
+    // Animated color bars on screen
+    var barColors = ['#5dade2', '#2ecc71', '#f39c12', '#e74c3c'];
+    for (var bri = 0; bri < 4; bri++) {
+      var barZ = def.drawHeight - 2 + bri * 2.5;
+      var barAlpha = 0.15 + Math.sin(screenTime * 1.5 + bri * 1.2) * 0.08;
+      ctx.save();
+      ctx.globalAlpha = barAlpha;
+      this.drawIsoPoly(ctx, [
+        [cx - 0.5, cy, barZ],
+        [cx + 0.5, cy, barZ],
+        [cx + 0.5, cy, barZ + 1.5],
+        [cx - 0.5, cy, barZ + 1.5]
+      ], barColors[bri], null, 0);
+      ctx.restore();
+    }
 
     // Screen glow effect
     ctx.save();
@@ -940,10 +1176,23 @@ const Board = {
       [bx+0.08, by, bz+17]
     ], '#fff', '#e0e0e0', 0.5);
 
-    // Subtle content hint (some lines)
-    this.drawIsoLine(ctx, [bx+0.3, by, bz+5], [bx+bw-0.3, by, bz+5], '#ddd', 0.3);
-    this.drawIsoLine(ctx, [bx+0.3, by, bz+8], [bx+bw*0.7, by, bz+8], '#e8e8e8', 0.3);
-    this.drawIsoLine(ctx, [bx+0.3, by, bz+11], [bx+bw-0.5, by, bz+11], '#ddd', 0.3);
+    // #26 Colored marker scribble hints
+    this.drawIsoLine(ctx, [bx+0.3, by, bz+4], [bx+bw-0.3, by, bz+4], 'rgba(41,128,185,0.3)', 0.6);
+    this.drawIsoLine(ctx, [bx+0.3, by, bz+5.5], [bx+bw*0.6, by, bz+5.5], 'rgba(41,128,185,0.2)', 0.4);
+    this.drawIsoLine(ctx, [bx+0.3, by, bz+8], [bx+bw*0.75, by, bz+8], 'rgba(231,76,60,0.25)', 0.5);
+    this.drawIsoLine(ctx, [bx+0.3, by, bz+9.5], [bx+bw-0.4, by, bz+9.5], 'rgba(231,76,60,0.15)', 0.3);
+    this.drawIsoLine(ctx, [bx+0.3, by, bz+11.5], [bx+bw-0.5, by, bz+11.5], 'rgba(39,174,96,0.25)', 0.5);
+    this.drawIsoLine(ctx, [bx+0.3, by, bz+13], [bx+bw*0.5, by, bz+13], 'rgba(39,174,96,0.15)', 0.3);
+    // Sketch circle
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    var circP = this.iso(bx + bw * 0.7, by, bz + 12);
+    ctx.beginPath();
+    ctx.arc(circP.x, circP.y, 4, 0, Math.PI * 2);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+    ctx.restore();
 
     // Marker tray
     this.drawIsoBox(ctx, bx+0.2, by-0.08, bz-0.5, bw-0.4, 0.1, 0.5, '#e0e0e0', '#ccc', '#d5d5d5', null);
@@ -973,7 +1222,7 @@ const Board = {
       }
     }
 
-    // Zone label
+    // Zone label with #45 improved readability (background pill)
     if (item.zone) {
       var lp = this.iso(item.x + w/2, item.y + h/2, 1);
 
@@ -993,10 +1242,19 @@ const Board = {
       ctx.textBaseline = 'middle';
       ctx.fillText(item.zone, lp.x, lp.y - 6);
 
-      // Zone name
+      // #45 Zone name with background pill for readability
       if (item.zoneName) {
-        ctx.font = '10px "Segoe UI", sans-serif';
-        ctx.fillStyle = 'rgba(74,111,165,0.7)';
+        ctx.font = 'bold 10px "Segoe UI", sans-serif';
+        var znWidth = ctx.measureText(item.zoneName).width;
+        // Background pill
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.beginPath();
+        ctx.roundRect(lp.x - znWidth / 2 - 6, lp.y + 3, znWidth + 12, 16, 8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(74,111,165,0.25)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(74,111,165,0.85)';
         ctx.fillText(item.zoneName, lp.x, lp.y + 10);
       }
     }
@@ -1012,10 +1270,22 @@ const Board = {
     this.drawIsoBox(ctx, x+0.05, y+0.05, 14, 0.9, 0.9, 2, this.lighten(def.color, 0.05), this.darken(def.color, 0.08), def.color, 'rgba(0,0,0,0.05)');
     // Front panel (darker with inset)
     this.drawIsoPoly(ctx, [[x+0.15,y+0.88,14],[x+0.85,y+0.88,14],[x+0.85,y+0.88,4],[x+0.15,y+0.88,4]], this.darken(def.color, 0.2), 'rgba(0,0,0,0.06)', 0.3);
-    // Front panel emblem/logo area
+    // #33 Small banner/flag on front panel
+    this.drawIsoPoly(ctx, [[x+0.3,y+0.88,12],[x+0.7,y+0.88,12],[x+0.7,y+0.88,6],[x+0.3,y+0.88,6]], 'rgba(52,152,219,0.3)', null, 0);
+    // Banner stripe
+    this.drawIsoPoly(ctx, [[x+0.3,y+0.88,10.5],[x+0.7,y+0.88,10.5],[x+0.7,y+0.88,9.5],[x+0.3,y+0.88,9.5]], 'rgba(255,255,255,0.15)', null, 0);
+    // Banner pennant bottom
     ctx.save();
-    ctx.globalAlpha = 0.08;
-    this.drawIsoPoly(ctx, [[x+0.3,y+0.88,11],[x+0.7,y+0.88,11],[x+0.7,y+0.88,7],[x+0.3,y+0.88,7]], '#fff', null, 0);
+    ctx.globalAlpha = 0.25;
+    var pennant1 = this.iso(x+0.3, y+0.88, 6);
+    var pennant2 = this.iso(x+0.5, y+0.88, 5);
+    var pennant3 = this.iso(x+0.7, y+0.88, 6);
+    ctx.beginPath();
+    ctx.moveTo(pennant1.x, pennant1.y);
+    ctx.lineTo(pennant2.x, pennant2.y);
+    ctx.lineTo(pennant3.x, pennant3.y);
+    ctx.fillStyle = '#3498db';
+    ctx.fill();
     ctx.restore();
     // Top edge highlight
     ctx.save();
@@ -1158,6 +1428,19 @@ const Board = {
     ctx.beginPath(); ctx.arc(bub.x, bub.y, 1, 0, Math.PI * 2); ctx.fill();
     bub = this.iso(x-0.04, y+0.03, 15);
     ctx.beginPath(); ctx.arc(bub.x, bub.y, 0.7, 0, Math.PI * 2); ctx.fill();
+
+    // #31 Small drip animation
+    var dripTime = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+    var dripPhase = (dripTime * 0.8) % 3; // drip every 3 seconds
+    if (dripPhase < 1) {
+      var dripZ = 5 - dripPhase * 3;
+      var dripAlpha = 1 - dripPhase;
+      var dripPos = this.iso(x, y + 0.26, dripZ);
+      ctx.fillStyle = 'rgba(100,180,230,' + (dripAlpha * 0.6) + ')';
+      ctx.beginPath();
+      ctx.ellipse(dripPos.x, dripPos.y, 0.8, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   },
 
   drawLamp(ctx, item, def) {
@@ -1224,15 +1507,36 @@ const Board = {
     }
     ctx.restore();
 
-    // Light glow — warm radial gradient
+    // #32 Improved warm glow — larger, softer gradient with two layers
     ctx.save();
+    // Outer soft glow
+    ctx.beginPath();
+    ctx.ellipse(top.x, top.y + 10, 30, 18, 0, 0, Math.PI * 2);
+    var outerGlow = ctx.createRadialGradient(top.x, top.y + 6, 0, top.x, top.y + 10, 30);
+    outerGlow.addColorStop(0, 'rgba(255,240,180,0.08)');
+    outerGlow.addColorStop(0.4, 'rgba(255,235,170,0.04)');
+    outerGlow.addColorStop(1, 'rgba(255,230,150,0)');
+    ctx.fillStyle = outerGlow;
+    ctx.fill();
+    // Inner bright glow
     ctx.beginPath();
     ctx.ellipse(top.x, top.y + 6, 18, 10, 0, 0, Math.PI * 2);
     var glowGrad = ctx.createRadialGradient(top.x, top.y + 4, 0, top.x, top.y + 6, 18);
-    glowGrad.addColorStop(0, 'rgba(255,240,200,0.12)');
-    glowGrad.addColorStop(0.5, 'rgba(255,240,200,0.04)');
+    glowGrad.addColorStop(0, 'rgba(255,240,200,0.16)');
+    glowGrad.addColorStop(0.4, 'rgba(255,240,200,0.06)');
     glowGrad.addColorStop(1, 'rgba(255,240,200,0)');
     ctx.fillStyle = glowGrad;
+    ctx.fill();
+    ctx.restore();
+    // Floor glow pool
+    var floorGlow = this.iso(x, y, 0);
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(floorGlow.x, floorGlow.y, 14, 7, 0, 0, Math.PI * 2);
+    var flGrad = ctx.createRadialGradient(floorGlow.x, floorGlow.y, 0, floorGlow.x, floorGlow.y, 14);
+    flGrad.addColorStop(0, 'rgba(255,240,200,0.06)');
+    flGrad.addColorStop(1, 'rgba(255,240,200,0)');
+    ctx.fillStyle = flGrad;
     ctx.fill();
     ctx.restore();
 
@@ -1299,6 +1603,19 @@ const Board = {
     var btnP = this.iso(x+w-0.28, y+d-0.06, legH+2);
     ctx.fillStyle = '#4a4a4a';
     ctx.beginPath(); ctx.arc(btnP.x, btnP.y, 1, 0, Math.PI * 2); ctx.fill();
+
+    // #35 Small notebook next to monitor
+    var nbX = x + 1.1, nbY = y + 0.15;
+    this.drawIsoBox(ctx, nbX, nbY, legH + 1.5, 0.35, 0.25, 0.3, '#f5f0e0', '#e5ddd0', '#ede5d5', null);
+    // Notebook lines
+    ctx.save();
+    ctx.globalAlpha = 0.1;
+    for (var nli = 0; nli < 3; nli++) {
+      this.drawIsoLine(ctx, [nbX + 0.05, nbY + 0.04 + nli * 0.06, legH + 1.85], [nbX + 0.3, nbY + 0.04 + nli * 0.06, legH + 1.85], '#333', 0.3);
+    }
+    ctx.restore();
+    // Pen next to notebook
+    this.drawIsoBox(ctx, nbX + 0.38, nbY + 0.08, legH + 1.5, 0.03, 0.18, 0.15, '#2c3e50', '#1a252f', '#243342', null);
   },
 
   drawDoor(ctx, item, def) {
@@ -1316,6 +1633,23 @@ const Board = {
       [x+0.15, y+0.5, 26]
     ], '#7B52A0', '#6A4290', 0.5);
 
+    // #29 Brick pattern on door frame
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    for (var brow = 0; brow < 7; brow++) {
+      var brickZ = 2 + brow * 3.5;
+      var brickOff = brow % 2 === 0 ? 0 : 0.2;
+      this.drawIsoLine(ctx, [x + 0.1, y + 0.5, brickZ], [x + 0.85, y + 0.5, brickZ], '#3a1a5a', 0.4);
+      // Vertical brick divisions
+      for (var bcol = 0; bcol < 2; bcol++) {
+        var bx = x + 0.1 + brickOff + bcol * 0.38;
+        if (bx < x + 0.85) {
+          this.drawIsoLine(ctx, [bx, y + 0.5, brickZ], [bx, y + 0.5, brickZ + 3.5], '#3a1a5a', 0.3);
+        }
+      }
+    }
+    ctx.restore();
+
     // Door arch top
     var archPos = this.iso(x+0.5, y+0.5, 27);
     ctx.beginPath();
@@ -1330,6 +1664,25 @@ const Board = {
     ctx.ellipse(portalPos.x, portalPos.y, 8, 12, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(155,89,182,' + glowAlpha + ')';
     ctx.fill();
+
+    // #44 Pulsing ring animation around portal
+    var ringPulse = (time * 1.5) % 2;
+    var ringAlpha = Math.max(0, 1 - ringPulse) * 0.4;
+    var ringSize = 1 + ringPulse * 0.5;
+    ctx.beginPath();
+    ctx.ellipse(portalPos.x, portalPos.y, 8 * ringSize, 12 * ringSize, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(200,160,255,' + ringAlpha + ')';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Second ring (offset timing)
+    var ringPulse2 = ((time * 1.5) + 1) % 2;
+    var ringAlpha2 = Math.max(0, 1 - ringPulse2) * 0.3;
+    var ringSize2 = 1 + ringPulse2 * 0.5;
+    ctx.beginPath();
+    ctx.ellipse(portalPos.x, portalPos.y, 8 * ringSize2, 12 * ringSize2, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(200,160,255,' + ringAlpha2 + ')';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
     // Sparkle particles
     for (var sp = 0; sp < 4; sp++) {
@@ -1416,10 +1769,24 @@ const Board = {
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    // #30 Second hand that actually ticks
+    var secAngle = (time % 60) * Math.PI / 30 - Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(cpos.x, cpos.y);
+    ctx.lineTo(cpos.x + Math.cos(secAngle) * 8, cpos.y + Math.sin(secAngle) * 8);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
     // Center dot
     ctx.beginPath();
-    ctx.arc(cpos.x, cpos.y, 1, 0, Math.PI * 2);
+    ctx.arc(cpos.x, cpos.y, 1.2, 0, Math.PI * 2);
     ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+    // Center dot highlight
+    ctx.beginPath();
+    ctx.arc(cpos.x - 0.3, cpos.y - 0.3, 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fill();
   },
 
@@ -1504,6 +1871,21 @@ const Board = {
       ctx.fillStyle = cGrad;
       ctx.fill();
       ctx.restore();
+
+      // #43 Animated particle effect at corners
+      for (var pi = 0; pi < 3; pi++) {
+        var pAngle = time * (1.5 + pi * 0.5) + ci * Math.PI / 2 + pi * 2.1;
+        var pDist = 3 + Math.sin(time * 2 + pi * 1.3) * 2;
+        var ppx = corners[ci].x + Math.cos(pAngle) * pDist;
+        var ppy = corners[ci].y + Math.sin(pAngle) * pDist * 0.5;
+        var pAlpha = 0.3 + Math.sin(time * 4 + pi) * 0.2;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(ppx, ppy, 1, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(46,204,113,' + pAlpha + ')';
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     // Label with background pill

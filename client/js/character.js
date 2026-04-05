@@ -461,6 +461,14 @@ const Character = {
     var headRx = 10 * S;
     var headRy = 11 * S;
 
+    // #8 Head tilt when walking
+    if (headTilt) {
+      ctx.save();
+      ctx.translate(headCx, headCy);
+      ctx.rotate(headTilt);
+      ctx.translate(-headCx, -headCy);
+    }
+
     if (isFront) {
       // Hair behind head
       ctx.fillStyle = colors.hair;
@@ -603,14 +611,36 @@ const Character = {
       ctx.quadraticCurveTo(headCx + eyeSpread + eyeDir, eyeY - 4 * S, headCx + eyeSpread + eyeDir + 2.5 * S, eyeY - 3.2 * S);
       ctx.stroke();
 
-      // Mouth — smile shrinks when walking
+      // #7 White highlight dot in each pupil for life
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.arc(headCx - eyeSpread + eyeDir + bodyFlip * 0.5 * S, eyeY - 0.1 * S, 0.45 * S, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(headCx + eyeSpread + eyeDir + bodyFlip * 0.5 * S, eyeY - 0.1 * S, 0.45 * S, 0, Math.PI * 2);
+      ctx.fill();
+
+      // #11 Mouth — open when speaking, smile otherwise
       var smileWidth = isWalking ? 2.2 * S : 3 * S;
       var smileArc = isWalking ? 0.15 : 0.25;
-      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-      ctx.lineWidth = 0.8 * S;
-      ctx.beginPath();
-      ctx.arc(headCx + eyeDir * 0.3, headCy + 4.5 * S, smileWidth, smileArc, Math.PI - smileArc);
-      ctx.stroke();
+      if (isSpeaking) {
+        // Open mouth (small ellipse)
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.beginPath();
+        ctx.ellipse(headCx + eyeDir * 0.3, headCy + 5 * S, 2 * S, 1.5 * S, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Mouth interior hint
+        ctx.fillStyle = 'rgba(180,60,60,0.15)';
+        ctx.beginPath();
+        ctx.ellipse(headCx + eyeDir * 0.3, headCy + 5.2 * S, 1.4 * S, 0.8 * S, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+        ctx.lineWidth = 0.8 * S;
+        ctx.beginPath();
+        ctx.arc(headCx + eyeDir * 0.3, headCy + 4.5 * S, smileWidth, smileArc, Math.PI - smileArc);
+        ctx.stroke();
+      }
 
       // Nose hint
       ctx.strokeStyle = 'rgba(0,0,0,0.05)';
@@ -656,8 +686,9 @@ const Character = {
       }
     }
 
-    // Ears (on visible side)
+    // #6 Ears (on visible side, both front and back views)
     if (isFront) {
+      // Near ear
       var earX = isRight ? headCx - headRx + 0.5 * S : headCx + headRx - 0.5 * S;
       ctx.fillStyle = colors.skin;
       ctx.strokeStyle = 'rgba(0,0,0,0.07)';
@@ -666,6 +697,25 @@ const Character = {
       ctx.ellipse(earX, headCy, 1.5 * S, 2.5 * S, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      // Inner ear detail
+      ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+      ctx.lineWidth = 0.3 * S;
+      ctx.beginPath();
+      ctx.arc(earX, headCy - 0.3 * S, 1 * S, 0.3, Math.PI * 1.7);
+      ctx.stroke();
+    }
+
+    // #1 Body outline (full character silhouette stroke for definition)
+    // Applied as a subtle dark stroke around head
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.ellipse(headCx, headCy, headRx + 0.3, headRy + 0.3, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Close head tilt transform
+    if (headTilt) {
+      ctx.restore();
     }
   },
 
@@ -851,10 +901,23 @@ const Character = {
     ctx.strokeStyle = '#d4a00a';
     ctx.lineWidth = 0.5;
     ctx.stroke();
-    // Crown jewel
+    // #13 Crown gem (red center dot) with sparkle
     ctx.fillStyle = '#e74c3c';
     ctx.beginPath();
-    ctx.arc(cx, cy + 1 * S, 1.2 * S, 0, Math.PI * 2);
+    ctx.arc(cx, cy + 1 * S, 1.4 * S, 0, Math.PI * 2);
+    ctx.fill();
+    // Gem highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(cx - 0.4 * S, cy + 0.6 * S, 0.5 * S, 0, Math.PI * 2);
+    ctx.fill();
+    // Side gems (smaller blue dots on the tips)
+    ctx.fillStyle = '#3498db';
+    ctx.beginPath();
+    ctx.arc(cx - 3 * S, cy + 2.2 * S, 0.7 * S, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 3 * S, cy + 2.2 * S, 0.7 * S, 0, Math.PI * 2);
     ctx.fill();
   },
 
@@ -872,17 +935,30 @@ const Character = {
     ctx.fillStyle = 'rgba(0,0,0,0.1)';
     ctx.fill();
 
-    var phase = time * 0.5;
-    var dx = Math.cos(phase);
-    var dy = Math.sin(phase);
-    var facing = this.getFacing({ dx: dx, dy: dy });
+    // #15 Rotate through all 4 directions (front-right, front-left, back-left, back-right)
+    var dirIndex = Math.floor((time * 0.4) % 4);
+    var directions = [
+      { dx: 1, dy: 1 },   // front-right
+      { dx: -1, dy: 1 },  // front-left
+      { dx: -1, dy: -1 }, // back-left
+      { dx: 1, dy: -1 },  // back-right
+    ];
+    var facing = this.getFacing(directions[dirIndex]);
     var walkPhase = time * 2;
+    var isWalkingPreview = true;
 
-    this.drawBody(ctx, cx, cy, S, colors, facing, Math.sin(walkPhase * 3) * 0.2, Math.sin(walkPhase * 3) * 0.3, false, false, false, 0);
+    this.drawBody(ctx, cx, cy, S, colors, facing, Math.sin(walkPhase * 3) * 0.2, Math.sin(walkPhase * 3) * 0.3, false, false, isWalkingPreview, Math.abs(Math.cos(walkPhase * 3)) * 0.5, false, 0);
+
+    // Direction label
+    var dirNames = ['Avant-droite', 'Avant-gauche', 'Arrière-gauche', 'Arrière-droite'];
+    ctx.font = '9px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    ctx.fillText(dirNames[dirIndex], cx, cy + 25);
 
     ctx.font = 'bold 11px "Segoe UI", sans-serif';
     ctx.fillStyle = '#666';
     ctx.textAlign = 'center';
-    ctx.fillText('Aperçu', cx, cy + 30);
+    ctx.fillText('Aperçu', cx, cy + 38);
   },
 };

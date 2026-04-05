@@ -125,7 +125,7 @@ const Environments = {
       name: 'Bureau',
       floorColor1: '#c8c8c8',
       floorColor2: '#b8b8b8',
-      wallColor: '#e8e0d8',
+      wallColor: '#ede4d8', // #41 warmer wall for bureau
       furniture: (gs) => {
         const items = [];
         const m = 3;
@@ -146,6 +146,8 @@ const Environments = {
         items.push({ type: 'whiteboard', x: gs - 4, y: 0 });
         // Post-it board on back-left wall (x=0)
         items.push({ type: 'postItBoard', x: 0, y: Math.floor(gs / 2) });
+        // #42 Small rug near first desk cluster
+        items.push({ type: 'carpet', x: 2, y: 5 });
         return items;
       },
     },
@@ -185,7 +187,7 @@ const Environments = {
       name: 'Salle de Conférence',
       floorColor1: '#b0b0b8',
       floorColor2: '#a0a0a8',
-      wallColor: '#d8d0c8',
+      wallColor: '#d0d4de', // #41 cooler wall for conference
       furniture: (gs) => {
         const items = [];
         const cx = Math.floor(gs / 2);

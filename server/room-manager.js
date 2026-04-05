@@ -140,6 +140,12 @@ class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return { error: 'room_not_found' };
     if (room.closed) return { error: 'room_closed' };
+    // Improvement #2: password protection
+    if (room.password && !data.isCreator) {
+      if (!data.password || data.password !== room.password) {
+        return { error: 'invalid_password' };
+      }
+    }
     if (room.participants.size >= CONSTANTS.MAX_PARTICIPANTS) return { error: 'room_full' };
 
     this._cancelRoomCleanup(roomId);
@@ -190,6 +196,8 @@ class RoomManager {
       handRaised: false,
       joinedAt: Date.now(),
       lastSeen: Date.now(),
+      lastAction: Date.now(), // improvement #9: activity tracking
+      joinOrder: room.nextJoinOrder++, // improvement #23: join order
       disconnected: false,
     };
 
@@ -297,6 +305,7 @@ class RoomManager {
     p.isWalking = !!data.isWalking;
     p.walkPhase = (typeof data.walkPhase === 'number' && isFinite(data.walkPhase)) ? data.walkPhase : 0;
     p.lastSeen = Date.now();
+    p.lastAction = Date.now(); // improvement #9
 
     const tableResult = this.updateTableAssociation(roomId, socketId);
     return tableResult;
@@ -312,6 +321,10 @@ class RoomManager {
       gridSize: room.gridSize,
       participantCount: room.participants.size,
       maxParticipants: CONSTANTS.MAX_PARTICIPANTS,
+      createdAt: room.createdAt, // improvement #25
+      hasPassword: !!room.password, // improvement #2
+      inviteCode: room.inviteCode, // improvement #20
+      audioRadius: room.audioRadius, // improvement #24
     };
   }
 
@@ -336,6 +349,8 @@ class RoomManager {
         tableId: p.tableId,
         handRaised: p.handRaised,
         disconnected: p.disconnected,
+        joinOrder: p.joinOrder, // improvement #23
+        lastAction: p.lastAction, // improvement #9
       });
     }
     return list;
@@ -393,7 +408,7 @@ class RoomManager {
     return { success: true, pseudo: target.pseudo };
   }
 
-  kickParticipant(roomId, requesterId, targetId) {
+  kickParticipant(roomId, requesterId, targetId, reason) {
     const room = this.rooms.get(roomId);
     if (!room) return { error: 'room_not_found' };
     const requester = room.participants.get(requesterId);
@@ -402,7 +417,9 @@ class RoomManager {
     if (!requester.isAdmin) return { error: 'not_admin' };
     if (target.role === 'creator') return { error: 'cannot_kick_creator' };
     if (requesterId === targetId) return { error: 'cannot_kick_self' };
-    return { success: true, participant: target };
+    // Improvement #3: custom kick reason
+    const kickReason = (typeof reason === 'string' && reason.length > 0) ? reason.slice(0, 200) : 'Exclu par un administrateur';
+    return { success: true, participant: target, reason: kickReason };
   }
 
   closeRoom(roomId, socketId) {
@@ -613,7 +630,13 @@ class RoomManager {
       x: Math.max(0, Math.min(gs - 1, Number(furnitureData.x) || 0)),
       y: Math.max(0, Math.min(gs - 1, Number(furnitureData.y) || 0)),
     };
-    if (typeof furnitureData.rotation === 'number') item.rotation = furnitureData.rotation;
+    // Improvement #6: validate rotation to 0/90/180/270
+    if (furnitureData.rotation !== undefined) {
+      const rot = parseInt(furnitureData.rotation) || 0;
+      item.rotation = [0, 90, 180, 270].includes(rot) ? rot : 0;
+    } else {
+      item.rotation = 0;
+    }
     if (typeof furnitureData.variant === 'string') item.variant = furnitureData.variant.slice(0, 50);
     if (typeof furnitureData.label === 'string') item.label = furnitureData.label.slice(0, 100);
     if (typeof furnitureData.linkedDoorId === 'string') item.linkedDoorId = furnitureData.linkedDoorId.slice(0, 100);
@@ -925,6 +948,287 @@ class RoomManager {
     if (!p) return null;
     p.isMuted = !!muted;
     return { isMuted: p.isMuted };
+  }
+
+  // ===== CANCEL TIMER (improvement #1) =====
+
+  cancelTimer(roomId, requesterId, timerId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (typeof timerId !== 'string') return { error: 'invalid_timer_id' };
+    const timer = room.timers.get(timerId);
+    if (!timer) return { error: 'not_found' };
+    room.timers.delete(timerId);
+    return { success: true };
+  }
+
+  // ===== ROOM NAME CHANGE (improvement #4) =====
+
+  renameRoom(roomId, requesterId, newName) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (typeof newName !== 'string' || !newName.trim()) return { error: 'invalid_name' };
+    room.name = newName.trim().slice(0, 60);
+    return { success: true, name: room.name };
+  }
+
+  // ===== FURNITURE ROTATION (improvement #6) =====
+
+  rotateFurniture(roomId, requesterId, furnitureId, rotation) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (typeof furnitureId !== 'string') return { error: 'invalid_id' };
+    const item = room.furniture.find(f => f.id === furnitureId);
+    if (!item) return { error: 'not_found' };
+    // Only allow 0, 90, 180, 270
+    const validRotations = [0, 90, 180, 270];
+    const rot = parseInt(rotation) || 0;
+    item.rotation = validRotations.includes(rot) ? rot : 0;
+    return { success: true, item };
+  }
+
+  // ===== VOTE RESULTS EXPORT (improvement #8) =====
+
+  exportVoteResults(roomId, voteId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+    const vote = room.votes.get(voteId);
+    if (!vote) return null;
+    return JSON.stringify({
+      id: vote.id,
+      question: vote.question,
+      options: vote.options.map(o => ({ text: o.text, votes: o.votes })),
+      totalVoters: vote.voters.size,
+      active: vote.active,
+      anonymous: vote.anonymous,
+      createdAt: vote.createdAt,
+    });
+  }
+
+  // ===== ROOM STATISTICS (improvement #10) =====
+
+  getRoomStats(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+    return {
+      messagesSent: room.stats.messagesSent,
+      reactionsCount: room.stats.reactionsCount,
+      timeActive: Date.now() - room.stats.timeActive,
+      participantCount: room.participants.size,
+      tableCount: room.tables.size,
+      furnitureCount: room.furniture.length,
+    };
+  }
+
+  incrementStat(roomId, statName) {
+    const room = this.rooms.get(roomId);
+    if (!room || !room.stats) return;
+    if (typeof room.stats[statName] === 'number') {
+      room.stats[statName]++;
+    }
+  }
+
+  // ===== THEME PRESETS (improvement #11) =====
+
+  saveThemePreset(roomId, requesterId, presetName, themeData) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (typeof presetName !== 'string' || !presetName.trim()) return { error: 'invalid_name' };
+    const name = presetName.trim().slice(0, 30);
+    if (room.themePresets.size >= 20) return { error: 'too_many_presets' };
+    room.themePresets.set(name, { ...themeData });
+    return { success: true, name };
+  }
+
+  loadThemePreset(roomId, requesterId, presetName) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    const preset = room.themePresets.get(presetName);
+    if (!preset) return { error: 'preset_not_found' };
+    // Apply preset to theme
+    const allowedKeys = ['floorColor1', 'floorColor2', 'bgColor', 'glowColor', 'mode'];
+    for (const key of allowedKeys) {
+      if (preset[key] !== undefined) room.theme[key] = preset[key];
+    }
+    room.theme.preset = presetName;
+    return { success: true, theme: room.theme };
+  }
+
+  // ===== GRID SNAP (improvement #12) — furniture coords snap to integer =====
+  // Already handled by Math.max(0, Math.min(gs-1, Number(...) || 0)) in addFurniture
+  // Adding explicit snap method for client use
+  snapToGrid(x, y) {
+    return { x: Math.round(x), y: Math.round(y) };
+  }
+
+  // ===== FURNITURE COLLISION (improvement #13) =====
+
+  checkFurnitureCollision(room, x, y, type, excludeId) {
+    const Envs = require('../client/js/environments');
+    const def = Envs.furnitureTypes ? Envs.furnitureTypes[type] : null;
+    const w = (def && def.width) || 1;
+    const h = (def && def.height) || 1;
+    for (const item of room.furniture) {
+      if (excludeId && item.id === excludeId) continue;
+      const idef = Envs.furnitureTypes ? Envs.furnitureTypes[item.type] : null;
+      const iw = (idef && idef.width) || 1;
+      const ih = (idef && idef.height) || 1;
+      // AABB overlap check
+      if (x < item.x + iw && x + w > item.x && y < item.y + ih && y + h > item.y) {
+        return true; // collision
+      }
+    }
+    return false;
+  }
+
+  // ===== UNDO FURNITURE PLACEMENT (improvement #14) =====
+  // Server tracks last placed furniture per socket for undo
+
+  undoLastFurniture(roomId, requesterId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    if (room.furniture.length === 0) return { error: 'nothing_to_undo' };
+    const removed = room.furniture.pop();
+    return { success: true, removedId: removed.id };
+  }
+
+  // ===== AUTO-PAUSE TIMER (improvement #16) =====
+
+  checkTimerAutoPause(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    const activeCount = [...room.participants.values()].filter(p => !p.disconnected).length;
+    for (const [, timer] of room.timers) {
+      if (timer.running && !timer.paused && activeCount === 0) {
+        timer.paused = true;
+        timer.autoPaused = true;
+        timer.remaining = Math.max(0, timer.remaining - (Date.now() - timer.startedAt) / 1000);
+      }
+    }
+  }
+
+  checkTimerAutoResume(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    for (const [, timer] of room.timers) {
+      if (timer.running && timer.paused && timer.autoPaused) {
+        timer.paused = false;
+        timer.autoPaused = false;
+        timer.startedAt = Date.now();
+      }
+    }
+  }
+
+  // ===== VOTE TIMER (improvement #17) =====
+  // Votes already have a duration field; this adds explicit method
+  isVoteExpired(roomId, voteId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return true;
+    const vote = room.votes.get(voteId);
+    if (!vote || !vote.active) return true;
+    const elapsed = (Date.now() - vote.createdAt) / 1000;
+    return elapsed >= vote.duration;
+  }
+
+  // ===== CHAT HISTORY LIMIT (improvement #18) =====
+
+  addChatMessage(roomId, socketId, text) {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+    const p = room.participants.get(socketId);
+    if (!p) return null;
+    const msg = {
+      socketId,
+      pseudo: p.pseudo,
+      text: (text || '').toString().trim().slice(0, 200),
+      timestamp: Date.now(),
+    };
+    if (!msg.text) return null;
+    room.chatHistory.push(msg);
+    if (room.chatHistory.length > CONSTANTS.MAX_CHAT_MESSAGES_STORED) {
+      room.chatHistory = room.chatHistory.slice(-CONSTANTS.MAX_CHAT_MESSAGES_STORED);
+    }
+    room.stats.messagesSent++;
+    p.lastAction = Date.now();
+    return msg;
+  }
+
+  // ===== ROOM INVITE CODE (improvement #20) =====
+
+  _generateInviteCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 for clarity
+    let code = '';
+    for (let i = 0; i < CONSTANTS.INVITE_CODE_LENGTH; i++) {
+      code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+  }
+
+  findRoomByInviteCode(code) {
+    if (typeof code !== 'string') return null;
+    const upper = code.toUpperCase().trim();
+    for (const [roomId, room] of this.rooms) {
+      if (room.inviteCode === upper && !room.closed) return roomId;
+    }
+    return null;
+  }
+
+  // ===== RAISED HANDS COUNT (improvement #21) =====
+
+  getRaisedHandsCount(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return 0;
+    return room.raisedHands.size;
+  }
+
+  // ===== MUTE ALL (improvement #22) =====
+
+  muteAll(roomId, requesterId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    const muted = [];
+    for (const [sid, p] of room.participants) {
+      if (sid !== requesterId) {
+        p.isMuted = true;
+        muted.push(sid);
+      }
+    }
+    return { success: true, muted };
+  }
+
+  // ===== CONFIGURABLE AUDIO RADIUS (improvement #24) =====
+
+  setAudioRadius(roomId, requesterId, radius) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    const r = Math.max(CONSTANTS.AUDIO_RADIUS_MIN, Math.min(CONSTANTS.AUDIO_RADIUS_MAX, Number(radius) || CONSTANTS.AUDIO_RADIUS));
+    room.audioRadius = r;
+    return { success: true, audioRadius: r };
+  }
+
+  // ===== ROOM CREATION DATE (improvement #25) =====
+  // Already stored as room.createdAt; this provides formatted access
+
+  getRoomCreationDate(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+    return room.createdAt;
   }
 
   // Cleanup on shutdown

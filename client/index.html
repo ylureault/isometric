@@ -29,6 +29,7 @@
         <option value="salle-de-conference">Salle de Conférence</option>
         <option value="coworking">Espace Coworking (zones numérotées)</option>
       </select>
+      <div class="env-preview-desc" id="env-preview-desc">Espace ouvert avec postes de travail et zones de réunion</div>
     </div>
 
     <div class="form-group">
@@ -45,8 +46,38 @@
       <div class="form-group">
         <input type="text" id="room-id-input" placeholder="Identifiant de la salle" aria-label="Identifiant de la salle à rejoindre">
       </div>
+      <div id="join-room-info" style="display:none;font-size:0.8rem;color:rgba(255,255,255,0.7);margin-top:4px;"></div>
       <button class="btn btn-secondary" id="btn-join" style="margin-top: 8px;">Rejoindre</button>
     </div>
+
+    <!-- #48 Feature highlights -->
+    <div class="landing-features">
+      <div class="landing-feature">
+        <span class="landing-feature-icon">🎙</span>
+        <span class="landing-feature-text">Audio spatial par proximite</span>
+      </div>
+      <div class="landing-feature">
+        <span class="landing-feature-icon">📋</span>
+        <span class="landing-feature-text">Tableaux collaboratifs</span>
+      </div>
+      <div class="landing-feature">
+        <span class="landing-feature-icon">🗳</span>
+        <span class="landing-feature-text">Votes et minuteurs</span>
+      </div>
+      <div class="landing-feature">
+        <span class="landing-feature-icon">🖥</span>
+        <span class="landing-feature-text">Partage d'ecran</span>
+      </div>
+    </div>
+
+    <!-- #23 Server status -->
+    <div id="server-status" style="margin-top: 12px; font-size: 0.75rem; color: rgba(255,255,255,0.4);">
+      <span id="server-status-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#999;margin-right:4px;vertical-align:middle;"></span>
+      <span id="server-status-text">Verification du serveur...</span>
+    </div>
+
+    <!-- #49 Footer -->
+    <div class="landing-footer">Made with &#10084;&#65039; by <a href="https://www.insuffle.com" target="_blank">Insuffle</a></div>
   </div>
 
   <script src="../shared/constants.js"></script>
@@ -58,6 +89,54 @@
     gridSizeInput.addEventListener('input', () => {
       gridSizeValue.textContent = gridSizeInput.value;
       gridSizeValue2.textContent = gridSizeInput.value;
+    });
+
+    // #9 Environment preview descriptions
+    const envDescriptions = {
+      'bureau': 'Espace classique avec bureaux individuels et salle de réunion',
+      'open-space': 'Espace ouvert avec postes de travail et zones de réunion',
+      'salle-de-conference': 'Grande salle équipée pour les présentations et conférences',
+      'coworking': 'Espace modulable avec zones numérotées pour le travail collaboratif',
+    };
+    const envSelect = document.getElementById('environment');
+    const envDesc = document.getElementById('env-preview-desc');
+    envSelect.addEventListener('change', () => {
+      envDesc.textContent = envDescriptions[envSelect.value] || '';
+    });
+
+    // #5 Show participant count when typing a room ID
+    const roomIdInput = document.getElementById('room-id-input');
+    const joinRoomInfo = document.getElementById('join-room-info');
+    let roomInfoTimeout = null;
+    roomIdInput.addEventListener('input', () => {
+      clearTimeout(roomInfoTimeout);
+      const rid = roomIdInput.value.trim();
+      if (rid.length > 3) {
+        roomInfoTimeout = setTimeout(() => {
+          fetch('/api/rooms/' + encodeURIComponent(rid)).then(r => r.ok ? r.json() : null).then(info => {
+            if (info) {
+              joinRoomInfo.innerHTML = '\u2705 <strong>' + info.name + '</strong> \u2014 ' + info.participantCount + '/' + info.maxParticipants + ' participants';
+              joinRoomInfo.style.display = 'block';
+            } else {
+              joinRoomInfo.style.display = 'none';
+            }
+          }).catch(() => { joinRoomInfo.style.display = 'none'; });
+        }, 500);
+      } else {
+        joinRoomInfo.style.display = 'none';
+      }
+    });
+
+    // Server status check
+    fetch('/api/rooms/health-check').then(r => {
+      const dot = document.getElementById('server-status-dot');
+      const txt = document.getElementById('server-status-text');
+      if (r.ok) { dot.style.background = '#2ecc71'; txt.textContent = 'Serveur en ligne'; }
+      else { dot.style.background = '#e74c3c'; txt.textContent = 'Serveur indisponible'; }
+    }).catch(() => {
+      const dot = document.getElementById('server-status-dot');
+      const txt = document.getElementById('server-status-text');
+      dot.style.background = '#e74c3c'; txt.textContent = 'Serveur injoignable';
     });
 
     const createBtn = document.getElementById('btn-create');
@@ -135,6 +214,39 @@
     document.getElementById('room-id-input').addEventListener('keydown', (e) => {
       if (e.code === 'Enter') joinBtn.click();
     });
+
+    // #23 Server status check
+    (function checkServerStatus() {
+      var dot = document.getElementById('server-status-dot');
+      var text = document.getElementById('server-status-text');
+      fetch('/api/rooms', { method: 'HEAD' }).then(function(r) {
+        if (r.ok || r.status === 405 || r.status === 404) {
+          dot.style.background = '#2ecc71';
+          text.textContent = 'Serveur en ligne';
+        } else {
+          dot.style.background = '#e74c3c';
+          text.textContent = 'Serveur indisponible';
+        }
+      }).catch(function() {
+        dot.style.background = '#e74c3c';
+        text.textContent = 'Serveur injoignable';
+      });
+    })();
+
+    // #26 Browser compatibility warnings
+    (function checkBrowserCompat() {
+      var warnings = [];
+      if (!window.RTCPeerConnection) warnings.push('WebRTC non supporte (audio impossible)');
+      if (!window.AudioContext && !window.webkitAudioContext) warnings.push('AudioContext non supporte');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) warnings.push('getUserMedia non supporte (micro impossible)');
+      if (!window.WebSocket) warnings.push('WebSocket non supporte');
+      if (warnings.length > 0) {
+        var warnDiv = document.createElement('div');
+        warnDiv.style.cssText = 'margin-top:12px;padding:10px 16px;background:rgba(243,156,18,0.15);border:1px solid rgba(243,156,18,0.3);border-radius:8px;color:rgba(255,255,255,0.8);font-size:0.8rem;max-width:400px;text-align:center;';
+        warnDiv.innerHTML = '&#9888;&#65039; Compatibilite limitee : ' + warnings.join(', ') + '. Utilisez un navigateur recent (Chrome, Firefox, Edge).';
+        document.getElementById('landing').appendChild(warnDiv);
+      }
+    })();
   </script>
 </body>
 </html>

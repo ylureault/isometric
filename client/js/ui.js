@@ -29,7 +29,19 @@ const UI = {
 
     for (const [key, input] of Object.entries(colorInputs)) {
       input.value = this.currentColors[key];
-      input.addEventListener('input', () => { this.currentColors[key] = input.value; });
+      // #4 Animate color pickers with smooth transition + #49 hover preview swatch
+      input.addEventListener('input', () => {
+        this.currentColors[key] = input.value;
+        input.style.borderColor = input.value;
+        input.style.boxShadow = '0 0 8px ' + input.value + '44';
+      });
+      // #49 Add color swatch preview on hover
+      var swatch = document.createElement('div');
+      swatch.className = 'color-swatch-preview';
+      swatch.style.background = input.value;
+      input.parentElement.style.position = 'relative';
+      input.parentElement.appendChild(swatch);
+      input.addEventListener('input', (function(sw) { return function() { sw.style.background = input.value; }; })(swatch));
     }
 
     let animTime = 0;
@@ -40,16 +52,57 @@ const UI = {
     };
     animatePreview();
 
+    // #1 Auto-focus pseudo input
+    var pseudoInput = document.getElementById('pseudo-input');
+    setTimeout(function() { pseudoInput.focus(); }, 300);
+
+    // #8 Auto-select all text on focus
+    pseudoInput.addEventListener('focus', function() { pseudoInput.select(); });
+
+    // #2 Character count remaining + #10 Real-time validation
+    var charCount = document.getElementById('pseudo-char-count');
+    var validIndicator = document.getElementById('pseudo-valid-indicator');
     var enterBtn = document.getElementById('btn-enter');
+
+    pseudoInput.addEventListener('input', function() {
+      var len = pseudoInput.value.length;
+      var max = 20;
+      if (charCount) {
+        charCount.textContent = len + '/' + max;
+        charCount.classList.toggle('near-limit', len >= 15 && len < 20);
+        charCount.classList.toggle('at-limit', len >= 20);
+      }
+      // #10 Green check when valid (2+ chars)
+      var isValid = pseudoInput.value.trim().length >= 2;
+      if (validIndicator) {
+        validIndicator.classList.toggle('visible', isValid);
+        validIndicator.style.color = isValid ? '#2ecc71' : 'transparent';
+      }
+      // #7 Pulse animation on enter button when valid
+      enterBtn.classList.toggle('btn-enter-valid', isValid);
+    });
+
     enterBtn.addEventListener('click', () => {
-      const pseudo = document.getElementById('pseudo-input').value.trim();
+      const pseudo = pseudoInput.value.trim();
       const errorEl = document.getElementById('error-pseudo');
-      if (!pseudo) { errorEl.style.display = 'block'; document.getElementById('pseudo-input').focus(); return; }
+      if (!pseudo) {
+        errorEl.style.display = 'block';
+        pseudoInput.focus();
+        // #37 Error shake
+        pseudoInput.classList.add('shake-error');
+        setTimeout(() => pseudoInput.classList.remove('shake-error'), 400);
+        return;
+      }
       errorEl.style.display = 'none';
 
       // Show loading state on button
       enterBtn.classList.add('btn-loading');
+      enterBtn.classList.remove('btn-enter-valid');
       enterBtn.disabled = true;
+
+      // #41 Show loading indicator
+      var loadingBar = document.getElementById('room-loading-indicator');
+      if (loadingBar) loadingBar.style.display = 'block';
 
       if (this.previewAnimId) cancelAnimationFrame(this.previewAnimId);
       this.avatarConfig.style.display = 'none';
@@ -60,18 +113,41 @@ const UI = {
       var accessorySelect = document.getElementById('accessory-select');
       var accessory = accessorySelect ? accessorySelect.value : 'none';
       onEnter({ pseudo, colors: { ...this.currentColors }, accessory: accessory });
+
+      // #17 Show keyboard hint overlay on first join
+      this.showKeyboardHintOnce();
     });
 
     // Allow Enter key to submit pseudo
-    document.getElementById('pseudo-input').addEventListener('keydown', (e) => {
+    pseudoInput.addEventListener('keydown', (e) => {
       if (e.code === 'Enter') enterBtn.click();
     });
+  },
+
+  // #17 Keyboard shortcut hint overlay (shown once)
+  showKeyboardHintOnce() {
+    try {
+      if (localStorage.getItem('insuffle_hint_shown')) return;
+    } catch(e) {}
+    var hint = document.getElementById('keyboard-hint-overlay');
+    if (!hint) return;
+    hint.style.display = 'block';
+    var dismiss = document.getElementById('keyboard-hint-dismiss');
+    if (dismiss) {
+      dismiss.addEventListener('click', function() {
+        hint.style.display = 'none';
+        try { localStorage.setItem('insuffle_hint_shown', '1'); } catch(e) {}
+      });
+    }
+    // Auto-dismiss after 15 seconds
+    setTimeout(function() { if (hint) hint.style.display = 'none'; }, 15000);
   },
 
   showRoomInfo(info) {
     const el = document.getElementById('room-info-display');
     if (el) {
-      el.textContent = `${info.name} — ${info.participantCount}/${info.maxParticipants} participants`;
+      // #5 Show participant count with badge
+      el.innerHTML = `${this.escapeHtml(info.name)} \u2014 <span class="room-participant-badge">${info.participantCount}/${info.maxParticipants} participants</span>`;
       el.style.display = 'block';
     }
   },
@@ -116,13 +192,40 @@ const UI = {
 
   // ===== HUD =====
 
+  _lastZoomShow: 0,
+  _prevZoom: 1,
+
   updateHUD(roomName, playerX, playerY, participantCount, zoom) {
     const el1 = document.getElementById('hud-room-name');
     const el2 = document.getElementById('hud-coords');
-    const el3 = document.getElementById('hud-participants');
+    const el3 = document.getElementById('hud-participants-text');
+    // #11 Show coordinates as "Zone X, Y"
     if (el1) el1.textContent = roomName || 'Salle';
-    if (el2) el2.textContent = `${Math.floor(playerX)}, ${Math.floor(playerY)}  ·  x${(zoom || 1).toFixed(1)}`;
+    if (el2) el2.textContent = `Zone ${Math.floor(playerX)}, ${Math.floor(playerY)}  \u00b7  x${(zoom || 1).toFixed(1)}`;
     if (el3) el3.textContent = `${participantCount} participant${participantCount > 1 ? 's' : ''}`;
+
+    // #14 Minimap badge with player count
+    var minimapBadge = document.getElementById('minimap-badge');
+    if (minimapBadge) minimapBadge.textContent = participantCount;
+
+    // #19 Zoom level indicator (show briefly on zoom change)
+    var zoomIndicator = document.getElementById('zoom-indicator');
+    if (zoomIndicator) {
+      zoomIndicator.textContent = 'x' + (zoom || 1).toFixed(1);
+      if (Math.abs((zoom || 1) - this._prevZoom) > 0.01) {
+        zoomIndicator.classList.add('visible');
+        this._lastZoomShow = Date.now();
+        var self = this;
+        setTimeout(function() {
+          if (Date.now() - self._lastZoomShow >= 1400) zoomIndicator.classList.remove('visible');
+        }, 1500);
+      }
+      this._prevZoom = zoom || 1;
+    }
+
+    // #43 Admin badge
+    var adminBadge = document.getElementById('hud-admin-badge');
+    if (adminBadge) adminBadge.style.display = Engine.player.isAdmin ? 'block' : 'none';
   },
 
   // ===== TOOLBAR =====
@@ -168,10 +271,13 @@ const UI = {
       this.updateScreenShareButton();
     });
 
-    // View toggle button
+    // View toggle button (#13 smooth transition)
     document.getElementById('btn-view-toggle')?.addEventListener('click', () => {
       Engine.viewMode = Engine.viewMode === 'iso' ? 'topdown' : 'iso';
-      this.showNotification('Vue : ' + (Engine.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus'));
+      this.showNotification('Vue : ' + (Engine.viewMode === 'iso' ? 'Isom\u00e9trique' : 'Vue de dessus'));
+      // #12 Update compass rotation for view mode
+      var compass = document.getElementById('compass-indicator');
+      if (compass) compass.style.transform = Engine.viewMode === 'topdown' ? 'rotate(0deg)' : 'rotate(45deg)';
     });
 
     // Edit mode button (admin only)
@@ -217,6 +323,65 @@ const UI = {
 
     // Edit mode toolbar
     this.initEditToolbar();
+
+    // #42 Notification sound toggle
+    var soundToggle = document.getElementById('btn-sound-toggle');
+    if (soundToggle) {
+      soundToggle.addEventListener('click', function() {
+        Engine.sfxMuted = !Engine.sfxMuted;
+        soundToggle.classList.toggle('sound-muted', Engine.sfxMuted);
+        soundToggle.textContent = Engine.sfxMuted ? '\uD83D\uDD07' : '\uD83D\uDD08';
+        UI.showNotification(Engine.sfxMuted ? 'Sons d\u00e9sactiv\u00e9s' : 'Sons activ\u00e9s');
+      });
+    }
+
+    // #50 Dark mode toggle for UI panels
+    var darkModeToggle = document.getElementById('btn-dark-mode');
+    if (darkModeToggle) {
+      // Restore saved preference
+      if (localStorage.getItem('ui-dark-mode') === 'true') {
+        document.body.classList.add('ui-dark-mode');
+        darkModeToggle.textContent = '\u2600'; // sun icon
+      }
+      darkModeToggle.addEventListener('click', function() {
+        document.body.classList.toggle('ui-dark-mode');
+        var isDark = document.body.classList.contains('ui-dark-mode');
+        darkModeToggle.textContent = isDark ? '\u2600' : '\u263D';
+        localStorage.setItem('ui-dark-mode', isDark);
+        UI.showNotification(isDark ? 'Mode sombre activ\u00e9' : 'Mode clair activ\u00e9');
+      });
+    }
+
+    // #47 Export config button
+    this.initExportConfig();
+
+    // #40 Consistent tooltip system for toolbar buttons
+    this.initTooltipSystem();
+  },
+
+  // #40 Unified tooltip system
+  initTooltipSystem() {
+    var tooltip = null;
+    function showTooltip(btn) {
+      if (tooltip) tooltip.remove();
+      var title = btn.getAttribute('data-tooltip') || btn.getAttribute('title');
+      if (!title) return;
+      tooltip = document.createElement('div');
+      tooltip.className = 'ux-tooltip';
+      tooltip.textContent = title;
+      document.body.appendChild(tooltip);
+      var rect = btn.getBoundingClientRect();
+      tooltip.style.left = (rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+      tooltip.style.top = (rect.top - tooltip.offsetHeight - 6) + 'px';
+    }
+    function hideTooltip() {
+      if (tooltip) { tooltip.remove(); tooltip = null; }
+    }
+    document.querySelectorAll('.toolbar-btn').forEach(function(btn) {
+      btn.addEventListener('mouseenter', function() { showTooltip(btn); });
+      btn.addEventListener('mouseleave', hideTooltip);
+      btn.addEventListener('mousedown', hideTooltip);
+    });
   },
 
   updateMuteButton(muted) {
@@ -257,14 +422,23 @@ const UI = {
 
   // ===== NOTIFICATIONS =====
 
-  showNotification(text) {
+  showNotification(text, type) {
     const container = document.getElementById('notifications-container');
     if (!container) return;
     // Limit max visible notifications to 5
     while (container.children.length >= 5) container.removeChild(container.firstChild);
     const el = document.createElement('div');
     el.className = 'notification';
-    el.textContent = text;
+    // #36 Success / #37 Error type notifications
+    if (type === 'success') {
+      el.classList.add('notification-success');
+      el.innerHTML = text + ' <span class="success-flash"></span>';
+    } else if (type === 'error') {
+      el.classList.add('notification-error');
+      el.innerHTML = text;
+    } else {
+      el.textContent = text;
+    }
     container.appendChild(el);
     requestAnimationFrame(() => el.classList.add('notification-show'));
     setTimeout(() => {
@@ -272,6 +446,10 @@ const UI = {
       el.classList.add('notification-hide');
       setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
     }, CONSTANTS.NOTIFICATION_DURATION);
+
+    // #41 Hide loading indicator after first notification
+    var loadingBar = document.getElementById('room-loading-indicator');
+    if (loadingBar) loadingBar.style.display = 'none';
   },
 
   showReconnecting(show) {
@@ -377,6 +555,26 @@ const UI = {
     });
   },
 
+  // #20 Right-click empty space: return to player
+  showReturnToPlayerMenu(x, y) {
+    this.hideContextMenu();
+    var menu = document.getElementById('context-menu');
+    if (!menu) return;
+    menu.innerHTML = '<div class="ctx-menu-item ctx-menu-return" data-action="return-to-player">\u2302 Recentrer sur mon avatar</div>';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.display = 'block';
+    this.contextMenuOpen = true;
+    var self = this;
+    menu.querySelector('[data-action="return-to-player"]').addEventListener('click', function() {
+      Engine._cameraCenterTarget = null; // Reset any pending center
+      var ps = Board.iso(Engine.player.x, Engine.player.y);
+      Engine.camera.x = Engine.canvas.width / 2 - ps.x * Engine.zoom;
+      Engine.camera.y = Engine.canvas.height / 2 - ps.y * Engine.zoom;
+      self.hideContextMenu();
+    });
+  },
+
   hideContextMenu() {
     const menu = document.getElementById('context-menu');
     if (menu) menu.style.display = 'none';
@@ -427,6 +625,23 @@ const UI = {
     this.refreshFurnitureList();
     this.refreshTablesList();
     this.refreshSubRoomsList();
+    // #46 Room uptime
+    this.updateRoomUptime();
+  },
+
+  // #46 Room uptime display
+  updateRoomUptime() {
+    var el = document.getElementById('room-uptime');
+    if (!el) return;
+    if (!this._roomJoinTime) this._roomJoinTime = Date.now();
+    var elapsed = Math.floor((Date.now() - this._roomJoinTime) / 1000);
+    var hours = Math.floor(elapsed / 3600);
+    var mins = Math.floor((elapsed % 3600) / 60);
+    var secs = elapsed % 60;
+    var uptimeStr = '';
+    if (hours > 0) uptimeStr += hours + 'h ';
+    uptimeStr += mins + 'min ' + secs + 's';
+    el.textContent = '\u23F1 Session active depuis : ' + uptimeStr;
   },
 
   refreshParticipantsList() {
@@ -483,7 +698,18 @@ const UI = {
       }
     }
 
-    return `<div class="participant-row">${badge}${name} ${muteBadge}${handBadge}${dc}<div class="participant-actions">${actions}</div></div>`;
+    // #45 Last activity timestamp
+    var activity = '';
+    if (!isMe && p.lastSeen) {
+      var ago = Math.floor((Date.now() - p.lastSeen) / 1000);
+      if (ago < 10) activity = '<span class="participant-activity">actif maintenant</span>';
+      else if (ago < 60) activity = '<span class="participant-activity">actif il y a ' + ago + 's</span>';
+      else activity = '<span class="participant-activity">actif il y a ' + Math.floor(ago / 60) + 'min</span>';
+    } else if (isMe) {
+      activity = '<span class="participant-activity">vous</span>';
+    }
+
+    return `<div class="participant-row">${badge}${name} ${muteBadge}${handBadge}${dc} ${activity}<div class="participant-actions">${actions}</div></div>`;
   },
 
   initMobilierTab() {
@@ -707,6 +933,34 @@ const UI = {
     }
   },
 
+  // #47 Export room config as JSON
+  initExportConfig() {
+    var btn = document.getElementById('btn-export-config');
+    if (!btn || btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener('click', function() {
+      var config = {
+        roomId: Engine.roomConfig.roomId,
+        name: Engine.roomConfig.name,
+        environment: Engine.roomConfig.environment,
+        gridSize: Engine.roomConfig.gridSize,
+        furniture: Board.furniture.map(function(f) { return { type: f.type, x: f.x, y: f.y, id: f.id }; }),
+        tables: [],
+        participantCount: Network.getParticipantCount(),
+        exportedAt: new Date().toISOString(),
+      };
+      Engine.tables.forEach(function(t, id) { config.tables.push({ id: id, name: t.name, x: t.x, y: t.y }); });
+      var blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'room-config-' + (Engine.roomConfig.roomId || 'export') + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      UI.showNotification('Configuration export\u00e9e avec succ\u00e8s');
+    });
+  },
+
   // ===== SHORTCUTS MODAL =====
 
   toggleShortcutsModal() {
@@ -736,13 +990,21 @@ const UI = {
     const container = document.getElementById('vote-popup');
     if (!container) return;
 
-    let optionsHtml = vote.options.map((opt, i) =>
-      `<button class="vote-option-btn" data-index="${i}">${opt.text} <span class="vote-count">(${opt.votes})</span></button>`
-    ).join('');
+    var totalVotes = vote.options.reduce(function(sum, o) { return sum + o.votes; }, 0);
+    let optionsHtml = vote.options.map((opt, i) => {
+      var pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+      return `<div style="margin-bottom:6px;">
+        <button class="vote-option-btn" data-index="${i}">${this.escapeHtml(opt.text)} <span class="vote-count">(${opt.votes})</span></button>
+        <div class="vote-bar-container">
+          <div class="vote-bar"><div class="vote-bar-fill" style="width:${pct}%;" data-bar-index="${i}"></div></div>
+          <span class="vote-bar-label">${pct}%</span>
+        </div>
+      </div>`;
+    }).join('');
 
     container.innerHTML = `
       <div class="vote-popup-inner">
-        <h3>${vote.question}</h3>
+        <h3>${this.escapeHtml(vote.question)}</h3>
         <div class="vote-options">${optionsHtml}</div>
         <p class="vote-info">${vote.totalVoters} vote(s)</p>
         <button class="vote-close-btn" id="vote-close-btn">Fermer</button>
@@ -755,6 +1017,7 @@ const UI = {
           voteId: vote.id,
           optionIndex: parseInt(btn.dataset.index),
         }, () => {});
+        btn.classList.add('voted');
         container.querySelectorAll('.vote-option-btn').forEach(b => b.disabled = true);
       });
     });
@@ -766,9 +1029,18 @@ const UI = {
   updateVotePopup(vote) {
     const container = document.getElementById('vote-popup');
     if (!container || container.style.display === 'none') return;
+    var totalVotes = vote.options.reduce(function(sum, o) { return sum + o.votes; }, 0);
     const counts = container.querySelectorAll('.vote-count');
     vote.options.forEach((opt, i) => {
       if (counts[i]) counts[i].textContent = `(${opt.votes})`;
+      // #30 Update bar chart
+      var bar = container.querySelector('[data-bar-index="' + i + '"]');
+      if (bar) {
+        var pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+        bar.style.width = pct + '%';
+        var label = bar.parentElement.parentElement.querySelector('.vote-bar-label');
+        if (label) label.textContent = pct + '%';
+      }
     });
     const info = container.querySelector('.vote-info');
     if (info) info.textContent = `${vote.totalVoters} vote(s)`;
@@ -1365,7 +1637,9 @@ const UI = {
 
     var closeBtn = document.getElementById('postit-close');
     if (closeBtn) closeBtn.onclick = cleanup;
-    if (statusText) statusText.textContent = 'Prêt — Raccourcis : V N P S T G E | Échap pour fermer';
+    // #35 Show connected users count in dark board status bar
+    var userCount = 1 + Network.remotePlayers.size;
+    if (statusText) statusText.textContent = 'Pr\u00eat \u2014 ' + userCount + ' utilisateur' + (userCount > 1 ? 's' : '') + ' connect\u00e9' + (userCount > 1 ? 's' : '') + ' \u2014 Raccourcis : V N P S T G E | \u00c9chap pour fermer';
   },
 
 
@@ -1379,6 +1653,10 @@ const UI = {
 
     this.activeWhiteboardId = whiteboardId;
     overlay.style.display = 'flex';
+
+    // #34 Show "last edited by" in whiteboard header
+    var wbHeader = overlay.querySelector('.whiteboard-header h3');
+    if (wbHeader) wbHeader.innerHTML = 'Tableau blanc collaboratif <span id="wb-last-edited" style="font-size:0.7rem;color:#999;font-weight:normal;margin-left:8px;"></span>';
 
     var canvas = document.getElementById('whiteboard-canvas');
     var ctx = canvas.getContext('2d');
@@ -1442,6 +1720,9 @@ const UI = {
       if (data.whiteboardId !== whiteboardId) return;
       strokes.push(data.strokeData);
       drawStroke(data.strokeData);
+      // #34 Update "last edited by"
+      var lastEditEl = document.getElementById('wb-last-edited');
+      if (lastEditEl && data.pseudo) lastEditEl.textContent = 'Derni\u00e8re modification par ' + data.pseudo;
     }
     Network.socket.on('wb-stroke', onRemoteStroke);
 
@@ -1984,10 +2265,16 @@ const UI = {
       }
     }
 
+    // #29 Audible tick in last 10 seconds
+    if (remaining <= 10 && remaining > 0 && !t.paused) {
+      Engine.initSfx();
+      Engine.playSfx('click');
+    }
+
     if (remaining <= 0) {
       t.running = false;
-      if (el) el.innerHTML = '<span class="timer-text timer-ended">Terminé !</span>';
-      if (globalTime) globalTime.textContent = 'Terminé !';
+      if (el) el.innerHTML = '<span class="timer-text timer-ended">Termin\u00e9 !</span>';
+      if (globalTime) globalTime.textContent = 'Termin\u00e9 !';
     }
 
     // Add stop button for admins on the global timer display

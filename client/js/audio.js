@@ -461,9 +461,10 @@ const Audio = {
     var level = this.getAudioLevel();
     var speaking = level > this._speakingThreshold;
 
-    // Emit speaking state to server (throttled to 4 times/sec)
+    // Improvement #19: throttled speaking detection using constant
     var now = Date.now();
-    if (speaking !== this._isSpeakingState && now - this._speakingLastEmit > 250) {
+    var throttleMs = (typeof CONSTANTS !== 'undefined' && CONSTANTS.SPEAKING_THROTTLE_MS) ? CONSTANTS.SPEAKING_THROTTLE_MS : 250;
+    if (speaking !== this._isSpeakingState && now - this._speakingLastEmit > throttleMs) {
       this._isSpeakingState = speaking;
       this._speakingLastEmit = now;
       if (Network.socket) {
