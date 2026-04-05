@@ -240,18 +240,24 @@ var Engine = {
   checkRoom: function() {
     var self = this;
     if (!this.roomConfig.roomId) { UI.showError('Aucun identifiant de salle fourni. Veuillez utiliser un lien valide.'); return; }
+    // #41 Show loading indicator while checking room
+    var loadingBar = document.getElementById('room-loading-indicator');
+    if (loadingBar) loadingBar.style.display = 'block';
     if (!this.roomConfig.isCreator) {
       fetch('/api/rooms/' + this.roomConfig.roomId).then(function(resp) {
-        if (!resp.ok) { UI.showError('Cette salle est introuvable. Vérifiez le lien et réessayez.'); return; }
+        if (!resp.ok) { if (loadingBar) loadingBar.style.display = 'none'; UI.showError('Cette salle est introuvable. V\u00e9rifiez le lien et r\u00e9essayez.'); return; }
         return resp.json();
       }).then(function(info) {
         if (!info) return;
+        if (loadingBar) loadingBar.style.display = 'none';
         self.roomConfig.name = info.name;
         self.roomConfig.environment = info.environment;
         self.roomConfig.gridSize = info.gridSize;
-        if (info.participantCount >= info.maxParticipants) { UI.showError('Cette salle est complète. Le nombre maximum de participants est atteint.'); return; }
+        // #5 Show room participant count on join screen
+        UI.showRoomInfo(info);
+        if (info.participantCount >= info.maxParticipants) { UI.showError('Cette salle est compl\u00e8te. Le nombre maximum de participants est atteint.'); return; }
         self.initBoard();
-      }).catch(function() { self.initBoard(); });
+      }).catch(function() { if (loadingBar) loadingBar.style.display = 'none'; self.initBoard(); });
     } else {
       this.initBoard();
     }
@@ -720,10 +726,12 @@ var Engine = {
       var fdef = Environments.furnitureTypes[fitem.type];
       if (!fdef || fdef.isWhiteboard || fdef.isPostItBoard) continue;
       if (clickX >= fitem.x && clickX < fitem.x + (fdef.width || 1) && clickY >= fitem.y && clickY < fitem.y + (fdef.height || 1)) {
+        // #22 Click feedback: brief highlight on clicked furniture
+        this._flashFurniture = { item: fitem, time: performance.now() };
         // Admin: select furniture for move/delete
         if (this.player.isAdmin && fitem.id) {
           this.selectedFurniture = fitem;
-          UI.showNotification(fdef.name + ' sélectionné — Clic droit pour les options');
+          UI.showNotification(fdef.name + ' s\u00e9lectionn\u00e9 \u2014 Clic droit pour les options');
           return;
         }
         return;
@@ -1338,6 +1346,26 @@ var Engine = {
       var e = entities[ei];
       if (e.type === 'f') {
         Board.drawFurnitureItem(ctx, e.item, 0, 0);
+        // #22 Click feedback flash on furniture
+        if (this._flashFurniture && this._flashFurniture.item === e.item) {
+          var elapsed = performance.now() - this._flashFurniture.time;
+          if (elapsed < 300) {
+            var flashAlpha = 0.4 * (1 - elapsed / 300);
+            var fdef22 = Environments.furnitureTypes[e.item.type];
+            if (fdef22) {
+              var fpos22 = Board.iso(e.item.x + (fdef22.width || 1) / 2, e.item.y + (fdef22.height || 1) / 2);
+              ctx.save();
+              ctx.globalAlpha = flashAlpha;
+              ctx.fillStyle = '#fff';
+              ctx.beginPath();
+              ctx.arc(fpos22.x, fpos22.y, Board.tileWidth * 0.6, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+          } else {
+            this._flashFurniture = null;
+          }
+        }
       } else if (e.type === 't') {
         this.drawTable(ctx, e.t);
       } else if (e.type === 'me') {

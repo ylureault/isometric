@@ -172,9 +172,11 @@
 
   <!-- Admin Panel (sidebar) -->
   <div class="admin-panel" id="admin-panel">
+    <!-- #31 Drag handle to resize panel width -->
+    <div class="admin-panel-resize" id="admin-panel-resize" title="Glisser pour redimensionner"></div>
     <div class="admin-panel-header">
       <h3>Administration</h3>
-      <button class="admin-close-btn" onclick="UI.toggleAdminPanel()" aria-label="Fermer le panneau admin">✕</button>
+      <button class="admin-close-btn" onclick="UI.toggleAdminPanel()" aria-label="Fermer le panneau admin">&#10005;</button>
     </div>
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="participants" onclick="this.parentElement.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');document.querySelectorAll('.admin-tab-content').forEach(c=>c.style.display='none');document.getElementById('tab-participants').style.display='block';UI.refreshParticipantsList();">Participants</button>

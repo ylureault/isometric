@@ -199,9 +199,22 @@ const UI = {
     const el1 = document.getElementById('hud-room-name');
     const el2 = document.getElementById('hud-coords');
     const el3 = document.getElementById('hud-participants-text');
-    // #11 Show coordinates as "Zone X, Y"
+    // #11 Show coordinates as "Zone X, Y" + #15 breadcrumb
     if (el1) el1.textContent = roomName || 'Salle';
-    if (el2) el2.textContent = `Zone ${Math.floor(playerX)}, ${Math.floor(playerY)}  \u00b7  x${(zoom || 1).toFixed(1)}`;
+    // #15 Determine area name based on position
+    var areaName = '';
+    var gridSize = Engine.roomConfig ? Engine.roomConfig.gridSize : 20;
+    var relX = Math.floor(playerX) / gridSize, relY = Math.floor(playerY) / gridSize;
+    if (relX < 0.3 && relY < 0.3) areaName = 'Coin nord-ouest';
+    else if (relX > 0.7 && relY < 0.3) areaName = 'Coin nord-est';
+    else if (relX < 0.3 && relY > 0.7) areaName = 'Coin sud-ouest';
+    else if (relX > 0.7 && relY > 0.7) areaName = 'Coin sud-est';
+    else if (relY < 0.25) areaName = 'Zone nord';
+    else if (relY > 0.75) areaName = 'Zone sud';
+    else if (relX < 0.25) areaName = 'Zone ouest';
+    else if (relX > 0.75) areaName = 'Zone est';
+    else areaName = 'Centre';
+    if (el2) el2.textContent = `${areaName} (${Math.floor(playerX)}, ${Math.floor(playerY)})  \u00b7  x${(zoom || 1).toFixed(1)}`;
     if (el3) el3.textContent = `${participantCount} participant${participantCount > 1 ? 's' : ''}`;
 
     // #14 Minimap badge with player count
@@ -615,7 +628,32 @@ const UI = {
     this.adminPanelOpen = !this.adminPanelOpen;
     const panel = document.getElementById('admin-panel');
     if (panel) panel.classList.toggle('open', this.adminPanelOpen);
-    if (this.adminPanelOpen) this.refreshAdminPanel();
+    if (this.adminPanelOpen) {
+      this.refreshAdminPanel();
+      // #31 Wire up drag handle for resizing
+      this.initAdminPanelResize();
+    }
+  },
+
+  // #31 Admin panel resize via drag handle
+  _adminResizeWired: false,
+  initAdminPanelResize() {
+    if (this._adminResizeWired) return;
+    this._adminResizeWired = true;
+    var handle = document.getElementById('admin-panel-resize');
+    var panel = document.getElementById('admin-panel');
+    if (!handle || !panel) return;
+    var dragging = false;
+    handle.addEventListener('mousedown', function(e) {
+      dragging = true;
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      var newWidth = Math.max(280, Math.min(600, window.innerWidth - e.clientX));
+      panel.style.width = newWidth + 'px';
+    });
+    window.addEventListener('mouseup', function() { dragging = false; });
   },
 
   refreshAdminPanel() {
@@ -746,7 +784,7 @@ const UI = {
           if (r && r.success) {
             Board.furniture.push(r.item);
             Board.buildCollisionMap();
-            self.showNotification(Environments.furnitureTypes[type].name + ' ajouté avec succès');
+            self.showNotification(Environments.furnitureTypes[type].name + ' ajout\u00e9 avec succ\u00e8s', 'success');
             self.refreshFurnitureList();
           }
         });
@@ -893,17 +931,17 @@ const UI = {
           return;
         }
         gridBtn.disabled = true;
-        gridBtn.textContent = 'En cours...';
+        gridBtn.innerHTML = 'En cours<span class="loading-dots"></span>';
         Network.socket.emit('resize-grid', { size: s }, function(r) {
           gridBtn.disabled = false;
           gridBtn.textContent = 'Appliquer';
           if (r && r.success) {
-            self.showNotification('Grille redimensionnée : ' + s + 'x' + s);
+            self.showNotification('Grille redimensionn\u00e9e : ' + s + 'x' + s, 'success');
             var status = document.getElementById('grid-apply-status');
             if (status) { status.style.display = 'inline'; setTimeout(function() { status.style.display = 'none'; }, 2000); }
             self.updateAdminSettings();
           } else {
-            self.showNotification('Une erreur est survenue : ' + (r && r.error || 'cause inconnue'));
+            self.showNotification('Une erreur est survenue : ' + (r && r.error || 'cause inconnue'), 'error');
           }
         });
       });
@@ -917,16 +955,16 @@ const UI = {
         var env = document.getElementById('admin-environment').value;
         if (!confirm('Attention : le mobilier actuel sera remplacé par celui du nouvel environnement. Voulez-vous continuer ?')) return;
         envBtn.disabled = true;
-        envBtn.textContent = 'En cours...';
+        envBtn.innerHTML = 'En cours<span class="loading-dots"></span>';
         Network.socket.emit('change-environment', { environment: env }, function(r) {
           envBtn.disabled = false;
           envBtn.textContent = 'Changer';
           if (r && r.success) {
-            self.showNotification('Environnement modifié avec succès');
+            self.showNotification('Environnement modifi\u00e9 avec succ\u00e8s', 'success');
             self.updateAdminSettings();
             self.refreshFurnitureList();
           } else {
-            self.showNotification('Une erreur est survenue : ' + (r && r.error || 'cause inconnue'));
+            self.showNotification('Une erreur est survenue : ' + (r && r.error || 'cause inconnue'), 'error');
           }
         });
       });

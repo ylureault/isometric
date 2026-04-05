@@ -299,6 +299,16 @@ body {
   z-index: 40; transition: right var(--transition-slow) cubic-bezier(0.4, 0, 0.2, 1); overflow-y: auto;
   padding-bottom: 60px; box-shadow: -4px 0 20px rgba(0,0,0,0.08);
 }
+/* #31 Admin panel drag handle to resize */
+.admin-panel-resize {
+  position: absolute; top: 0; left: -4px; width: 8px; height: 100%;
+  cursor: col-resize; z-index: 2;
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+.admin-panel-resize:hover, .admin-panel-resize:active {
+  background: rgba(74,111,165,0.3);
+}
 .admin-panel.open { right: 0; }
 .admin-panel-header {
   display: flex; justify-content: space-between; align-items: center;
