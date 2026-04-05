@@ -72,9 +72,16 @@ const Character = {
     var armSwing = walkSin * 0.45;
     var bounce = isWalking ? Math.abs(Math.sin(walkPhase * 6)) * 1.5 : 0;
     var headBob = isWalking ? Math.abs(walkCos) * 0.8 : 0;
-    var baseY = sy - bounce;
 
-    this.drawBody(ctx, sx, baseY, S, colors, facing, walk, armSwing, handRaised, isAdmin, isWalking, headBob);
+    // #4 Idle breathing animation (subtle Y-axis bob when not walking)
+    var breathTime = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+    var breathBob = isWalking ? 0 : Math.sin(breathTime * Math.PI) * 0.3;
+    var baseY = sy - bounce - breathBob;
+
+    // #8 Head tilt when walking (lean into direction)
+    var headTilt = isWalking ? walkSin * 0.06 * (facing.indexOf('right') >= 0 ? 1 : -1) : 0;
+
+    this.drawBody(ctx, sx, baseY, S, colors, facing, walk, armSwing, handRaised, isAdmin, isWalking, headBob, isSpeaking, headTilt);
 
     // Admin crown
     if (isAdmin) {
@@ -91,17 +98,40 @@ const Character = {
       this.drawChatBubble(ctx, sx, baseY, S, chatBubble);
     }
 
-    // Muted icon
+    // #14 Muted icon — proper microphone shape
     if (isMuted) {
+      var micX = sx + 12 * S, micY = baseY - 38 * S;
+      // Red circle background
       ctx.fillStyle = '#e74c3c';
       ctx.beginPath();
-      ctx.arc(sx + 12 * S, baseY - 38 * S, 4 * S, 0, Math.PI * 2);
+      ctx.arc(micX, micY, 5 * S, 0, Math.PI * 2);
       ctx.fill();
+      // Microphone body (white)
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.roundRect(micX - 1.5 * S, micY - 3 * S, 3 * S, 4 * S, 1.2 * S);
+      ctx.fill();
+      // Mic arc (U-shape holder)
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 0.8 * S;
+      ctx.beginPath();
+      ctx.arc(micX, micY - 0.5 * S, 2.5 * S, 0, Math.PI);
+      ctx.stroke();
+      // Mic stand
+      ctx.beginPath();
+      ctx.moveTo(micX, micY + 2 * S);
+      ctx.lineTo(micX, micY + 3.2 * S);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(micX - 1.5 * S, micY + 3.2 * S);
+      ctx.lineTo(micX + 1.5 * S, micY + 3.2 * S);
+      ctx.stroke();
+      // Strike-through line (red slash)
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1.2 * S;
       ctx.beginPath();
-      ctx.moveTo(sx + 10 * S, baseY - 40 * S);
-      ctx.lineTo(sx + 14 * S, baseY - 36 * S);
+      ctx.moveTo(micX - 3 * S, micY - 3.5 * S);
+      ctx.lineTo(micX + 3 * S, micY + 3.5 * S);
       ctx.stroke();
     }
 
@@ -182,7 +212,7 @@ const Character = {
     return (r * 299 + g * 587 + b * 114) / 1000;
   },
 
-  drawBody: function(ctx, sx, sy, S, colors, facing, walk, armSwing, handRaised, isAdmin, isWalking, headBob) {
+  drawBody: function(ctx, sx, sy, S, colors, facing, walk, armSwing, handRaised, isAdmin, isWalking, headBob, isSpeaking, headTilt) {
     var isFront = facing.indexOf('front') === 0;
     var isRight = facing.indexOf('right') >= 0;
     var bodyFlip = isRight ? 1 : -1;
@@ -191,6 +221,20 @@ const Character = {
     var shoulderNear = 12 * S;
     var shoulderFar = 9 * S;
     headBob = headBob || 0;
+    headTilt = headTilt || 0;
+    isSpeaking = isSpeaking || false;
+
+    // #2 Moving foot shadow
+    var footShadowOff = isWalking ? Math.sin(walk * 8) * 2 * S : 0;
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(sx + footShadowOff, sy + 3 * S, 10 * S, 4 * S, 0, 0, Math.PI * 2);
+    var footShadGrad = ctx.createRadialGradient(sx + footShadowOff, sy + 3 * S, 0, sx + footShadowOff, sy + 3 * S, 10 * S);
+    footShadGrad.addColorStop(0, 'rgba(0,0,0,0.12)');
+    footShadGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = footShadGrad;
+    ctx.fill();
+    ctx.restore();
 
     // ===== LEGS ===== (thinner for polish)
     var legSpread = 4 * S;
@@ -242,6 +286,13 @@ const Character = {
     ctx.beginPath();
     ctx.ellipse(lsx, legBot + shoeH * 0.5 + (walk > 0 ? shoeRaise : 0), shoeW * 0.9, shoeH * 0.3, 0, 0, Math.PI);
     ctx.fill();
+    // #9 Visible sole line
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 0.6 * S;
+    ctx.beginPath();
+    ctx.moveTo(lsx - shoeW * 0.8, legBot + shoeH * 0.15 + (walk > 0 ? shoeRaise : 0));
+    ctx.lineTo(lsx + shoeW * 0.8, legBot + shoeH * 0.15 + (walk > 0 ? shoeRaise : 0));
+    ctx.stroke();
 
     // Right shoe
     ctx.fillStyle = colors.shoes;
@@ -255,6 +306,13 @@ const Character = {
     ctx.beginPath();
     ctx.ellipse(rsx, legBot + shoeH * 0.5 + (walk < 0 ? shoeRaise : 0), shoeW * 0.9, shoeH * 0.3, 0, 0, Math.PI);
     ctx.fill();
+    // #9 Visible sole line
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 0.6 * S;
+    ctx.beginPath();
+    ctx.moveTo(rsx - shoeW * 0.8, legBot + shoeH * 0.15 + (walk < 0 ? shoeRaise : 0));
+    ctx.lineTo(rsx + shoeW * 0.8, legBot + shoeH * 0.15 + (walk < 0 ? shoeRaise : 0));
+    ctx.stroke();
 
     // ===== TORSO =====
     var torsoTop = sy - 22 * S;
@@ -316,56 +374,74 @@ const Character = {
     ctx.lineTo(sx + tiltX + 0.4 * S, torsoBot - 4 * S);
     ctx.stroke();
 
-    // ===== ARMS ===== (thinner, smoother swing)
+    // ===== ARMS ===== (thinner, smoother swing with elbow bend #3)
     var armY = torsoTop + 4 * S;
     var armLen = 16 * S;
     var armW = 3.2 * S;
+    // #3 Elbow bend angle during walking
+    var elbowBend = isWalking ? Math.abs(armSwing) * 0.35 : 0;
 
     // Left arm
     ctx.save();
     ctx.translate(sx - torsoWL + tiltX, armY);
     ctx.rotate(-armSwing * 0.9);
+    // Upper arm (shirt)
     ctx.fillStyle = colors.shirt;
     ctx.strokeStyle = 'rgba(0,0,0,0.1)';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
-    ctx.roundRect(-armW, 0, armW, armLen * 0.55, 1 * S);
+    ctx.roundRect(-armW, 0, armW, armLen * 0.5, 1 * S);
     ctx.fill();
     ctx.stroke();
+    // #3 Forearm with elbow bend
+    ctx.save();
+    ctx.translate(-armW / 2, armLen * 0.5);
+    ctx.rotate(elbowBend);
     ctx.fillStyle = colors.skin;
     ctx.beginPath();
-    ctx.roundRect(-armW + 0.4 * S, armLen * 0.5, armW - 0.8 * S, armLen * 0.38, 1 * S);
+    ctx.roundRect(-armW / 2 + 0.4 * S, 0, armW - 0.8 * S, armLen * 0.38, 1 * S);
     ctx.fill();
     // Hand
     ctx.beginPath();
-    ctx.ellipse(-armW / 2, armLen * 0.9, armW * 0.5, armW * 0.4, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, armLen * 0.4, armW * 0.5, armW * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
     ctx.restore();
 
     // Right arm
     ctx.save();
     ctx.translate(sx + torsoWR + tiltX, armY);
-    ctx.rotate(handRaised ? -1.2 : armSwing * 0.9);
+    // #12 Hand wave animation when raised
+    var waveTime = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
+    var waveRot = handRaised ? -1.2 + Math.sin(waveTime * 8) * 0.2 : armSwing * 0.9;
+    ctx.rotate(waveRot);
+    // Upper arm (shirt)
     ctx.fillStyle = colors.shirt;
     ctx.strokeStyle = 'rgba(0,0,0,0.1)';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
-    ctx.roundRect(0, 0, armW, armLen * 0.55, 1 * S);
+    ctx.roundRect(0, 0, armW, armLen * 0.5, 1 * S);
     ctx.fill();
     ctx.stroke();
+    // #3 Forearm with elbow bend
+    ctx.save();
+    ctx.translate(armW / 2, armLen * 0.5);
+    ctx.rotate(handRaised ? -0.3 + Math.sin(waveTime * 8) * 0.15 : -elbowBend);
     ctx.fillStyle = colors.skin;
     ctx.beginPath();
-    ctx.roundRect(0.4 * S, armLen * 0.5, armW - 0.8 * S, armLen * 0.38, 1 * S);
+    ctx.roundRect(-armW / 2 + 0.4 * S, 0, armW - 0.8 * S, armLen * 0.38, 1 * S);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(armW / 2, armLen * 0.9, armW * 0.5, armW * 0.4, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, armLen * 0.4, armW * 0.5, armW * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
     if (handRaised) {
+      // Bigger open palm for wave
       ctx.fillStyle = colors.skin;
       ctx.beginPath();
-      ctx.ellipse(armW / 2, armLen * 0.95, armW * 0.6, armW * 0.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, armLen * 0.42, armW * 0.6, armW * 0.5, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
     ctx.restore();
 
     // ===== NECK =====
@@ -373,6 +449,11 @@ const Character = {
     ctx.fillRect(sx + tiltX - 2.5 * S, torsoTop - 3 * S, 5 * S, 6 * S);
     ctx.fillStyle = 'rgba(0,0,0,0.05)';
     ctx.fillRect(sx + tiltX - 2.5 * S, torsoTop - 1 * S, 5 * S, 2 * S);
+    // #10 Subtle neck shadow under head
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    ctx.beginPath();
+    ctx.ellipse(sx + tiltX, torsoTop - 3 * S, 5 * S, 1.5 * S, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     // ===== HEAD ===== (slightly larger for cute proportions)
     var headCx = sx + tiltX;

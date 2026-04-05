@@ -87,6 +87,9 @@ class RoomManager {
     const environment = CONSTANTS.ENVIRONMENTS.includes(config.environment) ? config.environment : 'open-space';
     const gridSize = Math.min(CONSTANTS.GRID_MAX, Math.max(CONSTANTS.GRID_MIN, parseInt(config.gridSize) || CONSTANTS.GRID_DEFAULT));
 
+    // Generate invite code (improvement #20)
+    const inviteCode = this._generateInviteCode();
+
     const room = {
       id: roomId,
       name,
@@ -104,18 +107,25 @@ class RoomManager {
         mode: 'dark',
         preset: null,
       },
+      themePresets: new Map(), // improvement #11: named theme presets
       activeScreenShare: null,
       whiteboards: new Map(),
       votes: new Map(),
       timers: new Map(),
       tableNotes: new Map(),
       raisedHands: new Map(),
+      chatHistory: [], // improvement #18: limited chat history
       closed: false,
       createdAt: Date.now(),
       nextTableId: 1,
       nextWhiteboardId: 1,
       nextVoteId: 1,
       nextTimerId: 1,
+      nextJoinOrder: 1, // improvement #23: participant join order
+      password: (typeof config.password === 'string' && config.password.length > 0) ? config.password : null, // improvement #2
+      inviteCode, // improvement #20
+      audioRadius: CONSTANTS.AUDIO_RADIUS, // improvement #24: configurable audio radius
+      stats: { messagesSent: 0, reactionsCount: 0, timeActive: Date.now() }, // improvement #10
     };
 
     this.rooms.set(roomId, room);

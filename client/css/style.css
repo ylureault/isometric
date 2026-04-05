@@ -1147,6 +1147,375 @@ body {
 .admin-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
 .admin-panel::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
 
+/* ===== UX Improvements ===== */
+
+/* #2 Character count on pseudo input */
+.pseudo-char-count {
+  font-size: 0.75rem; color: var(--color-text-muted); text-align: right;
+  margin-top: -4px; font-variant-numeric: tabular-nums;
+  transition: color var(--transition-fast);
+}
+.pseudo-char-count.near-limit { color: var(--color-warning); }
+.pseudo-char-count.at-limit { color: var(--color-danger); }
+
+/* #4 Color picker smooth transition */
+.color-picker-item input[type="color"] {
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal), border-color var(--transition-normal);
+}
+.color-picker-item input[type="color"]:active { transform: scale(1.15); }
+
+/* #5 Room participant count on join screen */
+.room-participant-badge {
+  display: inline-block; background: rgba(46,204,113,0.15); color: var(--color-success);
+  padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600;
+  margin-left: 4px; animation: badge-bounce 0.3s ease;
+}
+
+/* #6 Enter hint */
+.enter-hint {
+  font-size: 0.75rem; color: var(--color-text-muted); text-align: center;
+  margin-top: 4px; opacity: 0.7;
+}
+.enter-hint kbd {
+  background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.1); font-size: 0.7rem; font-family: inherit;
+}
+
+/* #7 Pulse animation on valid enter button */
+@keyframes btn-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74,111,165,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(74,111,165,0); }
+}
+.btn-enter-valid {
+  animation: btn-pulse-glow 2s ease-in-out infinite;
+}
+
+/* #9 Environment preview description */
+.env-preview-desc {
+  font-size: 0.75rem; color: rgba(255,255,255,0.5); text-align: center;
+  margin-top: 2px; min-height: 1.2em; transition: opacity var(--transition-fast);
+}
+
+/* #10 Pseudo validation indicator */
+.pseudo-valid-indicator {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 1rem; opacity: 0; transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.pseudo-valid-indicator.visible {
+  opacity: 1; transform: translateY(-50%) scale(1);
+}
+.pseudo-input-wrapper {
+  position: relative; display: flex; flex-direction: column;
+}
+.pseudo-input-wrapper input { padding-right: 32px; }
+
+/* #11 Zone coordinates display */
+.hud-coords { font-variant-numeric: tabular-nums; }
+
+/* #12 Compass indicator */
+.compass-indicator {
+  position: absolute; top: 16px; right: 16px;
+  width: 48px; height: 48px; background: var(--color-surface);
+  backdrop-filter: blur(8px); border: 1px solid var(--color-border);
+  border-radius: 50%; z-index: 20; display: flex; align-items: center;
+  justify-content: center; pointer-events: none;
+  box-shadow: var(--shadow-sm); opacity: 0.7;
+  transition: transform var(--transition-normal);
+}
+.compass-indicator svg { width: 28px; height: 28px; }
+.compass-indicator .compass-n { font-size: 10px; font-weight: 700; color: var(--color-danger); position: absolute; top: 4px; }
+.compass-indicator .compass-e { font-size: 8px; color: var(--color-text-muted); position: absolute; right: 5px; }
+
+/* #14 Player count badge on minimap */
+.minimap-badge {
+  position: absolute; top: -6px; right: -6px;
+  background: var(--color-primary); color: #fff;
+  font-size: 0.6rem; font-weight: 700; min-width: 16px; height: 16px;
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  padding: 0 3px; z-index: 1; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+/* #17 Keyboard shortcut hint overlay */
+.keyboard-hint-overlay {
+  position: fixed; bottom: 80px; right: 16px;
+  background: var(--color-surface); backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  padding: 12px 16px; z-index: 25; box-shadow: var(--shadow-md);
+  font-size: 0.8rem; color: var(--color-text-secondary);
+  animation: hint-slide-in 0.5s ease-out;
+  max-width: 260px;
+}
+@keyframes hint-slide-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.keyboard-hint-overlay .hint-title {
+  font-weight: 600; color: var(--color-primary); margin-bottom: 6px; font-size: 0.85rem;
+}
+.keyboard-hint-overlay .hint-row {
+  display: flex; justify-content: space-between; padding: 2px 0; gap: 12px;
+}
+.keyboard-hint-overlay .hint-dismiss {
+  margin-top: 8px; font-size: 0.7rem; color: var(--color-text-muted);
+  cursor: pointer; text-align: right;
+}
+.keyboard-hint-overlay .hint-dismiss:hover { color: var(--color-primary); }
+
+/* #19 Zoom level indicator */
+.zoom-indicator {
+  position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+  background: var(--color-surface); backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border); border-radius: 20px;
+  padding: 4px 14px; font-size: 0.75rem; color: var(--color-text-muted);
+  z-index: 15; pointer-events: none; opacity: 0;
+  transition: opacity var(--transition-fast);
+  font-variant-numeric: tabular-nums;
+}
+.zoom-indicator.visible { opacity: 1; }
+
+/* #20 Right-click return to player */
+.ctx-menu-return { color: var(--color-primary); font-weight: 500; }
+
+/* #21 Furniture hover tooltip */
+.furniture-tooltip {
+  position: absolute; z-index: 50; pointer-events: none;
+  background: rgba(0,0,0,0.85); color: #fff; padding: 6px 12px;
+  border-radius: var(--radius-sm); font-size: 0.75rem;
+  white-space: nowrap; backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  animation: tooltip-fade-in 0.15s ease-out;
+}
+@keyframes tooltip-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.furniture-tooltip .tooltip-name { font-weight: 600; }
+.furniture-tooltip .tooltip-hint { font-size: 0.65rem; color: rgba(255,255,255,0.6); margin-top: 2px; }
+
+/* #22 Click feedback flash on furniture */
+@keyframes furniture-flash {
+  0% { outline: 3px solid rgba(74,111,165,0.8); outline-offset: 0; }
+  100% { outline: 3px solid rgba(74,111,165,0); outline-offset: 6px; }
+}
+
+/* #24 Door approach prompt */
+.door-prompt {
+  position: absolute; z-index: 30; pointer-events: none;
+  background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px;
+  border-radius: var(--radius-md); font-size: 0.8rem;
+  animation: door-prompt-bounce 0.3s ease-out;
+  white-space: nowrap;
+}
+.door-prompt kbd {
+  background: rgba(255,255,255,0.2); padding: 1px 6px; border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;
+}
+@keyframes door-prompt-bounce {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* #26 Chat new messages button */
+.chat-new-messages-btn {
+  position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%);
+  background: var(--color-primary); color: #fff; border: none;
+  padding: 4px 12px; border-radius: 12px; font-size: 0.7rem;
+  cursor: pointer; z-index: 1; box-shadow: var(--shadow-sm);
+  animation: chat-new-msg-in 0.2s ease-out;
+  font-weight: 600;
+}
+@keyframes chat-new-msg-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* #27 Typing indicator */
+.chat-typing-indicator {
+  font-size: 0.7rem; color: var(--color-text-muted); font-style: italic;
+  padding: 2px 0; min-height: 16px;
+}
+.typing-dots { display: inline-flex; gap: 2px; }
+.typing-dots span {
+  width: 4px; height: 4px; background: var(--color-text-muted);
+  border-radius: 50%; animation: typing-dot 1.4s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* #28 Reaction pop animation */
+@keyframes reaction-pop {
+  0% { transform: scale(0.3) translateY(0); opacity: 0; }
+  50% { transform: scale(1.2) translateY(-10px); opacity: 1; }
+  100% { transform: scale(1) translateY(-20px); opacity: 0.8; }
+}
+
+/* #30 Vote bar chart */
+.vote-bar-container {
+  display: flex; align-items: center; gap: 8px; margin-top: 4px;
+}
+.vote-bar {
+  flex: 1; height: 8px; background: rgba(0,0,0,0.06); border-radius: 4px;
+  overflow: hidden;
+}
+.vote-bar-fill {
+  height: 100%; background: var(--color-primary); border-radius: 4px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
+}
+.vote-bar-label {
+  font-size: 0.75rem; color: var(--color-primary); font-weight: 600;
+  min-width: 24px; text-align: right; font-variant-numeric: tabular-nums;
+}
+
+/* #36 Success checkmark animation */
+@keyframes success-checkmark {
+  0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+  50% { transform: scale(1.2) rotate(-45deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-45deg); opacity: 1; }
+}
+.success-flash {
+  display: inline-block; width: 10px; height: 5px;
+  border-left: 2px solid var(--color-success); border-bottom: 2px solid var(--color-success);
+  animation: success-checkmark 0.4s ease-out forwards;
+  margin-left: 6px;
+}
+
+/* #37 Error shake animation */
+@keyframes shake-error {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.shake-error { animation: shake-error 0.4s ease; }
+
+/* #38 Loading dots animation */
+.loading-dots::after {
+  content: ''; animation: loading-dots-anim 1.5s steps(4, end) infinite;
+}
+@keyframes loading-dots-anim {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+/* #39 Smooth number transitions */
+.smooth-number { transition: all 0.3s ease; display: inline-block; }
+
+/* #40 Consistent tooltip styling */
+.ux-tooltip {
+  position: absolute; z-index: 100; pointer-events: none;
+  background: rgba(0,0,0,0.85); color: #fff; padding: 5px 10px;
+  border-radius: var(--radius-sm); font-size: 0.72rem; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  animation: tooltip-fade-in 0.12s ease-out;
+  max-width: 200px;
+}
+.ux-tooltip .tooltip-shortcut {
+  display: inline-block; background: rgba(255,255,255,0.15); padding: 0 4px;
+  border-radius: 3px; margin-left: 6px; font-size: 0.65rem;
+}
+
+/* #41 Progress indicator for room loading */
+.room-loading-indicator {
+  position: fixed; top: 0; left: 0; width: 100%; height: 3px; z-index: 200;
+  overflow: hidden;
+}
+.room-loading-indicator::after {
+  content: ''; display: block; width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  animation: loading-bar-slide 1.2s ease-in-out infinite;
+}
+@keyframes loading-bar-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* #42 Notification sound toggle */
+.toolbar-btn.sound-muted { opacity: 0.5; }
+.toolbar-btn.sound-muted::after {
+  content: ''; position: absolute; width: 2px; height: 60%;
+  background: var(--color-danger); transform: rotate(45deg);
+  border-radius: 1px;
+}
+
+/* #43 Admin badge in HUD */
+.hud-admin-badge {
+  background: rgba(243,156,18,0.15); border: 1px solid rgba(243,156,18,0.3);
+  color: var(--color-warning); font-size: 0.75rem; font-weight: 600;
+  padding: 4px 10px; border-radius: var(--radius-md);
+}
+
+/* #44 Connection quality indicator */
+.connection-indicator {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.connection-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  transition: background var(--transition-normal);
+}
+.connection-dot.good { background: var(--color-success); }
+.connection-dot.medium { background: var(--color-warning); }
+.connection-dot.poor { background: var(--color-danger); }
+
+/* #45 Last activity timestamp */
+.participant-activity {
+  font-size: 0.65rem; color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* #46 Room uptime */
+.room-uptime {
+  font-size: 0.75rem; color: var(--color-text-muted);
+  padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.05);
+  margin-bottom: 8px;
+}
+
+/* #48 Keyboard shortcuts in tooltips */
+.toolbar-btn[title]::before { content: none; }
+
+/* #49 Color picker hover preview swatch */
+.color-swatch-preview {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  border: 2px solid #fff; box-shadow: var(--shadow-md);
+  pointer-events: none; opacity: 0; transition: opacity var(--transition-fast);
+  z-index: 10;
+}
+.color-picker-item:hover .color-swatch-preview { opacity: 1; }
+
+/* #50 Smooth scroll for long lists */
+#placed-furniture-list, #admin-participants-list, #tables-list, #sub-rooms-list {
+  max-height: 300px; overflow-y: auto; scroll-behavior: smooth;
+}
+#placed-furniture-list::-webkit-scrollbar, #admin-participants-list::-webkit-scrollbar,
+#tables-list::-webkit-scrollbar, #sub-rooms-list::-webkit-scrollbar { width: 4px; }
+#placed-furniture-list::-webkit-scrollbar-thumb, #admin-participants-list::-webkit-scrollbar-thumb,
+#tables-list::-webkit-scrollbar-thumb, #sub-rooms-list::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.12); border-radius: 2px;
+}
+
+/* #32 Edit mode grid coordinates on hover */
+.edit-hover-coords {
+  position: absolute; z-index: 36; pointer-events: none;
+  background: rgba(0,0,0,0.75); color: #fff; padding: 2px 8px;
+  border-radius: 4px; font-size: 0.7rem; font-variant-numeric: tabular-nums;
+}
+
+/* #33 Edit mode snap preview feedback */
+.edit-snap-indicator {
+  position: absolute; z-index: 36; pointer-events: none;
+  border: 2px dashed var(--color-primary); border-radius: 4px;
+  background: rgba(74,111,165,0.1);
+  transition: all 0.1s ease;
+}
+
 /* ===== Tooltip utility ===== */
 [title] { position: relative; }
 

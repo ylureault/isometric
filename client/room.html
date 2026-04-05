@@ -19,7 +19,11 @@
         <div id="room-info-display" class="room-info-display" style="display: none;"></div>
         <div class="form-group" style="margin-bottom: 16px;">
           <label for="pseudo-input">Votre pseudo (obligatoire)</label>
-          <input type="text" id="pseudo-input" placeholder="Comment souhaitez-vous être appelé(e) ?" maxlength="20">
+          <div class="pseudo-input-wrapper">
+            <input type="text" id="pseudo-input" placeholder="Ex: Marie, Jean..." maxlength="20">
+            <span class="pseudo-valid-indicator" id="pseudo-valid-indicator">&#10003;</span>
+          </div>
+          <div class="pseudo-char-count" id="pseudo-char-count">0/20</div>
           <span class="error-message" id="error-pseudo">Veuillez saisir un pseudo pour continuer</span>
         </div>
         <div class="color-picker-group">
@@ -42,6 +46,7 @@
           </select>
         </div>
         <button class="btn btn-primary" id="btn-enter" style="margin-top: 16px; width: 100%;">Rejoindre la salle</button>
+        <div class="enter-hint" id="enter-hint">Appuyer sur <kbd>Entr&#233;e</kbd> pour rejoindre</div>
       </div>
     </div>
   </div>
