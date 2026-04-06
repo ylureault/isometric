@@ -3,10 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Espace Collaboratif Isométrique</title>
+  <title>Espace Collaboratif Insuffle</title>
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    .mobile-block { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); z-index:99999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; color:#fff; font-family:'Segoe UI',sans-serif; }
+    .mobile-block h1 { font-size:2rem; margin-bottom:16px; }
+    .mobile-block p { font-size:1.1rem; opacity:0.85; max-width:400px; line-height:1.5; }
+    .mobile-block .mobile-icon { font-size:4rem; margin-bottom:20px; }
+    .mobile-block a { color:#fff; text-decoration:underline; margin-top:20px; display:inline-block; }
+    @media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+      .mobile-block { display:flex !important; }
+      body > *:not(.mobile-block) { display:none !important; }
+    }
+  </style>
 </head>
 <body>
+  <div class="mobile-block">
+    <div class="mobile-icon">💻</div>
+    <h1>Version ordinateur uniquement</h1>
+    <p>L'Espace Collaboratif Insuffle nécessite un ordinateur avec un écran large. Veuillez vous connecter depuis un ordinateur.</p>
+    <a href="https://www.insuffle.com">Retour sur insuffle.com</a>
+  </div>
   <div class="landing-container" id="landing">
     <div class="insuffle-branding">
       <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" class="insuffle-logo">
