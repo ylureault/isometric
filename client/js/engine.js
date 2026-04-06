@@ -424,12 +424,7 @@ var Engine = {
     if (this.editMode) { this.onEditWheel(e); return; }
     e.preventDefault();
     var d = e.deltaY > 0 ? -CONSTANTS.ZOOM_STEP : CONSTANTS.ZOOM_STEP;
-    // #39 Smooth zoom transition
-    if (typeof UXEnhancements !== 'undefined') {
-      UXEnhancements.animateZoom((UXEnhancements._targetZoom || this.zoom) + d);
-    } else {
-      this.zoom = Math.max(CONSTANTS.ZOOM_MIN, Math.min(CONSTANTS.ZOOM_MAX, this.zoom + d));
-    }
+    this.zoom = Math.max(CONSTANTS.ZOOM_MIN, Math.min(CONSTANTS.ZOOM_MAX, this.zoom + d));
   },
 
   onKeyDown: function(e) {
@@ -1368,8 +1363,8 @@ var Engine = {
       UXEnhancements.checkFirstProximity(this.player.x, this.player.y);
       // #38 FPS tracking for adaptive quality
       UXEnhancements.updateFps(dt);
-      // #39 Smooth zoom
-      UXEnhancements.updateSmoothZoom(dt);
+      // #39 Smooth zoom (disabled - caused zoom interference)
+      // UXEnhancements.updateSmoothZoom(dt);
     }
   },
 

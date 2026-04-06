@@ -1814,11 +1814,8 @@ body.atmosphere-night #game-canvas { filter: hue-rotate(15deg) brightness(0.88) 
   will-change: transform, opacity;
 }
 
-/* ===== #37 CSS containment on canvas ===== */
-#game-canvas {
-  contain: strict;
-  will-change: contents;
-}
+/* ===== #37 CSS containment on canvas (disabled - caused rendering issues) ===== */
+/* #game-canvas { contain: strict; will-change: contents; } */
 
 /* ===== #39 Smooth zoom transition ===== */
 /* (handled in JS via CSS transition on transform) */
