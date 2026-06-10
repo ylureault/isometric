@@ -73,6 +73,36 @@
   <!-- Game Canvas -->
   <canvas id="game-canvas"></canvas>
 
+  <!-- Decorative foliage overlay (purely cosmetic, never blocks interaction) -->
+  <div class="room-foliage room-foliage-tr" aria-hidden="true">
+    <svg viewBox="0 0 200 200" width="100%" height="100%">
+      <g fill="none" stroke="#6f9576" stroke-width="3" stroke-linecap="round" opacity="0.9">
+        <path d="M195 8 C150 30 120 60 100 110" stroke-width="3.5"/>
+      </g>
+      <g fill="#7aa07f" opacity="0.92">
+        <path d="M188 18 q22 -6 30 -22 q-20 2 -34 16 z"/>
+        <path d="M170 40 q24 -4 33 -20 q-21 0 -36 14 z"/>
+        <path d="M150 64 q24 -3 34 -18 q-22 -1 -37 13 z"/>
+        <path d="M132 90 q23 -2 33 -17 q-21 -2 -36 12 z"/>
+        <path d="M116 116 q22 0 32 -15 q-21 -3 -35 11 z"/>
+      </g>
+      <g fill="#8fb593" opacity="0.85">
+        <path d="M182 30 q-18 -6 -33 4 q15 11 33 6 z"/>
+        <path d="M162 54 q-18 -5 -33 5 q16 10 33 5 z"/>
+        <path d="M143 80 q-18 -4 -32 6 q16 9 32 4 z"/>
+      </g>
+    </svg>
+  </div>
+  <div class="room-foliage room-foliage-bl" aria-hidden="true">
+    <svg viewBox="0 0 200 200" width="100%" height="100%">
+      <g fill="#7aa07f" opacity="0.8">
+        <path d="M6 196 q-4 -28 10 -46 q14 16 8 44 z"/>
+        <path d="M30 196 q-2 -34 16 -52 q12 22 2 50 z"/>
+        <path d="M54 196 q2 -26 20 -40 q8 20 -4 42 z"/>
+      </g>
+    </svg>
+  </div>
+
   <!-- Help button (top-right) -->
   <button class="help-fab" id="btn-help" onclick="UI.toggleShortcutsModal();" aria-label="Aide et raccourcis" title="Aide et raccourcis">
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 16.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm1.6-6.1c-.7.5-.9.8-.9 1.4v.3h-1.5v-.4c0-1.1.5-1.7 1.3-2.2.7-.5 1-.8 1-1.4 0-.7-.6-1.2-1.4-1.2-.7 0-1.3.4-1.5 1.2l-1.4-.5C9.1 7.5 10.3 6.7 12 6.7c1.7 0 3 1 3 2.6 0 1.1-.6 1.7-1.4 2.2Z"/></svg>

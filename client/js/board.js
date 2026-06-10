@@ -256,6 +256,138 @@ const Board = {
       }
     }
     ctx.restore();
+
+    // Warm string lights + benevolent wall panels (wellness ambience)
+    this.drawWallDecor(ctx, WH);
+  },
+
+  // Cozy wall decoration: warm fairy lights draped along both back walls,
+  // plus framed "bienveillance" panels (rainbow + heart). Matches the studio look.
+  drawWallDecor(ctx, WH) {
+    var gs = this.gridSize;
+    var t = (typeof performance !== 'undefined' ? performance.now() : 0) / 1000;
+    var lightZ = WH - 7;
+
+    // --- Fairy lights: draped catenary wire with glowing warm bulbs ---
+    var self = this;
+    function drawGarland(axis) {
+      // axis 'x' = back-right wall (y=0); axis 'y' = back-left wall (x=0)
+      var pts = [];
+      var span = 3; // grid units between hang points
+      for (var i = 1; i < gs; i += span) {
+        var gx = axis === 'x' ? i : 0;
+        var gy = axis === 'x' ? 0 : i;
+        pts.push(self.iso(gx, gy, lightZ));
+      }
+      if (pts.length < 2) return;
+      // Wire with a soft sag between hang points
+      ctx.strokeStyle = 'rgba(70,66,54,0.45)';
+      ctx.lineWidth = 0.8;
+      for (var k = 0; k < pts.length - 1; k++) {
+        var a = pts[k], b = pts[k + 1];
+        var midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2 + 9; // sag down
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.quadraticCurveTo(midX, midY, b.x, b.y);
+        ctx.stroke();
+        // Bulbs along each segment
+        for (var s = 0; s <= 4; s++) {
+          var tt = s / 4;
+          var bx = (1 - tt) * (1 - tt) * a.x + 2 * (1 - tt) * tt * midX + tt * tt * b.x;
+          var by = (1 - tt) * (1 - tt) * a.y + 2 * (1 - tt) * tt * midY + tt * tt * b.y;
+          var twinkle = 0.65 + 0.35 * Math.sin(t * 2 + (k * 5 + s) * 0.9);
+          // glow
+          var g = ctx.createRadialGradient(bx, by, 0, bx, by, 6);
+          g.addColorStop(0, 'rgba(255,214,150,' + (0.5 * twinkle) + ')');
+          g.addColorStop(1, 'rgba(255,214,150,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(bx, by, 6, 0, Math.PI * 2); ctx.fill();
+          // bulb
+          ctx.fillStyle = 'rgba(255,226,170,' + (0.85 * twinkle + 0.15) + ')';
+          ctx.beginPath(); ctx.arc(bx, by, 1.6, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+    drawGarland('x');
+    drawGarland('y');
+
+    // --- Benevolent wall panels (rainbow + heart) ---
+    // Panel on the back-right wall (y=0 plane), reads along +x, up = +z.
+    this._wallPanel(ctx, 'x', Math.max(2, Math.floor(gs * 0.22)), WH * 0.42, 'rainbow', 'Prenez soin de vous');
+    // Panel on the back-left wall (x=0 plane).
+    this._wallPanel(ctx, 'y', Math.max(2, Math.floor(gs * 0.30)), WH * 0.42, 'heart', 'Restez bienveillant·e');
+  },
+
+  // Draw a framed panel flat on a back wall, with a small motif and a caption.
+  // axis 'x' -> y=0 wall; axis 'y' -> x=0 wall. pos = grid offset along the wall.
+  _wallPanel(ctx, axis, pos, baseZ, motif, caption) {
+    var pw = 3.4, ph = 26; // panel size: width in grid units, height in px
+    // Corner points of the panel on the wall plane.
+    var c;
+    if (axis === 'x') {
+      c = [ this.iso(pos, 0, baseZ + ph), this.iso(pos + pw, 0, baseZ + ph),
+            this.iso(pos + pw, 0, baseZ), this.iso(pos, 0, baseZ) ];
+    } else {
+      c = [ this.iso(0, pos, baseZ + ph), this.iso(0, pos + pw, baseZ + ph),
+            this.iso(0, pos + pw, baseZ), this.iso(0, pos, baseZ) ];
+    }
+    // Soft shadow
+    ctx.save();
+    ctx.globalAlpha = 0.10;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.moveTo(c[0].x + 2, c[0].y + 3);
+    for (var i = 1; i < 4; i++) ctx.lineTo(c[i].x + 2, c[i].y + 3);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // Panel face (warm paper)
+    ctx.fillStyle = '#fbf6ec';
+    ctx.strokeStyle = 'rgba(120,110,90,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(c[0].x, c[0].y);
+    for (var j = 1; j < 4; j++) ctx.lineTo(c[j].x, c[j].y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // Motif drawn centered on the panel (screen space, near panel center).
+    var cx = (c[0].x + c[1].x + c[2].x + c[3].x) / 4;
+    var cy = (c[0].y + c[1].y + c[2].y + c[3].y) / 4;
+    if (motif === 'rainbow') {
+      var bands = ['#e0855c', '#e0a85c', '#cdbc5c', '#5e9e6f', '#5e8c9e', '#8c6ba6'];
+      for (var b = 0; b < bands.length; b++) {
+        ctx.strokeStyle = bands[b];
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy + 5, 9 - b * 1.3, Math.PI * 1.05, Math.PI * 1.95);
+        ctx.stroke();
+      }
+    } else {
+      // Heart
+      ctx.fillStyle = '#e0855c';
+      ctx.beginPath();
+      var hs = 5;
+      ctx.moveTo(cx, cy + hs * 0.8);
+      ctx.bezierCurveTo(cx - hs, cy - hs * 0.4, cx - hs * 0.5, cy - hs, cx, cy - hs * 0.35);
+      ctx.bezierCurveTo(cx + hs * 0.5, cy - hs, cx + hs, cy - hs * 0.4, cx, cy + hs * 0.8);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // Caption projected onto the wall plane (true iso skew).
+    if (caption) {
+      var u = (axis === 'x')
+        ? { x: this.tileWidth / 2, y: this.tileHeight / 2 }
+        : { x: -this.tileWidth / 2, y: this.tileHeight / 2 };
+      var ul = Math.hypot(u.x, u.y);
+      ctx.save();
+      // local x -> along wall (unit screen vector), local y -> straight down the wall
+      ctx.transform(u.x / ul, u.y / ul, 0, 1, cx, cy);
+      ctx.fillStyle = '#6a6256';
+      ctx.font = '600 5px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(caption, 0, 11);
+      ctx.restore();
+    }
   },
 
   drawEdges(ctx, offsetX, offsetY) {
