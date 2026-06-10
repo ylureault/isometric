@@ -1398,8 +1398,8 @@ var Engine = {
     var parallaxX = this.camera.x * 0.02;
     var parallaxY = this.camera.y * 0.02;
     var bgGrad = ctx.createLinearGradient(parallaxX, parallaxY, parallaxX, h + parallaxY);
-    bgGrad.addColorStop(0, '#e8ecf0');
-    bgGrad.addColorStop(1, '#d0d4d8');
+    bgGrad.addColorStop(0, '#fbf9f3'); // airy warm cream (wellness palette)
+    bgGrad.addColorStop(1, '#ede7da');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
@@ -1476,6 +1476,7 @@ var Engine = {
           isMuted: this.player.isMuted, handRaised: this.player.handRaised,
           isBroadcasting: this.player.isBroadcasting,
           isSpeaking: Audio.isSpeaking(),
+          isSharingScreen: ScreenShare.isSharing,
           accessory: this.player.accessory || 'none',
           chatBubble: myChatBubble,
         });
@@ -1494,6 +1495,7 @@ var Engine = {
           isAdmin: p.isAdmin, disconnected: p.disconnected, isMuted: p.isMuted,
           handRaised: p.handRaised, isBroadcasting: p.isBroadcasting,
           isSpeaking: p.isSpeaking,
+          isSharingScreen: ScreenShare.isSharingFrom(e.sid),
           accessory: p.accessory || 'none',
           chatBubble: p.chatBubble,
         });
@@ -1660,8 +1662,8 @@ var Engine = {
       var isoPos = Board.iso(icx, icy);
       var glowR = Board.tileWidth * Math.max(def.width || 1, def.height || 1) * 0.4;
       var grad = ctx.createRadialGradient(isoPos.x, isoPos.y, 0, isoPos.x, isoPos.y, glowR);
-      grad.addColorStop(0, 'rgba(74,111,165,' + glowAlpha + ')');
-      grad.addColorStop(1, 'rgba(74,111,165,0)');
+      grad.addColorStop(0, 'rgba(94,140,106,' + glowAlpha + ')');
+      grad.addColorStop(1, 'rgba(94,140,106,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(isoPos.x, isoPos.y, glowR, 0, Math.PI * 2);
@@ -2256,7 +2258,7 @@ var Engine = {
     // Draw floor tiles
     for (var y = 0; y < gs; y++) {
       for (var x = 0; x < gs; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? '#e8ecf0' : '#dee2e6';
+        ctx.fillStyle = (x + y) % 2 === 0 ? '#bdc6b1' : '#b1bca4';
         ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
       }
     }

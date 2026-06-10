@@ -12,6 +12,15 @@ const ScreenShare = {
   // Incoming screen shares
   incomingShares: new Map(), // socketId -> { connection, videoElement }
   activeGlobalShare: null, // { socketId, pseudo }
+  collabScreenOwners: new Set(), // socketIds sharing inside a table/collab space
+
+  // True if the given participant is currently sharing a screen (any scope).
+  isSharingFrom(socketId) {
+    if (this.activeGlobalShare && this.activeGlobalShare.socketId === socketId) return true;
+    if (this.incomingShares.has(socketId)) return true;
+    if (this.collabScreenOwners.has(socketId)) return true;
+    return false;
+  },
 
   async startShare(scope = 'global', tableId = null) {
     try {

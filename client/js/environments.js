@@ -123,9 +123,9 @@ const Environments = {
   presets: {
     'bureau': {
       name: 'Bureau',
-      floorColor1: '#c8c8c8',
-      floorColor2: '#b8b8b8',
-      wallColor: '#ede4d8', // #41 warmer wall for bureau
+      floorColor1: '#b9c2ad',
+      floorColor2: '#aeb8a1',
+      wallColor: '#f0ebdd', // warm cream wall (wellness palette)
       furniture: (gs) => {
         const items = [];
         const m = 3;
@@ -153,9 +153,9 @@ const Environments = {
     },
     'open-space': {
       name: 'Open Space',
-      floorColor1: '#a8b0a0',
-      floorColor2: '#98a890',
-      wallColor: '#e0e0e0',
+      floorColor1: '#aec3a4',
+      floorColor2: '#a2b898',
+      wallColor: '#f0ebdd',
       furniture: (gs) => {
         const items = [];
         const cx = Math.floor(gs / 2);
@@ -185,9 +185,9 @@ const Environments = {
     },
     'salle-de-conference': {
       name: 'Salle de Conférence',
-      floorColor1: '#b0b0b8',
-      floorColor2: '#a0a0a8',
-      wallColor: '#d0d4de', // #41 cooler wall for conference
+      floorColor1: '#b4c1ac',
+      floorColor2: '#a8b6a0',
+      wallColor: '#f0ebdd', // warm cream wall (wellness palette)
       furniture: (gs) => {
         const items = [];
         const cx = Math.floor(gs / 2);
@@ -212,9 +212,9 @@ const Environments = {
     },
     'coworking': {
       name: 'Espace Coworking',
-      floorColor1: '#c0c0c0',
-      floorColor2: '#b0b0b0',
-      wallColor: '#e0d8d0',
+      floorColor1: '#b9c2ad',
+      floorColor2: '#adb8a0',
+      wallColor: '#f0ebdd',
       furniture: (gs) => {
         const items = [];
         const cx = Math.floor(gs / 2);

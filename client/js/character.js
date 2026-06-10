@@ -16,6 +16,7 @@ const Character = {
       isBroadcasting = false,
       isOnStage = false,
       isSpeaking = false,
+      isSharingScreen = false,
       disconnected = false,
     } = opts || {};
 
@@ -178,6 +179,37 @@ const Character = {
       ctx.beginPath();
       ctx.arc(spkX, spkY, 2.5 * S, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(46,204,113,0.9)';
+      ctx.fill();
+    }
+
+    // Screen-share badge — small monitor icon floating above the head.
+    // Placed on the left so it never overlaps the mic badge (right side).
+    if (isSharingScreen) {
+      var scX = sx - 12 * S, scY = baseY - 38 * S;
+      var sharePulse = 0.7 + Math.sin((typeof performance !== 'undefined' ? performance.now() : 0) / 400) * 0.3;
+      // Soft glow
+      ctx.beginPath();
+      ctx.arc(scX, scY, 7 * S, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(46,160,120,' + (0.18 * sharePulse) + ')';
+      ctx.fill();
+      // Green rounded badge
+      ctx.fillStyle = '#2e9b6e';
+      ctx.beginPath();
+      ctx.arc(scX, scY, 5 * S, 0, Math.PI * 2);
+      ctx.fill();
+      // Monitor screen (white)
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.roundRect(scX - 3 * S, scY - 2.6 * S, 6 * S, 4 * S, 0.8 * S);
+      ctx.fill();
+      // Monitor stand
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(scX - 1.4 * S, scY + 1.4 * S);
+      ctx.lineTo(scX + 1.4 * S, scY + 1.4 * S);
+      ctx.lineTo(scX + 0.8 * S, scY + 3 * S);
+      ctx.lineTo(scX - 0.8 * S, scY + 3 * S);
+      ctx.closePath();
       ctx.fill();
     }
 
