@@ -459,8 +459,8 @@ body.ui-dark-mode .share-close:hover { background: rgba(255,255,255,0.1); color:
 /* ===== Context Menu ===== */
 .context-menu {
   position: absolute; z-index: 50;
-  background: rgba(255,255,255,0.98); backdrop-filter: blur(12px);
-  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--panel-solid); backdrop-filter: blur(12px);
+  border: 1px solid var(--panel-border); border-radius: 14px;
   min-width: 180px; overflow: hidden; box-shadow: var(--shadow-md);
   animation: ctx-menu-pop 0.15s ease-out;
 }
@@ -662,7 +662,7 @@ body.ui-dark-mode .share-close:hover { background: rgba(255,255,255,0.1); color:
 /* ===== Reconnecting ===== */
 .reconnecting-indicator {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-  background: rgba(255,255,255,0.95); backdrop-filter: blur(8px);
+  background: var(--panel-solid); backdrop-filter: blur(8px);
   border: 1px solid var(--color-danger-border); border-radius: var(--radius-lg);
   padding: var(--space-md) var(--space-lg); display: flex; align-items: center; gap: var(--space-md);
   color: var(--color-danger); font-size: 0.95rem; z-index: 80;
@@ -716,13 +716,16 @@ body.ui-dark-mode .share-close:hover { background: rgba(255,255,255,0.1); color:
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.avatar-config-panel.ob-card {
-  width: min(880px, 94vw); border-radius: 28px;
-  background: var(--panel-solid);
+.avatar-config-panel {
+  background: var(--panel-solid); border-radius: 28px;
   box-shadow: 0 50px 120px -40px rgba(10,14,40,.55);
-  display: grid; grid-template-columns: 300px 1fr; overflow: hidden;
-  color: var(--text); padding: 0;
+  padding: 34px; color: var(--text); display: flex; gap: 24px;
   animation: avatar-panel-in 0.5s ease-out 0.1s both;
+}
+.avatar-config-panel.ob-card {
+  width: min(880px, 94vw);
+  display: grid; grid-template-columns: 300px 1fr; overflow: hidden;
+  padding: 0; gap: 0;
 }
 @keyframes avatar-panel-in {
   from { opacity: 0; transform: translateY(20px) scale(0.97); }
@@ -1455,8 +1458,8 @@ html[data-theme="nuit"] .ob-brand-img { filter: brightness(0) invert(1); opacity
 /* ===== Edit Mode Toolbar ===== */
 .edit-toolbar {
   position: absolute; top: 0; left: 0; right: 0; height: 50px;
-  background: rgba(255,255,255,0.97); backdrop-filter: blur(12px);
-  border-bottom: 2px solid var(--color-primary);
+  background: var(--panel-solid); backdrop-filter: blur(12px);
+  border-bottom: 2px solid var(--accent);
   display: flex; align-items: center; justify-content: center;
   gap: var(--space-md); padding: 0 20px; z-index: 35;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);

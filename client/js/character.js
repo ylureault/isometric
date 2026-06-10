@@ -990,12 +990,12 @@ const Character = {
     ctx.clearRect(0, 0, canvasW, canvasH);
 
     var cx = canvasW / 2;
-    var cy = canvasH / 2 + 38;
-    var S = 1.5;
+    var cy = canvasH - 46;
+    var S = 1.9;
 
     // Ombre portée douce
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 4, 24, 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 5, 30, 12, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(20,24,40,0.16)';
     ctx.fill();
 
