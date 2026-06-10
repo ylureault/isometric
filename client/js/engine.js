@@ -47,6 +47,22 @@ var Engine = {
   editIsPanning: false,
   editPanStart: { x: 0, y: 0 },
   editCameraStart: { x: 0, y: 0 },
+  // Rayon de parole affiché (interpolé pour grandir/rétrécir en douceur)
+  _displayAudioRadius: null,
+  _radiusChangedAt: 0,
+  // Cache des couleurs CSS du thème actif (invalidé au changement de thème)
+  _themeColorCache: {}, _themeColorKey: null,
+
+  // Lit une variable CSS du thème actif (avec cache par thème)
+  themeColor: function(name, fallback) {
+    var key = (typeof Themes !== 'undefined') ? Themes.current : 'default';
+    if (this._themeColorKey !== key) { this._themeColorCache = {}; this._themeColorKey = key; }
+    if (!(name in this._themeColorCache)) {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      this._themeColorCache[name] = v || fallback;
+    }
+    return this._themeColorCache[name] || fallback;
+  },
 
   init: function() {
     this.player.colors = Object.assign({}, CONSTANTS.DEFAULT_COLORS);
@@ -195,7 +211,11 @@ var Engine = {
       var r = Network.remotePlayers.get(d.socketId); if (r) r.tableId = d.tableId;
       if (d.socketId === Network.mySocketId) self.player.tableId = d.tableId;
     });
-    s.on('theme-changed', function(t) { if (t.floorColor1) Board.floorColor1 = t.floorColor1; if (t.floorColor2) Board.floorColor2 = t.floorColor2; });
+    s.on('theme-changed', function(t) {
+      if (t && t.preset && typeof Themes !== 'undefined' && Themes.THEMES[t.preset]) { Themes.apply(t.preset); return; }
+      if (t.floorColor1) Board.floorColor1 = t.floorColor1;
+      if (t.floorColor2) Board.floorColor2 = t.floorColor2;
+    });
     s.on('environment-changed', function(d) { self.roomConfig.environment = d.environment; Board.init(self.roomConfig.gridSize, d.environment); UI.updateAdminSettings(); UI.refreshFurnitureList(); });
     s.on('grid-resized', function(d) { self.roomConfig.gridSize = d.size; Board.init(d.size, self.roomConfig.environment); self.player.x = Math.min(self.player.x, d.size - 1); self.player.y = Math.min(self.player.y, d.size - 1); UI.updateAdminSettings(); });
     s.on('reaction', function(d) {
@@ -240,7 +260,14 @@ var Engine = {
     // Improvement #22: force muted by admin
     s.on('force-muted', function() { self.player.isMuted = true; Audio.isMuted = true; Audio._applyMuteState(); UI.updateMuteButton(true); UI.showNotification('Vous avez été mis en sourdine'); });
     // Improvement #24: audio radius changed
-    s.on('audio-radius-changed', function(d) { self.player.audioRadius = d.audioRadius; });
+    s.on('audio-radius-changed', function(d) {
+      self.player.audioRadius = d.audioRadius;
+      self._radiusChangedAt = performance.now();
+      var rs = document.getElementById('radius-slider');
+      if (rs) rs.value = d.audioRadius;
+      var lbl = d.audioRadius < 1 ? Math.round(d.audioRadius * 100) + ' cm' : d.audioRadius + ' m';
+      UI.showNotification('Rayon de parole : ' + lbl);
+    });
     // Improvement #6: furniture rotated
     s.on('furniture-rotated', function(d) { var f = Board.furniture.find(function(item) { return item.id === d.furnitureId; }); if (f) { f.rotation = d.rotation; Board.buildCollisionMap(); } });
 
@@ -365,6 +392,15 @@ var Engine = {
       self.roomConfig.gridSize = r.room.gridSize;
       document.getElementById('hud-room-name').textContent = r.room.name;
       if (!self.roomConfig.isCreator) Board.init(r.room.gridSize, r.room.environment);
+      // Thème de la salle : le preset design prime, sinon couleurs de sol custom
+      if (r.theme) {
+        if (r.theme.preset && typeof Themes !== 'undefined' && Themes.THEMES[r.theme.preset]) {
+          Themes.apply(r.theme.preset, { silent: true });
+        } else {
+          if (r.theme.floorColor1) Board.floorColor1 = r.theme.floorColor1;
+          if (r.theme.floorColor2) Board.floorColor2 = r.theme.floorColor2;
+        }
+      }
       // Apply server furniture state (preserves door links, server-added items)
       if (r.furniture && r.furniture.length > 0) {
         // Merge server furniture with client-generated preset
@@ -1394,13 +1430,19 @@ var Engine = {
     // Map logical pixels -> device pixels for this frame (crisp HiDPI rendering).
     ctx.setTransform(this.dpr || 1, 0, 0, this.dpr || 1, 0, 0);
 
-    // Background — light professional with #9 subtle parallax
+    // Fond thémé (design Insuffle Espace) : dégradé + halo, avec léger parallaxe
     var parallaxX = this.camera.x * 0.02;
     var parallaxY = this.camera.y * 0.02;
     var bgGrad = ctx.createLinearGradient(parallaxX, parallaxY, parallaxX, h + parallaxY);
-    bgGrad.addColorStop(0, '#fbf9f3'); // airy warm cream (wellness palette)
-    bgGrad.addColorStop(1, '#ede7da');
+    bgGrad.addColorStop(0, this.themeColor('--bg-1', '#eef1fc'));
+    bgGrad.addColorStop(1, this.themeColor('--bg-2', '#dfe4f5'));
     ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, w, h);
+    // Halo lumineux en haut de l'écran (radial-gradient du design)
+    var glow = ctx.createRadialGradient(w / 2, -h * 0.1, 0, w / 2, -h * 0.1, h * 0.9);
+    glow.addColorStop(0, this.themeColor('--bg-glowc', 'rgba(123,139,255,.30)'));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
 
     // Apply zoom transform
@@ -1479,6 +1521,7 @@ var Engine = {
           isSharingScreen: ScreenShare.isSharing,
           accessory: this.player.accessory || 'none',
           chatBubble: myChatBubble,
+          isMe: true,
         });
       } else if (e.type === 'r') {
         var p = e.p;
@@ -1511,6 +1554,9 @@ var Engine = {
 
     // #23 Proximity indicator: subtle glow when near interactive furniture
     this.drawInteractiveGlow(ctx);
+
+    // Étiquettes de zones (design) au-dessus des meubles interactifs
+    this.drawZoneLabels(ctx);
 
     // #2 Particle trail behind walking character
     if (typeof UXEnhancements !== 'undefined') {
@@ -1583,38 +1629,90 @@ var Engine = {
     }
   },
 
+  // Convertit une couleur hex/rgb du thème en rgba avec alpha donné
+  _withAlpha: function(color, alpha) {
+    if (color.charAt(0) === '#') {
+      var hex = color.slice(1);
+      if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
+      var n = parseInt(hex, 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+    }
+    if (color.indexOf('rgb(') === 0) return color.replace(')', ',' + alpha + ')').replace('rgb(', 'rgba(');
+    return color;
+  },
+
   drawProximityCircle: function(ctx, px, py, radius, color, isLocal) {
     var pos = Board.iso(px, py);
+    var now = performance.now();
+    // Le cercle de parole respire doucement et s'agrandit en fluide
+    // quand l'admin change le rayon.
+    if (isLocal) {
+      if (this._displayAudioRadius == null) this._displayAudioRadius = radius;
+      if (Math.abs(this._displayAudioRadius - radius) > 0.005) {
+        this._displayAudioRadius += (radius - this._displayAudioRadius) * 0.08;
+      } else {
+        this._displayAudioRadius = radius;
+      }
+      radius = this._displayAudioRadius;
+      radius *= 1 + 0.012 * Math.sin(now / 900); // respiration subtile
+    }
     var rx = radius * (Board.tileWidth / 2);
     var ry = radius * (Board.tileHeight / 2);
+    var accent = isLocal ? this.themeColor('--accent', '#5b6cff') : color;
 
     ctx.save();
     ctx.translate(pos.x, pos.y);
     ctx.scale(1, ry / rx);
 
-    // Fill gradient
+    // Halo doux (le « territoire de conversation »)
     var g = ctx.createRadialGradient(0, 0, rx * 0.1, 0, 0, rx);
-    g.addColorStop(0, color.replace(')', ',0.06)').replace('rgb', 'rgba'));
-    g.addColorStop(0.7, color.replace(')', ',0.02)').replace('rgb', 'rgba'));
+    g.addColorStop(0, this._withAlpha(accent, isLocal ? 0.07 : 0.04));
+    g.addColorStop(0.7, this._withAlpha(accent, isLocal ? 0.035 : 0.015));
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.beginPath();
     ctx.arc(0, 0, rx, 0, Math.PI * 2);
     ctx.fillStyle = g;
     ctx.fill();
 
-    // Border — dashed for remote, solid for local
+    // Bord — plein pour soi, pointillé pour les autres
     if (isLocal) {
-      ctx.strokeStyle = color.replace(')', ',0.25)').replace('rgb', 'rgba');
+      ctx.strokeStyle = this._withAlpha(accent, 0.30);
       ctx.lineWidth = 1.5;
       ctx.setLineDash([]);
     } else {
-      ctx.strokeStyle = color.replace(')', ',0.15)').replace('rgb', 'rgba');
+      ctx.strokeStyle = this._withAlpha(accent, 0.15);
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
     }
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // Onde sonore : anneau qui se propage quand on parle
+    if (isLocal && typeof Audio !== 'undefined' && Audio.isSpeaking && Audio.isSpeaking()) {
+      var wave = (now % 1400) / 1400;
+      ctx.strokeStyle = this._withAlpha(accent, 0.4 * (1 - wave));
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, rx * (0.25 + 0.75 * wave), 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
+
+    // Étiquette du rayon en mètres, montrée brièvement quand il change
+    if (isLocal && now - this._radiusChangedAt < 2600) {
+      var fade = Math.min(1, (2600 - (now - this._radiusChangedAt)) / 600);
+      var meters = this.player.audioRadius;
+      var label = meters < 1 ? Math.round(meters * 100) + ' cm' : (Math.round(meters * 10) / 10) + ' m';
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.font = '700 12px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = this._withAlpha(accent, 0.85);
+      ctx.fillText('Rayon de parole : ' + label, pos.x, pos.y - ry - 10);
+      ctx.restore();
+    }
   },
 
   // #25 Draw step-up chevrons at stage edges
@@ -1668,6 +1766,76 @@ var Engine = {
       ctx.beginPath();
       ctx.arc(isoPos.x, isoPos.y, glowR, 0, Math.PI * 2);
       ctx.fill();
+    }
+  },
+
+  // Étiquettes de zones du design : pastille flottante au-dessus des
+  // meubles interactifs (tableau blanc, mur collaboratif, espace partagé, portes)
+  drawZoneLabels: function(ctx) {
+    if (this.zoom < 0.55) return; // illisible en dézoom fort
+    var panelBg = this.themeColor('--panel-solid', '#ffffff');
+    var panelBorder = this.themeColor('--panel-border', 'rgba(20,28,60,.08)');
+    var ink = this.themeColor('--ink', '#1d2138');
+    var muted = this.themeColor('--muted', '#737b96');
+    var accent = this.themeColor('--accent', '#5b6cff');
+    var bob = Math.sin(performance.now() / 1100) * 2; // flotte doucement
+    for (var i = 0; i < Board.furniture.length; i++) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def) continue;
+      var label = null, hint = '';
+      if (def.isWhiteboard) { label = 'Tableau blanc'; hint = 'Dessiner ensemble'; }
+      else if (def.isPostItBoard) { label = 'Mur collaboratif'; hint = 'Post-its & idées'; }
+      else if (def.isCollabSpace) { label = 'Espace partagé'; hint = 'Partager un écran'; }
+      else if (def.isDoor) { label = item.doorLabel || 'Sous-salle'; hint = 'Entrer'; }
+      if (!label) continue;
+      var cx = item.x + (def.width || 1) / 2;
+      var pos = Board.iso(cx, item.y + (def.height || 1) / 2);
+      var topY = pos.y - (def.drawHeight || 0) - 34 + bob;
+
+      ctx.save();
+      ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+      var wLabel = ctx.measureText(label).width;
+      ctx.font = '500 11px "Plus Jakarta Sans", sans-serif';
+      var wHint = hint ? ctx.measureText(hint).width : 0;
+      var padX = 11, dotW = 14, sepW = hint ? 13 : 0;
+      var pillW = padX * 2 + dotW + wLabel + sepW + wHint;
+      var pillH = 26;
+      var x0 = pos.x - pillW / 2, y0 = topY - pillH / 2;
+
+      ctx.shadowColor = 'rgba(20,24,60,.28)';
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetY = 5;
+      ctx.fillStyle = panelBg;
+      ctx.beginPath();
+      ctx.roundRect(x0, y0, pillW, pillH, 13);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = panelBorder;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // point accent avec halo
+      var dx0 = x0 + padX + 4;
+      ctx.fillStyle = this._withAlpha(accent, 0.25);
+      ctx.beginPath(); ctx.arc(dx0, topY, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = accent;
+      ctx.beginPath(); ctx.arc(dx0, topY, 4, 0, Math.PI * 2); ctx.fill();
+
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+      ctx.fillStyle = ink;
+      ctx.fillText(label, x0 + padX + dotW, topY);
+      if (hint) {
+        var sepX = x0 + padX + dotW + wLabel + 6;
+        ctx.strokeStyle = panelBorder;
+        ctx.beginPath(); ctx.moveTo(sepX, topY - 6); ctx.lineTo(sepX, topY + 6); ctx.stroke();
+        ctx.font = '500 11px "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = muted;
+        ctx.fillText(hint, sepX + 7, topY);
+      }
+      ctx.restore();
     }
   },
 
@@ -1799,7 +1967,7 @@ var Engine = {
     var h = this.minimapCanvas.height;
     var sc = Math.min(w, h) / Board.gridSize;
 
-    ctx.fillStyle = '#e8e8e8';
+    ctx.fillStyle = this.themeColor('--floor-b', '#e8e8e8');
     ctx.fillRect(0, 0, w, h);
     for (var y = 0; y < Board.gridSize; y++) {
       for (var x = 0; x < Board.gridSize; x++) {
@@ -1854,8 +2022,8 @@ var Engine = {
     var ox = this.camera.x + (w - gridW) / 2;
     var oy = this.camera.y + (h - gridH) / 2;
 
-    // Background
-    ctx.fillStyle = '#f0f0f0';
+    // Background (thémé)
+    ctx.fillStyle = this.themeColor('--bg-2', '#dfe4f5');
     ctx.fillRect(0, 0, w, h);
 
     // Floor tiles

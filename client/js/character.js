@@ -213,34 +213,43 @@ const Character = {
       ctx.fill();
     }
 
-    // Pseudo label
+    // Étiquette de pseudo — pastille du design (accent pour soi, vitrée sinon)
     if (pseudo) {
-      ctx.font = 'bold ' + Math.max(9, Math.round(11 * S)) + 'px "Segoe UI", sans-serif';
+      var isMe = !!opts.isMe;
+      var tagBg = '#ffffff', tagText = '#1d2138', tagBorder = 'rgba(20,28,60,.08)';
+      if (typeof Engine !== 'undefined' && Engine.themeColor) {
+        tagBg = isMe ? Engine.themeColor('--accent', '#5b6cff') : Engine.themeColor('--panel-solid', '#ffffff');
+        tagText = isMe ? '#ffffff' : Engine.themeColor('--ink', '#1d2138');
+        tagBorder = Engine.themeColor('--panel-border', 'rgba(20,28,60,.08)');
+      } else if (isMe) {
+        tagBg = '#5b6cff'; tagText = '#ffffff';
+      }
+      ctx.font = '700 ' + Math.max(9, Math.round(11 * S)) + 'px "Plus Jakarta Sans", sans-serif';
       var tw = ctx.measureText(pseudo).width;
-      var px = sx - tw / 2 - 5;
-      var py = baseY + 12 * S;
-      var pw = tw + 10;
-      var ph = 16;
-      var rr = 4;
+      var ph = 18;
+      var pw = tw + 20;
+      var px = sx - pw / 2;
+      var py = baseY + 10 * S;
 
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.save();
+      ctx.shadowColor = 'rgba(20,24,60,.30)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = tagBg;
       ctx.beginPath();
-      ctx.moveTo(px + rr, py);
-      ctx.lineTo(px + pw - rr, py);
-      ctx.arcTo(px + pw, py, px + pw, py + rr, rr);
-      ctx.lineTo(px + pw, py + ph - rr);
-      ctx.arcTo(px + pw, py + ph, px + pw - rr, py + ph, rr);
-      ctx.lineTo(px + rr, py + ph);
-      ctx.arcTo(px, py + ph, px, py + ph - rr, rr);
-      ctx.lineTo(px, py + rr);
-      ctx.arcTo(px, py, px + rr, py, rr);
-      ctx.closePath();
+      ctx.roundRect(px, py, pw, ph, 999);
       ctx.fill();
-
-      ctx.fillStyle = '#fff';
+      ctx.shadowColor = 'transparent';
+      if (!isMe) {
+        ctx.strokeStyle = tagBorder;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.fillStyle = tagText;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(pseudo, sx, py + ph / 2);
+      ctx.fillText(pseudo, sx, py + ph / 2 + 0.5);
+      ctx.restore();
     }
 
     ctx.restore();
@@ -975,44 +984,36 @@ const Character = {
     ctx.fill();
   },
 
-  drawPreview: function(ctx, canvasW, canvasH, colors, time) {
-    ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(0, 0, canvasW, canvasH);
+  // Aperçu onboarding — fond transparent (le piédestal lumineux est en CSS),
+  // l'avatar tourne doucement sur lui-même pour se présenter.
+  drawPreview: function(ctx, canvasW, canvasH, colors, time, accessory) {
+    ctx.clearRect(0, 0, canvasW, canvasH);
 
     var cx = canvasW / 2;
-    var cy = canvasH / 2 + 20;
-    var S = 1.2;
+    var cy = canvasH / 2 + 38;
+    var S = 1.5;
 
-    // Shadow
+    // Ombre portée douce
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 2, 16, 8, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.ellipse(cx, cy + 4, 24, 10, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(20,24,40,0.16)';
     ctx.fill();
 
-    // #15 Rotate through all 4 directions (front-right, front-left, back-left, back-right)
-    var dirIndex = Math.floor((time * 0.4) % 4);
+    // Rotation lente sur les 4 directions, pause plus longue de face
+    var cycle = (time * 0.25) % 4;
+    var dirIndex = Math.floor(cycle);
     var directions = [
-      { dx: 1, dy: 1 },   // front-right
-      { dx: -1, dy: 1 },  // front-left
-      { dx: -1, dy: -1 }, // back-left
-      { dx: 1, dy: -1 },  // back-right
+      { dx: 1, dy: 1 },   // avant-droite
+      { dx: -1, dy: 1 },  // avant-gauche
+      { dx: -1, dy: -1 }, // arrière-gauche
+      { dx: 1, dy: -1 },  // arrière-droite
     ];
     var facing = this.getFacing(directions[dirIndex]);
     var walkPhase = time * 2;
-    var isWalkingPreview = true;
 
-    this.drawBody(ctx, cx, cy, S, colors, facing, Math.sin(walkPhase * 3) * 0.2, Math.sin(walkPhase * 3) * 0.3, false, false, isWalkingPreview, Math.abs(Math.cos(walkPhase * 3)) * 0.5, false, 0);
-
-    // Direction label
-    var dirNames = ['Avant-droite', 'Avant-gauche', 'Arrière-gauche', 'Arrière-droite'];
-    ctx.font = '9px "Segoe UI", sans-serif';
-    ctx.fillStyle = '#999';
-    ctx.textAlign = 'center';
-    ctx.fillText(dirNames[dirIndex], cx, cy + 25);
-
-    ctx.font = 'bold 11px "Segoe UI", sans-serif';
-    ctx.fillStyle = '#666';
-    ctx.textAlign = 'center';
-    ctx.fillText('Aperçu', cx, cy + 38);
+    this.drawBody(ctx, cx, cy, S, colors, facing, Math.sin(walkPhase * 3) * 0.12, Math.sin(walkPhase * 3) * 0.2, false, false, false, 0, false, 0);
+    if (accessory && accessory !== 'none') {
+      this.drawAccessory(ctx, cx, cy, S, accessory);
+    }
   },
 };

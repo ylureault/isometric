@@ -4,9 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Salle — Espace Collaboratif</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <style>
-    .mobile-block { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); z-index:99999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; color:#fff; font-family:'Segoe UI',sans-serif; }
+    .mobile-block { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(160deg,#5b6cff 0%,#3a3f8f 100%); z-index:99999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; color:#fff; font-family:'Segoe UI',sans-serif; }
     .mobile-block h1 { font-size:2rem; margin-bottom:16px; }
     .mobile-block p { font-size:1.1rem; opacity:0.85; max-width:400px; line-height:1.5; }
     .mobile-block .mobile-icon { font-size:4rem; margin-bottom:20px; }
@@ -26,35 +29,45 @@
     <a href="https://www.insuffle.com">Retour sur insuffle.com</a>
   </div>
 
-  <!-- Avatar Configuration Overlay -->
+  <!-- Avatar Configuration Overlay — onboarding « Créez votre avatar » -->
   <div class="avatar-config-overlay" id="avatar-config">
-    <div class="avatar-config-panel">
-      <div class="avatar-preview-container">
-        <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" style="height:32px;margin-bottom:12px;opacity:0.7;">
-        <h2>Votre avatar</h2>
-        <canvas id="avatar-preview-canvas" width="180" height="240"></canvas>
+    <div class="avatar-config-panel ob-card">
+      <div class="ob-left">
+        <div class="ob-preview">
+          <div class="pedestal"></div>
+          <canvas id="avatar-preview-canvas" width="180" height="240"></canvas>
+        </div>
       </div>
-      <div>
+      <div class="ob-right">
+        <div class="ob-logo">
+          <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" class="ob-brand-img">
+        </div>
+        <div class="ob-h">Créez votre avatar</div>
+        <div class="ob-sub">Personnalisez votre personnage avant de rejoindre l'espace collaboratif.</div>
         <div id="room-info-display" class="room-info-display" style="display: none;"></div>
-        <div class="form-group" style="margin-bottom: 16px;">
-          <label for="pseudo-input">Votre pseudo (obligatoire)</label>
-          <div class="pseudo-input-wrapper">
-            <input type="text" id="pseudo-input" placeholder="Ex: Marie, Jean..." maxlength="20">
+        <div class="ob-field">
+          <label for="pseudo-input">Votre pseudo</label>
+          <div class="ob-input-wrap pseudo-input-wrapper">
+            <input type="text" class="ob-input" id="pseudo-input" placeholder="ex. Camille" maxlength="20">
+            <span class="ob-count pseudo-char-count" id="pseudo-char-count">0/20</span>
             <span class="pseudo-valid-indicator" id="pseudo-valid-indicator">&#10003;</span>
           </div>
-          <div class="pseudo-char-count" id="pseudo-char-count">0/20</div>
           <span class="error-message" id="error-pseudo">Veuillez saisir un pseudo pour continuer</span>
         </div>
-        <div class="color-picker-group">
-          <div class="color-picker-item"><label>Peau</label><input type="color" id="color-skin" value="#FFDCB5"></div>
-          <div class="color-picker-item"><label>Cheveux</label><input type="color" id="color-hair" value="#4A3728"></div>
-          <div class="color-picker-item"><label>Haut</label><input type="color" id="color-shirt" value="#5B8DBE"></div>
-          <div class="color-picker-item"><label>Pantalon</label><input type="color" id="color-pants" value="#3D5A80"></div>
-          <div class="color-picker-item"><label>Chaussures</label><input type="color" id="color-shoes" value="#2B2B2B"></div>
+        <div class="ob-custom" id="ob-custom">
+          <div><div class="cust-label">Peau</div><div class="swatches" data-input="color-skin" data-palette="skin"></div></div>
+          <div><div class="cust-label">Cheveux</div><div class="swatches" data-input="color-hair" data-palette="hair"></div></div>
+          <div><div class="cust-label">Haut</div><div class="swatches" data-input="color-shirt" data-palette="top"></div></div>
+          <div><div class="cust-label">Pantalon</div><div class="swatches" data-input="color-pants" data-palette="pant"></div></div>
+          <div class="ob-acc-row"><div class="cust-label">Accessoire</div><div class="acc-chips" id="ob-acc"></div></div>
         </div>
-        <div class="form-group" style="margin-top: 12px;">
-          <label style="color:rgba(255,255,255,0.7);font-size:0.85rem;">Accessoire</label>
-          <select id="accessory-select" class="admin-input" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:8px;">
+        <div class="hidden-config-inputs" aria-hidden="true">
+          <input type="color" id="color-skin" value="#f4c9a3">
+          <input type="color" id="color-hair" value="#2b2320">
+          <input type="color" id="color-shirt" value="#6b6cff">
+          <input type="color" id="color-pants" value="#2f3852">
+          <input type="color" id="color-shoes" value="#2c2c33">
+          <select id="accessory-select">
             <option value="none">Aucun</option>
             <option value="glasses">🤓 Lunettes</option>
             <option value="cap">🧢 Casquette</option>
@@ -64,8 +77,10 @@
             <option value="party">🎉 Chapeau de fête</option>
           </select>
         </div>
-        <button class="btn btn-primary" id="btn-enter" style="margin-top: 16px; width: 100%;">Rejoindre la salle</button>
-        <div class="enter-hint" id="enter-hint">Appuyer sur <kbd>Entr&#233;e</kbd> pour rejoindre</div>
+        <div class="ob-join">
+          <button class="btn btn-primary join-btn" id="btn-enter">Rejoindre la salle</button>
+          <span class="join-hint enter-hint" id="enter-hint">ou <span class="kbd">Entrée</span></span>
+        </div>
       </div>
     </div>
   </div>
@@ -73,41 +88,8 @@
   <!-- Game Canvas -->
   <canvas id="game-canvas"></canvas>
 
-  <!-- Decorative foliage overlay (purely cosmetic, never blocks interaction) -->
-  <div class="room-foliage room-foliage-tr" aria-hidden="true">
-    <svg viewBox="0 0 200 200" width="100%" height="100%">
-      <g fill="none" stroke="#6f9576" stroke-width="3" stroke-linecap="round" opacity="0.9">
-        <path d="M195 8 C150 30 120 60 100 110" stroke-width="3.5"/>
-      </g>
-      <g fill="#7aa07f" opacity="0.92">
-        <path d="M188 18 q22 -6 30 -22 q-20 2 -34 16 z"/>
-        <path d="M170 40 q24 -4 33 -20 q-21 0 -36 14 z"/>
-        <path d="M150 64 q24 -3 34 -18 q-22 -1 -37 13 z"/>
-        <path d="M132 90 q23 -2 33 -17 q-21 -2 -36 12 z"/>
-        <path d="M116 116 q22 0 32 -15 q-21 -3 -35 11 z"/>
-      </g>
-      <g fill="#8fb593" opacity="0.85">
-        <path d="M182 30 q-18 -6 -33 4 q15 11 33 6 z"/>
-        <path d="M162 54 q-18 -5 -33 5 q16 10 33 5 z"/>
-        <path d="M143 80 q-18 -4 -32 6 q16 9 32 4 z"/>
-      </g>
-    </svg>
-  </div>
-  <div class="room-foliage room-foliage-bl" aria-hidden="true">
-    <svg viewBox="0 0 200 200" width="100%" height="100%">
-      <g fill="#7aa07f" opacity="0.8">
-        <path d="M6 196 q-4 -28 10 -46 q14 16 8 44 z"/>
-        <path d="M30 196 q-2 -34 16 -52 q12 22 2 50 z"/>
-        <path d="M54 196 q2 -26 20 -40 q8 20 -4 42 z"/>
-      </g>
-    </svg>
-  </div>
-
-  <!-- Help button (top-right) -->
-  <button class="help-fab" id="btn-help" onclick="UI.toggleShortcutsModal();" aria-label="Aide et raccourcis" title="Aide et raccourcis">
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 16.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm1.6-6.1c-.7.5-.9.8-.9 1.4v.3h-1.5v-.4c0-1.1.5-1.7 1.3-2.2.7-.5 1-.8 1-1.4 0-.7-.6-1.2-1.4-1.2-.7 0-1.3.4-1.5 1.2l-1.4-.5C9.1 7.5 10.3 6.7 12 6.7c1.7 0 3 1 3 2.6 0 1.1-.6 1.7-1.4 2.2Z"/></svg>
-    <span>Aide</span>
-  </button>
+  <!-- Voile d'ambiance par thème (Nuit, Nature, Festif) -->
+  <div id="ambient" aria-hidden="true"></div>
 
   <!-- #46 Vignette effect for premium feel -->
   <div class="canvas-vignette" id="canvas-vignette"></div>
@@ -115,34 +97,39 @@
   <!-- Room loading indicator (#41) -->
   <div class="room-loading-indicator" id="room-loading-indicator" style="display: none;"></div>
 
-  <!-- HUD top-left -->
-  <div class="hud" id="hud" style="display: none;">
-    <div class="hud-item hud-brand">
-      <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" style="height:20px;vertical-align:middle;margin-right:6px;opacity:0.8;">
+  <!-- Room card (top-left) -->
+  <aside class="hud room-card glass" id="hud" style="display: none;">
+    <div class="rc-head">
+      <div class="logo" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 13c4 0 5-5 9-5 2.5 0 4 1.8 4 4s-1.8 4-4 4c-2 0-3-1.2-3-2.6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><path d="M3 18c5 0 6-3 11-3" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".7"/></svg>
+      </div>
+      <div class="rc-titles">
+        <div class="rc-name" id="hud-room-name">Espace Insuffle</div>
+        <div class="rc-sub">Espace collaboratif · <span id="hud-version">v1.0</span></div>
+      </div>
     </div>
-    <div class="hud-item hud-room-name" id="hud-room-name"></div>
-    <div class="hud-item hud-coords" id="hud-coords">Zone 0, 0</div>
-    <div class="hud-item hud-participants" id="hud-participants">
-      <span class="connection-indicator"><span class="connection-dot good" id="connection-dot"></span></span>
-      <span id="hud-participants-text">1 participant</span>
+    <div class="rc-rows">
+      <div class="rc-row hud-participants" id="hud-participants">
+        <span class="connection-indicator"><span class="connection-dot good live-dot" id="connection-dot"></span></span>
+        <span id="hud-participants-text">1 participant</span>
+      </div>
+      <div class="rc-row" id="hud-admin-badge" style="display: none;">
+        <span class="ic">&#9733;</span><span>Vous êtes</span><span class="badge-admin">Administrateur</span>
+      </div>
+      <div class="rc-row admin-presence-badge" id="admin-presence" style="display:none;">
+        <span class="ic">&#9733;</span> <span id="admin-presence-text">Admin présent</span>
+      </div>
+      <div class="rc-row rc-row-ping">
+        <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h4l2-7 4 14 2-7h8"/></svg></span>
+        <span>Latence</span><span class="ping hud-ping" id="hud-ping" style="display:none;"></span>
+      </div>
+      <div class="rc-row hud-coords" id="hud-coords">Zone 0, 0</div>
     </div>
-    <div class="hud-item hud-admin-badge" id="hud-admin-badge" style="display: none;">&#9733; Administrateur</div>
-    <!-- #21 Ping indicator -->
-    <div class="hud-item hud-ping" id="hud-ping" style="display:none;"></div>
-    <!-- #29 Admin presence indicator -->
-    <div class="hud-item admin-presence-badge" id="admin-presence" style="display:none;">
-      <span>&#9733;</span> <span id="admin-presence-text">Admin present</span>
+    <div class="share" id="copy-link-container" style="display: none;">
+      <input id="room-url-display" class="room-url-display" readonly aria-label="Lien de la salle">
+      <button class="hud-share-btn btn btn-accent" id="btn-share" aria-haspopup="dialog" aria-expanded="false" title="Inviter des participants">Inviter</button>
     </div>
-    <!-- #50 Version number -->
-    <div class="hud-item hud-version" id="hud-version">v1.0</div>
-    <div class="hud-item share-hud-item" id="copy-link-container" style="display: none;">
-      <button class="hud-share-btn" id="btn-share" aria-haspopup="dialog" aria-expanded="false" title="Inviter des participants">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.9a3 3 0 0 0 0-2.6l6.7-3.9A3 3 0 1 0 15 4l-6.7 3.9a3 3 0 1 0 0 8.2L15 20a3 3 0 1 0 3-4Z"/></svg>
-        <span>Inviter</span>
-      </button>
-      <span id="room-url-display" class="room-url-display" hidden></span>
-    </div>
-  </div>
+  </aside>
 
   <!-- Share / invite popover -->
   <div class="share-popover" id="share-popover" role="dialog" aria-modal="false" aria-label="Inviter des participants" hidden>
@@ -205,9 +192,9 @@
         <input type="range" id="sfx-volume-slider" min="0" max="100" value="70" title="Volume des effets sonores">
       </div>
       <button class="toolbar-btn" id="btn-hand" title="Lever la main (H)" aria-label="Lever ou baisser la main">✋</button>
-      <div class="toolbar-radius" title="Rayon d'interaction">
-        <span style="font-size:11px;color:#888;">🔊</span>
-        <input type="range" id="radius-slider" min="2" max="6" value="3" step="0.5">
+      <div class="toolbar-radius" title="Rayon d'écoute personnel (en mètres)">
+        <span style="font-size:11px;color:var(--muted);">🔊</span>
+        <input type="range" id="radius-slider" min="0.5" max="8" value="3" step="0.5">
       </div>
     </div>
     <div class="toolbar-center">
@@ -232,6 +219,9 @@
       <button class="toolbar-btn" id="btn-sound-toggle" title="Activer / Couper les sons (notifications)" aria-label="Basculer les sons">&#128264;</button>
       <button class="toolbar-btn" id="btn-ambient" title="Bruit ambiant de bureau (off)" aria-label="Bruit ambiant">&#127925;</button>
       <button class="toolbar-btn dark-mode-toggle" id="btn-dark-mode" title="Mode sombre UI (D)" aria-label="Basculer mode sombre">&#9789;</button>
+      <button class="toolbar-btn" id="btn-help" onclick="UI.toggleShortcutsModal();" title="Aide et raccourcis (?)" aria-label="Aide et raccourcis">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 115 0c0 1.7-2.5 2-2.5 4M12 17h.01"/></svg>
+      </button>
       <button class="toolbar-btn toolbar-btn-danger" id="btn-leave" title="Quitter la salle" aria-label="Quitter la salle">&#10005;</button>
     </div>
   </div>
@@ -342,6 +332,18 @@
         <button class="btn btn-secondary btn-sm" style="margin-top:4px;" id="btn-apply-env">Changer</button>
       </div>
       <div class="form-group" style="margin-bottom: 12px;">
+        <label>Rayon de parole</label>
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;">Distance à laquelle on s'entend. Le cercle autour des avatars s'agrandit pour tout le monde. Les personnes réunies dans un même cercle se parlent entre elles.</p>
+        <div class="radius-presets" id="radius-presets">
+          <button class="preset-btn radius-preset" data-radius="0.5">50 cm</button>
+          <button class="preset-btn radius-preset" data-radius="1">1 m</button>
+          <button class="preset-btn radius-preset" data-radius="2">2 m</button>
+          <button class="preset-btn radius-preset" data-radius="3">3 m</button>
+          <button class="preset-btn radius-preset" data-radius="5">5 m</button>
+          <button class="preset-btn radius-preset" data-radius="8">8 m</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom: 12px;">
         <button class="btn btn-secondary btn-sm" id="btn-export-config" style="margin-top:8px;">&#128190; Exporter la configuration (JSON)</button>
       </div>
       <div class="form-group" style="margin-bottom: 12px;" id="close-room-section">
@@ -351,16 +353,12 @@
 
     <!-- Thème tab -->
     <div class="admin-tab-content" id="tab-theme" style="display: none;">
-      <div class="color-picker-item"><label>Couleur de sol claire</label><input type="color" id="theme-color1" value="#3a4a5c" onchange="Network.socket.emit('update-theme',{floorColor1:this.value},()=>{Board.floorColor1=this.value;});"></div>
-      <div class="color-picker-item"><label>Couleur de sol foncée</label><input type="color" id="theme-color2" value="#344458" onchange="Network.socket.emit('update-theme',{floorColor2:this.value},()=>{Board.floorColor2=this.value;});"></div>
-      <h4 style="margin-top:12px;">Palettes prédéfinies</h4>
-      <div class="theme-presets">
-        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#3a4a5c',floorColor2:'#344458'},()=>{Board.floorColor1='#3a4a5c';Board.floorColor2='#344458';});">Nuit</button>
-        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#8a9aac',floorColor2:'#7a8a9c'},()=>{Board.floorColor1='#8a9aac';Board.floorColor2='#7a8a9c';});">Jour</button>
-        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#4a5a6c',floorColor2:'#3a4a5c'},()=>{Board.floorColor1='#4a5a6c';Board.floorColor2='#3a4a5c';});">Corporate</button>
-        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#3c5a3c',floorColor2:'#2c4a2c'},()=>{Board.floorColor1='#3c5a3c';Board.floorColor2='#2c4a2c';});">Nature</button>
-        <button class="preset-btn" onclick="Network.socket.emit('update-theme',{floorColor1:'#5c3a5c',floorColor2:'#4c2a4c'},()=>{Board.floorColor1='#5c3a5c';Board.floorColor2='#4c2a4c';});">Festif</button>
-      </div>
+      <h4 class="sec-t">Thème d'ambiance</h4>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:12px;">Le thème change l'ambiance pour tous les participants : couleurs de la salle, du sol et de l'interface.</p>
+      <div class="themes-row" id="theme-picker"></div>
+      <h4 class="sec-t" style="margin-top:20px;">Réglage fin du sol</h4>
+      <div class="color-picker-item"><label>Couleur de sol claire</label><input type="color" id="theme-color1" value="#d3e2cf" onchange="Network.socket.emit('update-theme',{floorColor1:this.value},()=>{Board.floorColor1=this.value;});"></div>
+      <div class="color-picker-item"><label>Couleur de sol foncée</label><input type="color" id="theme-color2" value="#c3d6bf" onchange="Network.socket.emit('update-theme',{floorColor2:this.value},()=>{Board.floorColor2=this.value;});"></div>
     </div>
   </div>
 
@@ -394,8 +392,8 @@
   </div>
 
   <!-- Minimap -->
-  <div class="minimap-container" id="minimap-container" style="display: none; position: relative;">
-    <span class="minimap-badge" id="minimap-badge">1</span>
+  <div class="minimap-container glass" id="minimap-container" style="display: none; position: relative;">
+    <div class="mm-h"><span>Plan</span><span class="mm-right"><span class="minimap-badge" id="minimap-badge">1</span><span class="kbd">Tab</span></span></div>
     <canvas id="minimap-canvas" width="160" height="160"></canvas>
   </div>
 
@@ -681,6 +679,7 @@
   <script src="js/qrcode.js"></script>
   <script src="js/environments.js"></script>
   <script src="js/board.js"></script>
+  <script src="js/themes.js"></script>
   <script src="js/character.js"></script>
   <script src="js/network.js"></script>
   <script src="js/audio.js"></script>
@@ -688,6 +687,7 @@
   <script src="js/ui.js"></script>
   <script src="js/ux-enhancements.js"></script>
   <script src="js/engine.js"></script>
+  <script src="js/design.js"></script>
   <script>
     // #41 Preload commonly needed DOM elements at startup
     document.addEventListener('DOMContentLoaded', function() {

@@ -4,9 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Espace Collaboratif Insuffle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <style>
-    .mobile-block { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); z-index:99999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; color:#fff; font-family:'Segoe UI',sans-serif; }
+    .mobile-block { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(160deg,#5b6cff 0%,#3a3f8f 100%); z-index:99999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; color:#fff; font-family:'Segoe UI',sans-serif; }
     .mobile-block h1 { font-size:2rem; margin-bottom:16px; }
     .mobile-block p { font-size:1.1rem; opacity:0.85; max-width:400px; line-height:1.5; }
     .mobile-block .mobile-icon { font-size:4rem; margin-bottom:20px; }
@@ -25,53 +28,54 @@
     <a href="https://www.insuffle.com">Retour sur insuffle.com</a>
   </div>
   <div class="landing-container" id="landing">
-    <div class="insuffle-branding">
-      <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" class="insuffle-logo">
-    </div>
-    <h1>Espace Collaboratif</h1>
-    <p class="landing-subtitle">Créez un espace isométrique pour vos réunions, ateliers et séminaires à distance. Jusqu'à 20 participants, audio par proximité.</p>
-    <p class="powered-by">Propulsé par <strong>Insuffle</strong> — Facilitation &amp; Collaboration</p>
+    <div class="landing-card">
+      <div class="insuffle-branding">
+        <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" class="insuffle-logo">
+      </div>
+      <div>
+        <h1>Espace Collaboratif</h1>
+        <p class="landing-subtitle">Créez un espace isométrique pour vos réunions, ateliers et séminaires à distance. Sans inscription : un lien unique à partager, et tout le monde se retrouve.</p>
+      </div>
 
-    <div class="form-group">
-      <label for="room-name">Nom de la salle</label>
-      <input type="text" id="room-name" placeholder="Ma réunion d'équipe" maxlength="50">
-      <span class="error-message" id="error-name">Veuillez saisir un nom pour votre salle</span>
-    </div>
+      <div class="form-group">
+        <label for="room-name">Nom de la salle</label>
+        <input type="text" id="room-name" placeholder="Ma réunion d'équipe" maxlength="50">
+        <span class="error-message" id="error-name">Veuillez saisir un nom pour votre salle</span>
+      </div>
 
-    <div class="form-group">
-      <label for="environment">Environnement / Format</label>
-      <select id="environment">
-        <optgroup label="Espaces de travail">
-          <option value="bureau">Bureau</option>
-          <option value="open-space" selected>Open Space</option>
-          <option value="salle-de-conference">Salle de Conférence</option>
-          <option value="coworking">Espace Coworking (zones numérotées)</option>
-        </optgroup>
-        <optgroup label="Formats de facilitation">
-          <option value="world-cafe">World Café</option>
-          <option value="forum-ouvert">Forum Ouvert</option>
-          <option value="cercle">Cercle (codéveloppement)</option>
-        </optgroup>
-      </select>
-      <div class="env-preview-desc" id="env-preview-desc">Espace ouvert avec postes de travail et zones de réunion</div>
-    </div>
+      <div class="form-group">
+        <label for="environment">Environnement / Format</label>
+        <select id="environment">
+          <optgroup label="Espaces de travail">
+            <option value="bureau">Bureau</option>
+            <option value="open-space" selected>Open Space</option>
+            <option value="salle-de-conference">Salle de Conférence</option>
+            <option value="coworking">Espace Coworking (zones numérotées)</option>
+          </optgroup>
+          <optgroup label="Formats de facilitation">
+            <option value="world-cafe">World Café</option>
+            <option value="forum-ouvert">Forum Ouvert</option>
+            <option value="cercle">Cercle (codéveloppement)</option>
+          </optgroup>
+        </select>
+        <div class="env-preview-desc" id="env-preview-desc">Espace ouvert avec postes de travail et zones de réunion</div>
+      </div>
 
-    <div class="form-group">
-      <label for="grid-size">Taille de la grille</label>
-      <input type="range" id="grid-size" min="10" max="100" value="20" step="5">
-      <div class="grid-size-display"><span id="grid-size-value">20</span> x <span id="grid-size-value2">20</span></div>
-    </div>
+      <div class="form-group">
+        <label for="grid-size">Taille de la grille</label>
+        <input type="range" id="grid-size" min="10" max="100" value="20" step="5">
+        <div class="grid-size-display"><span id="grid-size-value">20</span> x <span id="grid-size-value2">20</span></div>
+      </div>
 
-    <button class="btn btn-primary" id="btn-create">Créer la salle</button>
-    <span class="error-message" id="error-create" style="text-align:center;"></span>
+      <button class="btn btn-primary join-btn" id="btn-create">Créer la salle</button>
+      <span class="error-message" id="error-create" style="text-align:center;"></span>
 
-    <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 24px; width: 320px; text-align: center;">
-      <p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 12px;">Ou rejoindre une salle existante</p>
+      <div class="landing-divider">Ou rejoindre une salle</div>
       <div class="form-group">
         <input type="text" id="room-id-input" placeholder="Identifiant de la salle" aria-label="Identifiant de la salle à rejoindre">
       </div>
-      <div id="join-room-info" style="display:none;font-size:0.8rem;color:rgba(255,255,255,0.7);margin-top:4px;"></div>
-      <button class="btn btn-secondary" id="btn-join" style="margin-top: 8px;">Rejoindre</button>
+      <div id="join-room-info" style="display:none;font-size:0.8rem;color:var(--muted);font-weight:600;"></div>
+      <button class="btn btn-secondary" id="btn-join">Rejoindre</button>
     </div>
 
     <!-- #48 Feature highlights -->
@@ -95,7 +99,7 @@
     </div>
 
     <!-- #23 Server status -->
-    <div id="server-status" style="margin-top: 12px; font-size: 0.75rem; color: rgba(255,255,255,0.4);">
+    <div id="server-status" style="margin-top: 4px; font-size: 0.75rem; color: var(--muted); font-weight: 600;">
       <span id="server-status-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#999;margin-right:4px;vertical-align:middle;"></span>
       <span id="server-status-text">Verification du serveur...</span>
     </div>
@@ -105,7 +109,11 @@
   </div>
 
   <script src="../shared/constants.js"></script>
+  <script src="js/themes.js"></script>
   <script>
+    // Continuité d'ambiance : on retrouve le thème choisi en salle
+    if (typeof Themes !== 'undefined') Themes.restore();
+
     const gridSizeInput = document.getElementById('grid-size');
     const gridSizeValue = document.getElementById('grid-size-value');
     const gridSizeValue2 = document.getElementById('grid-size-value2');

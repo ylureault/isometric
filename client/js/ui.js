@@ -45,9 +45,11 @@ const UI = {
     }
 
     let animTime = 0;
+    const accessorySelectEl = document.getElementById('accessory-select');
     const animatePreview = () => {
       animTime += 0.016;
-      Character.drawPreview(this.previewCtx, this.previewCanvas.width, this.previewCanvas.height, this.currentColors, animTime);
+      Character.drawPreview(this.previewCtx, this.previewCanvas.width, this.previewCanvas.height, this.currentColors, animTime,
+        accessorySelectEl ? accessorySelectEl.value : 'none');
       this.previewAnimId = requestAnimationFrame(animatePreview);
     };
     animatePreview();
@@ -353,9 +355,10 @@ const UI = {
       Engine.setSfxVolume(parseFloat(e.target.value) / 100);
     });
 
-    // Radius slider
+    // Radius slider (préférence locale) — le cercle s'agrandit en douceur
     document.getElementById('radius-slider')?.addEventListener('input', (e) => {
-      Engine.player.audioRadius = parseInt(e.target.value);
+      Engine.player.audioRadius = parseFloat(e.target.value);
+      Engine._radiusChangedAt = performance.now();
     });
 
     // Screen share button
@@ -447,20 +450,22 @@ const UI = {
       });
     }
 
-    // #50 Dark mode toggle for UI panels
+    // #50 Bascule jour/nuit : alterne entre le th\u00e8me Nuit et le dernier th\u00e8me clair
     var darkModeToggle = document.getElementById('btn-dark-mode');
-    if (darkModeToggle) {
-      // Restore saved preference
-      if (localStorage.getItem('ui-dark-mode') === 'true') {
-        document.body.classList.add('ui-dark-mode');
-        darkModeToggle.textContent = '\u2600'; // sun icon
-      }
+    if (darkModeToggle && typeof Themes !== 'undefined') {
+      darkModeToggle.textContent = Themes.current === 'nuit' ? '\u2600' : '\u263D';
       darkModeToggle.addEventListener('click', function() {
-        document.body.classList.toggle('ui-dark-mode');
-        var isDark = document.body.classList.contains('ui-dark-mode');
-        darkModeToggle.textContent = isDark ? '\u2600' : '\u263D';
-        localStorage.setItem('ui-dark-mode', isDark);
-        UI.showNotification(isDark ? 'Mode sombre activ\u00e9' : 'Mode clair activ\u00e9');
+        var isDark = Themes.current === 'nuit';
+        if (isDark) {
+          var prev = 'jour';
+          try { prev = localStorage.getItem('insuffle_theme_light') || 'jour'; } catch (e) {}
+          Themes.apply(prev);
+        } else {
+          try { localStorage.setItem('insuffle_theme_light', Themes.current); } catch (e) {}
+          Themes.apply('nuit');
+        }
+        darkModeToggle.textContent = Themes.current === 'nuit' ? '\u2600' : '\u263D';
+        UI.showNotification(Themes.current === 'nuit' ? 'Th\u00e8me Nuit activ\u00e9' : 'Th\u00e8me clair activ\u00e9');
       });
     }
 

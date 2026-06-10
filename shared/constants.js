@@ -32,7 +32,7 @@ const CONSTANTS = {
   EMPTY_ROOM_CLEANUP_TIMEOUT: 60000,
 
   AUDIO_RADIUS: 3,
-  AUDIO_RADIUS_MIN: 1,
+  AUDIO_RADIUS_MIN: 0.5, // 50 cm — une tuile représente 1 mètre
   AUDIO_RADIUS_MAX: 20,
   AUDIO_FADE_START: 1.5,
 
@@ -55,12 +55,13 @@ const CONSTANTS = {
 
   ENVIRONMENTS: ['bureau', 'open-space', 'salle-de-conference', 'coworking', 'world-cafe', 'forum-ouvert', 'cercle'],
 
+  // Avatar par défaut du design « Insuffle Espace »
   DEFAULT_COLORS: {
-    skin: '#FFDCB5',
-    hair: '#4A3728',
-    shirt: '#5B8DBE',
-    pants: '#3D5A80',
-    shoes: '#2B2B2B',
+    skin: '#f4c9a3',
+    hair: '#2b2320',
+    shirt: '#6b6cff',
+    pants: '#2f3852',
+    shoes: '#2c2c33',
   },
 
   DIRECTIONS: {
