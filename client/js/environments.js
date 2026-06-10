@@ -259,8 +259,114 @@ const Environments = {
     },
   },
 
+  // Place `count` chairs in a ring of given radius around (cx, cy).
+  _ring(cx, cy, radius, count, type) {
+    const out = [];
+    const seen = new Set();
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2;
+      const x = Math.round(cx + Math.cos(a) * radius);
+      const y = Math.round(cy + Math.sin(a) * radius * 0.85); // slightly squashed for iso feel
+      const key = x + ',' + y;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ type: type || 'chair', x, y });
+    }
+    return out;
+  },
+
+  // ===== Facilitation formats (preconfigured for real-world workshops) =====
+  facilitationPresets: {
+    'world-cafe': {
+      name: 'World Café',
+      floorColor1: '#bcae93', floorColor2: '#b0a487', wallColor: '#efe7d8',
+      description: 'Petites tables rondes avec paperboard — conversations qui essaiment.',
+      furniture: (gs) => {
+        const items = [];
+        const clamp = (v) => Math.max(1, Math.min(gs - 2, v));
+        // A grid of café tables, each with 4 seats + a paperboard alongside.
+        const cols = gs >= 26 ? 3 : 2;
+        const rows = gs >= 26 ? 3 : 2;
+        const stepX = Math.floor(gs / (cols + 1));
+        const stepY = Math.floor(gs / (rows + 1));
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const tx = clamp((c + 1) * stepX - 1);
+            const ty = clamp((r + 1) * stepY - 1);
+            items.push({ type: 'roundTable', x: tx, y: ty });
+            items.push({ type: 'chair', x: clamp(tx - 1), y: ty });
+            items.push({ type: 'chair', x: clamp(tx + 2), y: ty });
+            items.push({ type: 'chair', x: tx, y: clamp(ty - 1) });
+            items.push({ type: 'chair', x: tx, y: clamp(ty + 2) });
+            items.push({ type: 'postItBoard', x: clamp(tx + 2), y: clamp(ty + 2) });
+          }
+        }
+        // Restitution wall + greenery.
+        items.push({ type: 'whiteboard', x: Math.floor(gs / 2) - 1, y: 0 });
+        items.push({ type: 'plant', x: 1, y: 1 });
+        items.push({ type: 'palmTree', x: gs - 2, y: 1 });
+        items.push({ type: 'plant', x: 1, y: gs - 2 });
+        items.push({ type: 'palmTree', x: gs - 2, y: gs - 2 });
+        return items;
+      },
+    },
+    'forum-ouvert': {
+      name: 'Forum Ouvert',
+      floorColor1: '#b4bca8', floorColor2: '#a8b09c', wallColor: '#ece4d6',
+      description: 'Grand cercle d\'ouverture + zones de thèmes en marché des idées.',
+      furniture: function (gs) {
+        const items = [];
+        const clamp = (v) => Math.max(1, Math.min(gs - 2, v));
+        const cx = Math.floor(gs / 2), cy = Math.floor(gs / 2);
+        // Opening circle of chairs (the marketplace).
+        const ringR = Math.max(3, Math.floor(gs / 4));
+        const seats = Math.min(20, Math.max(10, Math.floor(gs * 0.9)));
+        Environments._ring(cx, cy, ringR, seats, 'chair').forEach((c) => {
+          c.x = clamp(c.x); c.y = clamp(c.y); items.push(c);
+        });
+        // Theme breakout zones in the four corners, each with a paperboard.
+        const z = Math.max(2, Math.floor(gs / 6));
+        const corners = [
+          { x: 1, y: 1, name: 'Thème 1' },
+          { x: gs - z - 1, y: 1, name: 'Thème 2' },
+          { x: 1, y: gs - z - 1, name: 'Thème 3' },
+          { x: gs - z - 1, y: gs - z - 1, name: 'Thème 4' },
+        ];
+        corners.forEach((co, i) => {
+          items.push({ type: 'zoneMarker', x: co.x, y: co.y, zone: i + 1, zoneName: co.name });
+          items.push({ type: 'postItBoard', x: clamp(co.x + 1), y: clamp(co.y) });
+          items.push({ type: 'roundTable', x: clamp(co.x + 1), y: clamp(co.y + 1) });
+        });
+        // Agenda wall.
+        items.push({ type: 'whiteboard', x: cx - 1, y: 0 });
+        items.push({ type: 'podium', x: cx + 2, y: 1 });
+        return items;
+      },
+    },
+    'cercle': {
+      name: 'Cercle (codéveloppement)',
+      floorColor1: '#b8b0a0', floorColor2: '#aca492', wallColor: '#efe8da',
+      description: 'Cercle de parole resserré autour d\'un paperboard — codir, codév, rétro.',
+      furniture: function (gs) {
+        const items = [];
+        const clamp = (v) => Math.max(1, Math.min(gs - 2, v));
+        const cx = Math.floor(gs / 2), cy = Math.floor(gs / 2);
+        items.push({ type: 'carpet', x: clamp(cx - 1), y: clamp(cy - 1) });
+        const ringR = Math.max(3, Math.floor(gs / 5));
+        Environments._ring(cx, cy, ringR, Math.min(14, Math.max(8, Math.floor(gs * 0.7))), 'chair')
+          .forEach((c) => { c.x = clamp(c.x); c.y = clamp(c.y); items.push(c); });
+        // Two paperboards for the "client" of the session.
+        items.push({ type: 'whiteboard', x: cx - 1, y: 0 });
+        items.push({ type: 'postItBoard', x: 0, y: cy });
+        items.push({ type: 'plant', x: 1, y: 1 });
+        items.push({ type: 'palmTree', x: gs - 2, y: gs - 2 });
+        return items;
+      },
+    },
+  },
+
   getFurniture(envType, gridSize) {
-    const preset = this.presets[envType];
+    const preset = this.presets[envType] || this.facilitationPresets[envType];
     var items = preset ? preset.furniture(gridSize) : this.presets['bureau'].furniture(gridSize);
     // Ensure every item has a unique ID
     for (var i = 0; i < items.length; i++) {
@@ -270,7 +376,7 @@ const Environments = {
   },
 
   getPreset(envType) {
-    return this.presets[envType] || this.presets['bureau'];
+    return this.presets[envType] || this.facilitationPresets[envType] || this.presets['bureau'];
   },
 
   isSolidAt(envType, gridSize, gx, gy) {

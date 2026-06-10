@@ -39,12 +39,19 @@
     </div>
 
     <div class="form-group">
-      <label for="environment">Environnement</label>
+      <label for="environment">Environnement / Format</label>
       <select id="environment">
-        <option value="bureau">Bureau</option>
-        <option value="open-space" selected>Open Space</option>
-        <option value="salle-de-conference">Salle de Conférence</option>
-        <option value="coworking">Espace Coworking (zones numérotées)</option>
+        <optgroup label="Espaces de travail">
+          <option value="bureau">Bureau</option>
+          <option value="open-space" selected>Open Space</option>
+          <option value="salle-de-conference">Salle de Conférence</option>
+          <option value="coworking">Espace Coworking (zones numérotées)</option>
+        </optgroup>
+        <optgroup label="Formats de facilitation">
+          <option value="world-cafe">World Café</option>
+          <option value="forum-ouvert">Forum Ouvert</option>
+          <option value="cercle">Cercle (codéveloppement)</option>
+        </optgroup>
       </select>
       <div class="env-preview-desc" id="env-preview-desc">Espace ouvert avec postes de travail et zones de réunion</div>
     </div>
@@ -114,6 +121,9 @@
       'open-space': 'Espace ouvert avec postes de travail et zones de réunion',
       'salle-de-conference': 'Grande salle équipée pour les présentations et conférences',
       'coworking': 'Espace modulable avec zones numérotées pour le travail collaboratif',
+      'world-cafe': 'Petites tables rondes avec paperboard — conversations qui essaiment',
+      'forum-ouvert': 'Grand cercle d\'ouverture et zones de thèmes en marché des idées',
+      'cercle': 'Cercle de parole resserré autour d\'un paperboard — codir, codév, rétro',
     };
     const envSelect = document.getElementById('environment');
     const envDesc = document.getElementById('env-preview-desc');

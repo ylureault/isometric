@@ -53,7 +53,7 @@ const CONSTANTS = {
   RATE_LIMIT_CHAT_MS: 500,
   MAX_RECONNECT_ATTEMPTS: 15,
 
-  ENVIRONMENTS: ['bureau', 'open-space', 'salle-de-conference', 'coworking'],
+  ENVIRONMENTS: ['bureau', 'open-space', 'salle-de-conference', 'coworking', 'world-cafe', 'forum-ouvert', 'cercle'],
 
   DEFAULT_COLORS: {
     skin: '#FFDCB5',
