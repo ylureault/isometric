@@ -97,8 +97,8 @@ var Themes = {
       Board.wallColor = t.vars['--wall-l'];
     }
     try { localStorage.setItem('insuffle_theme', key); } catch (e) {}
-    if (t.confetti && !opts.silent && typeof UXEnhancements !== 'undefined' && UXEnhancements.confettiBurst) {
-      UXEnhancements.confettiBurst();
+    if (t.confetti && !opts.silent && typeof Engine !== 'undefined' && Engine.triggerConfetti) {
+      Engine.triggerConfetti();
     }
     if (this.onChange) this.onChange(key);
   },

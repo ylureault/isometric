@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Espace Collaboratif Insuffle</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%235b6cff'/%3E%3Cpolygon points='50,30 74,44 50,58 26,44' fill='%23fff' opacity='.92'/%3E%3Cpolygon points='50,58 74,44 74,56 50,70' fill='%23cdd5ff'/%3E%3Cpolygon points='50,58 26,44 26,56 50,70' fill='%23b3bdf7'/%3E%3C/svg%3E">
+  <meta name="description" content="Espace collaboratif isométrique pour réunions, ateliers et séminaires. Sans inscription — un lien unique à partager. Audio par proximité, tableaux, partage d'écran.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Insuffle — Espace Collaboratif isométrique">
+  <meta property="og:description" content="Réunions et ateliers dans un espace vivant : on s'y déplace, on s'y regroupe, on s'y parle. Sans inscription.">
+  <meta property="og:image" content="https://meet.insuffle.com/client/assets/preview.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -75,6 +82,7 @@
       </div>
       <div id="join-room-info" style="display:none;font-size:0.8rem;color:var(--muted);font-weight:600;"></div>
       <button class="btn btn-secondary" id="btn-join">Rejoindre</button>
+      <div class="recent-rooms" id="recent-rooms" style="display:none;"><span class="recent-label">Récentes :</span></div>
     </div>
 
     <figure class="landing-preview" aria-label="Aperçu de l'espace collaboratif">
@@ -150,7 +158,7 @@
     let roomInfoTimeout = null;
     roomIdInput.addEventListener('input', () => {
       clearTimeout(roomInfoTimeout);
-      const rid = roomIdInput.value.trim();
+      const rid = parseRoomId(roomIdInput.value.trim());
       if (rid.length > 3) {
         roomInfoTimeout = setTimeout(() => {
           fetch('/api/rooms/' + encodeURIComponent(rid)).then(r => r.ok ? r.json() : null).then(info => {
@@ -241,14 +249,35 @@
       if (e.code === 'Enter') createBtn.click();
     });
 
+    // Accepte un identifiant OU un lien complet collé (room=… ou /r/…)
+    function parseRoomId(raw) {
+      const m = raw.match(/[?&]room=([A-Za-z0-9_-]+)/) || raw.match(/\/r\/([A-Za-z0-9_-]+)/);
+      return m ? m[1] : raw;
+    }
     joinBtn.addEventListener('click', () => {
-      const roomId = document.getElementById('room-id-input').value.trim();
+      const roomId = parseRoomId(document.getElementById('room-id-input').value.trim());
       if (roomId) {
         joinBtn.classList.add('btn-loading');
         joinBtn.disabled = true;
-        window.location.href = `room.html?room=${roomId}`;
+        window.location.href = `room.html?room=${encodeURIComponent(roomId)}`;
       }
     });
+
+    // Salles récentes (localStorage, remplies depuis la salle)
+    (function renderRecentRooms() {
+      let recent = [];
+      try { recent = JSON.parse(localStorage.getItem('insuffle_recent') || '[]'); } catch (e) {}
+      if (!recent.length) return;
+      const box = document.getElementById('recent-rooms');
+      box.style.display = 'flex';
+      recent.slice(0, 4).forEach((r) => {
+        const a = document.createElement('a');
+        a.className = 'recent-chip';
+        a.href = 'room.html?room=' + encodeURIComponent(r.id);
+        a.innerHTML = '<span class="rc-dot"></span>' + (r.name ? r.name.replace(/</g, '&lt;') : r.id);
+        box.appendChild(a);
+      });
+    })();
 
     // Allow Enter key on room ID to join
     document.getElementById('room-id-input').addEventListener('keydown', (e) => {

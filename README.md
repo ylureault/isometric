@@ -10,6 +10,8 @@
 [![CI](https://github.com/ylureault/isometric/actions/workflows/ci.yml/badge.svg)](https://github.com/ylureault/isometric/actions/workflows/ci.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg)](CONTRIBUTING.md)
 
+<img src="client/assets/preview.png" alt="Aperçu de l'Espace Collaboratif Insuffle" width="780">
+
 [Démarrage rapide](#-démarrage-rapide) · [Fonctionnalités](#-fonctionnalités) · [Comment ça marche](#-comment-ça-marche) · [Contribuer](#-contribuer)
 
 </div>

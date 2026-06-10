@@ -58,12 +58,38 @@
     });
   }
 
+  // « 🎲 Surprends-moi » : avatar aléatoire en un clic
+  function wireRandomAvatar() {
+    var btn = document.getElementById('ob-random');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.swatches[data-input]').forEach(function(row) {
+        var sw = row.querySelectorAll('.swatch');
+        if (sw.length) sw[Math.floor(Math.random() * sw.length)].click();
+      });
+      var chips = document.querySelectorAll('#ob-acc .acc-chip');
+      if (chips.length) chips[Math.floor(Math.random() * chips.length)].click();
+    });
+  }
+
+  // Mémorise la salle pour la liste « Récentes » de l'accueil
+  function rememberRoom(roomId) {
+    try {
+      var name = (typeof Engine !== 'undefined' && Engine.roomConfig) ? Engine.roomConfig.name : '';
+      var recent = JSON.parse(localStorage.getItem('insuffle_recent') || '[]');
+      recent = recent.filter(function(r) { return r.id !== roomId; });
+      recent.unshift({ id: roomId, name: name, ts: Date.now() });
+      localStorage.setItem('insuffle_recent', JSON.stringify(recent.slice(0, 6)));
+    } catch (e) {}
+  }
+
   // Room card : remplit le champ lien quand l'invitation devient disponible
   function wireShareLink() {
     if (typeof UI === 'undefined' || !UI.showCopyLink) return;
     var orig = UI.showCopyLink.bind(UI);
     UI.showCopyLink = function(roomId) {
       orig(roomId);
+      rememberRoom(roomId);
       var input = document.getElementById('room-url-display');
       if (input && UI.shareUrl) {
         input.value = UI.shareUrl.replace(/^https?:\/\//, '');
@@ -157,6 +183,7 @@
   function init() {
     buildSwatches();
     buildAccessoryChips();
+    wireRandomAvatar();
     wireShareLink();
     wireThemes();
     wireRadiusPresets();

@@ -238,6 +238,22 @@ html[data-theme="nuit"] .insuffle-logo { filter: brightness(0) invert(1); opacit
 .landing-divider::before, .landing-divider::after {
   content: ''; flex: 1; height: 1px; background: var(--panel-border);
 }
+/* Salles récentes */
+.recent-rooms { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.recent-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.recent-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border-radius: 999px;
+  background: rgba(125,135,170,.1); border: 1.5px solid transparent;
+  font-size: 12px; font-weight: 700; color: var(--text); text-decoration: none;
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: .13s;
+}
+.recent-chip:hover { border-color: var(--accent); color: var(--ink); transform: translateY(-1px); }
+.recent-chip .rc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+/* Bouton avatar aléatoire */
+.ob-random { font-size: 12px; }
+.ob-random:hover { border-color: var(--accent); color: var(--ink); }
 
 .btn {
   padding: 12px 24px; border: none; border-radius: var(--radius-md); font-size: 1rem;

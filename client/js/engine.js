@@ -552,6 +552,18 @@ var Engine = {
     // #21 Furniture hover tooltip
     if (this.started && !this.isDragging) {
       this._showFurnitureTooltip(e.clientX, e.clientY);
+      // Curseur main au survol des pastilles de zone (elles sont cliquables)
+      var hwx = (e.clientX - this.camera.x) / this.zoom;
+      var hwy = (e.clientY - this.camera.y) / this.zoom;
+      var overPill = false;
+      if (this._zonePills) {
+        for (var hp = 0; hp < this._zonePills.length; hp++) {
+          var hpill = this._zonePills[hp];
+          if (hwx >= hpill.x0 && hwx <= hpill.x1 && hwy >= hpill.y0 && hwy <= hpill.y1) { overPill = true; break; }
+        }
+      }
+      this._hoverPill = overPill;
+      this.canvas.style.cursor = overPill ? 'pointer' : 'default';
     }
   },
 
@@ -855,6 +867,11 @@ var Engine = {
     }
     // Click on empty space: deselect
     this.selectedFurniture = null;
+
+    // Clic sur le sol : on s'y rend (design — « Clic : aller à un endroit »)
+    if (gp.x > 0.5 && gp.y > 0.5 && gp.x < Board.gridSize - 0.5 && gp.y < Board.gridSize - 0.5 && !Board.isSolid(gp.x, gp.y)) {
+      this.moveTarget = { x: gp.x, y: gp.y, setAt: performance.now() };
+    }
   },
 
   setupChat: function() {
@@ -1329,6 +1346,26 @@ var Engine = {
     if (this.keys['ArrowLeft'] || this.keys['KeyA'] || this.keys['KeyQ']) dx = -1;
     if (this.keys['ArrowRight'] || this.keys['KeyD']) dx = 1;
 
+    // Clic-pour-se-déplacer (design) : le clavier reprend toujours la main
+    if (dx !== 0 || dy !== 0) {
+      this.moveTarget = null;
+    } else if (this.moveTarget) {
+      var mtx = this.moveTarget.x - this.player.x;
+      var mty = this.moveTarget.y - this.player.y;
+      var mtd = Math.sqrt(mtx * mtx + mty * mty);
+      if (mtd < 0.15) {
+        this.moveTarget = null;
+      } else {
+        dx = mtx / mtd; dy = mty / mtd;
+        // Si on bute contre un obstacle, on abandonne la cible proprement
+        var probeX = this.player.x + dx * 0.3;
+        var probeY = this.player.y + dy * 0.3;
+        if (Board.isSolid(probeX, this.player.y) && Board.isSolid(this.player.x, probeY)) {
+          this.moveTarget = null; dx = 0; dy = 0;
+        }
+      }
+    }
+
     if (dx !== 0 || dy !== 0) {
       var len = Math.sqrt(dx * dx + dy * dy);
       dx /= len; dy /= len;
@@ -1583,6 +1620,27 @@ var Engine = {
 
     // Proximity radius (gradient)
     this.drawProximityRadius(ctx);
+
+    // Marqueur de destination du clic-pour-se-déplacer (pulsation accent)
+    if (this.moveTarget) {
+      var mtPos = Board.iso(this.moveTarget.x, this.moveTarget.y);
+      var mtAge = (performance.now() - this.moveTarget.setAt) / 1000;
+      var mtPulse = (mtAge * 1.4) % 1;
+      var mtAccent = this.themeColor('--accent', '#5b6cff');
+      ctx.save();
+      ctx.translate(mtPos.x, mtPos.y);
+      ctx.scale(1, 0.5);
+      ctx.strokeStyle = this._withAlpha(mtAccent, 0.55 * (1 - mtPulse));
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6 + mtPulse * 22, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = this._withAlpha(mtAccent, 0.8);
+      ctx.beginPath();
+      ctx.arc(0, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // Reactions
     this.drawReactions(ctx);
