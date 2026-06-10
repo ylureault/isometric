@@ -119,12 +119,48 @@
     });
   }
 
+  // Espace d'écran par table : quand on s'assoit à une table de travail,
+  // une pastille propose d'ouvrir l'espace de partage d'écran de cette table.
+  // Le serveur crée l'espace à la volée (spaceId « table:<id> »).
+  function wireTableSpace() {
+    if (typeof Engine === 'undefined' || !document.getElementById('game-canvas')) return;
+    var pill = document.createElement('button');
+    pill.id = 'table-space-pill';
+    pill.className = 'table-space-pill glass';
+    pill.style.display = 'none';
+    pill.setAttribute('aria-label', "Ouvrir l'espace d'écran de la table");
+    document.body.appendChild(pill);
+
+    var currentTableId = null;
+    pill.addEventListener('click', function() {
+      if (!currentTableId) return;
+      var t = Engine.tables.get(currentTableId);
+      var name = t && t.name ? t.name : 'Table';
+      UI.openCollabSpace('table:' + currentTableId, 'Table « ' + name + ' » — Partage d\'écran');
+    });
+
+    setInterval(function() {
+      var tid = Engine.player ? Engine.player.tableId : null;
+      if (tid === currentTableId) return;
+      currentTableId = tid;
+      if (tid && Engine.tables.get(tid)) {
+        var t = Engine.tables.get(tid);
+        pill.innerHTML = '<span class="tsp-dot"></span>🖥️ Espace de la table « ' +
+          (t.name || 'Table') + ' » <span class="tsp-hint">Partager un écran</span>';
+        pill.style.display = 'flex';
+      } else {
+        pill.style.display = 'none';
+      }
+    }, 600);
+  }
+
   function init() {
     buildSwatches();
     buildAccessoryChips();
     wireShareLink();
     wireThemes();
     wireRadiusPresets();
+    wireTableSpace();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

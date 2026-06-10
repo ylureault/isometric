@@ -6,7 +6,7 @@
 
 [![Licence: MIT](https://img.shields.io/badge/Licence-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-289%20passing-brightgreen)](#-tests)
+[![Tests](https://img.shields.io/badge/tests-292%20passing-brightgreen)](#-tests)
 [![CI](https://github.com/ylureault/isometric/actions/workflows/ci.yml/badge.svg)](https://github.com/ylureault/isometric/actions/workflows/ci.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg)](CONTRIBUTING.md)
 
@@ -60,19 +60,22 @@ See [Démarrage rapide](#-démarrage-rapide) and [CONTRIBUTING.md](CONTRIBUTING.
 
 ### 🎙️ Communication
 - **Audio spatial par proximité** — le volume des voix s'ajuste selon la distance entre avatars (WebRTC). Rayon d'écoute réglable.
+- **Rayon de parole visible** — un cercle respirant entoure votre avatar; l'admin choisit le rayon pour toute la salle (50 cm à 8 m) et le cercle s'agrandit en direct. Les personnes réunies dans un même cercle conversent naturellement.
 - **Partage d'écran** — diffusez votre écran aux participants proches (WebRTC).
 - **Chat textuel** — messagerie en temps réel avec historique de salle.
 - **Réactions & lever de main** — exprimez-vous rapidement, signalez que vous voulez parler (`H`).
 
 ### 🗺️ Espace & avatars
 - **Vue isométrique 3D** rendue en Canvas 2D, avec **bascule en vue de dessus** (`V`).
-- **4 environnements** : bureau, open space, salle de conférence, coworking (zones numérotées).
+- **7 environnements & formats** : bureau, open space, salle de conférence, coworking, World Café, Forum Ouvert, Cercle (codéveloppement).
+- **5 thèmes d'ambiance** — Jour, Nuit, Corporate, Nature, Festif : l'admin change l'ambiance (interface + salle) pour tout le monde, en direct.
 - **Personnalisation d'avatar** — peau, cheveux, t-shirt, pantalon, chaussures.
 - **Grille redimensionnable** — de 10×10 à 100×100 tuiles.
 - **Mini-carte** togglable (`Tab`) pour se repérer.
 
 ### 🤝 Collaboration
-- **Tables de travail** — regroupez-vous, prenez des notes partagées par table.
+- **Tables de travail** — regroupez-vous, prenez des notes partagées par table. Chaque table possède son **espace de partage d'écran** dédié.
+- **Paperboards** — placez autant de tableaux blancs que nécessaire (mode édition), chacun garde son contenu propre, comme en salle.
 - **Tableaux blancs collaboratifs** — traits, textes et post-its en temps réel.
 - **Espaces de collaboration** dédiés au sein d'une salle.
 - **Sous-salles (breakout rooms)** — portes reliées pour téléporter les participants vers des espaces séparés.
@@ -84,6 +87,7 @@ See [Démarrage rapide](#-démarrage-rapide) and [CONTRIBUTING.md](CONTRIBUTING.
 - **Mode diffusion (broadcast)** — prise de parole prioritaire (`Espace`).
 - **Anti-abus intégré** — limites de débit (rate limiting) côté serveur sur les positions, traits, chat, etc.
 - **Nettoyage automatique** des salles vides et des participants déconnectés.
+- **Persistance réelle** — chaque salle est sauvegardée sur disque : revenez des semaines plus tard avec le même lien, tout est là (mobilier, tableaux, post-its, notes, thème).
 
 ---
 

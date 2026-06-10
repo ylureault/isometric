@@ -2005,12 +2005,14 @@ const UI = {
   collabConnections: new Map(), // socketId -> { connection, videoElement }
   collabLocalStream: null,
 
-  openCollabSpace: function(spaceId) {
+  openCollabSpace: function(spaceId, title) {
     var self = this;
     var overlay = document.getElementById('collab-space-overlay');
     if (!overlay) return;
     this.activeCollabSpace = spaceId;
     overlay.style.display = 'flex';
+    var titleEl = document.getElementById('collab-space-title');
+    if (titleEl) titleEl.textContent = title || 'Espace Collaboratif';
 
     var grid = document.getElementById('collab-space-grid');
     grid.innerHTML = '<div class="collab-screen-tile collab-screen-empty"><p>Aucun partage d\'écran en cours</p><p style="font-size:0.75rem;color:#666;">Cliquez sur \u00ab Partager mon écran \u00bb pour commencer</p></div>';

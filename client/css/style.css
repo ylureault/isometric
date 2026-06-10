@@ -581,6 +581,27 @@ body.ui-dark-mode .share-close:hover { background: rgba(255,255,255,0.1); color:
 .preset-btn:hover { background: rgba(74,111,165,0.15); border-color: var(--color-primary); transform: translateY(-1px); }
 .preset-btn:active { transform: translateY(0); }
 
+/* Pastille « Espace de la table » — apparaît quand on s'assoit à une table */
+.table-space-pill {
+  position: fixed; bottom: 86px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 999px; z-index: 44;
+  font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--ink);
+  cursor: pointer; border: 1px solid var(--panel-border);
+  transition: transform .15s, box-shadow .15s;
+  animation: table-pill-in .3s cubic-bezier(.2,.9,.3,1.2);
+}
+.table-space-pill:hover { transform: translateX(-50%) translateY(-2px); }
+@keyframes table-pill-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.tsp-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 4px var(--ring);
+}
+.tsp-hint { font-weight: 500; color: var(--muted); font-size: 11px; padding-left: 6px; border-left: 1px solid var(--panel-border); }
+
 /* Titre de section façon design (tiroir Réglages) */
 .sec-t, .admin-tab-content h4 {
   font-size: 11px; font-weight: 800; letter-spacing: .06em;

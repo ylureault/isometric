@@ -1,7 +1,7 @@
 // Shared constants for the isometric collaborative space
 
 const CONSTANTS = {
-  VERSION: '1.2.0',
+  VERSION: '2.0.0',
   GRID_MIN: 10,
   GRID_MAX: 100,
   GRID_DEFAULT: 20,
