@@ -325,8 +325,9 @@ describe('Test 44: creator rejoin after disconnect', () => {
     const p = rm.getRoom('r1').participants.get('creator');
     expect(p.disconnected).toBe(true);
 
-    // New socket joins with same pseudo
-    const r = rm.joinRoom('r1', 'creator2', { pseudo: 'Alice', colors: {} });
+    // New socket joins with the secret creatorToken (proof of identity)
+    const token = rm.getRoom('r1').creatorToken;
+    const r = rm.joinRoom('r1', 'creator2', { pseudo: 'Alice', colors: {}, creatorToken: token });
     expect(r.participant.role).toBe('creator');
     expect(r.participant.isAdmin).toBe(true);
     // Old socket should be cleaned up

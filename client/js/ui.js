@@ -164,29 +164,103 @@ const UI = {
     }
   },
 
+  // Build the share/invite experience: prominent button + popover with
+  // copy / WhatsApp / e-mail / native share / QR code.
+  shareUrl: '',
+
   showCopyLink(roomId) {
     const container = document.getElementById('copy-link-container');
-    if (container) {
-      container.style.display = 'flex';
-      const url = `${window.location.origin}/client/room.html?room=${roomId}`;
-      const urlDisplay = document.getElementById('room-url-display');
-      if (urlDisplay) urlDisplay.textContent = url;
+    if (!container) return;
+    container.style.display = 'flex';
+    this.shareUrl = `${window.location.origin}/client/room.html?room=${roomId}`;
+    this.initShare();
+  },
 
-      // Wire up copy button with feedback
-      const copyBtn = document.getElementById('btn-copy-link');
-      if (copyBtn && !copyBtn._wired) {
-        copyBtn._wired = true;
-        copyBtn.addEventListener('click', () => {
-          navigator.clipboard.writeText(url).then(() => {
-            copyBtn.textContent = 'Copié !';
-            copyBtn.classList.add('copied');
-            setTimeout(() => { copyBtn.textContent = 'Copier le lien'; copyBtn.classList.remove('copied'); }, 2000);
-          }).catch(() => {
-            // Fallback: select text
-            if (urlDisplay) { urlDisplay.select && urlDisplay.select(); }
-          });
-        });
+  initShare() {
+    if (this._shareWired) { this._refreshShareLinks(); return; }
+    this._shareWired = true;
+
+    const url = this.shareUrl;
+    const btn = document.getElementById('btn-share');
+    const popover = document.getElementById('share-popover');
+    const closeBtn = document.getElementById('share-close');
+    const input = document.getElementById('share-link-input');
+    const copyBtn = document.getElementById('share-copy-btn');
+    const nativeBtn = document.getElementById('share-native');
+    if (input) input.value = url;
+    this._refreshShareLinks();
+
+    const open = () => {
+      popover.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      // Render QR lazily (only when first opened)
+      if (!this._qrRendered && typeof QRCode !== 'undefined') {
+        const ok = QRCode.renderToElement(document.getElementById('share-qr-canvas'), this.shareUrl, { ecc: 'MEDIUM' });
+        this._qrRendered = ok;
+        if (!ok) { const q = document.getElementById('share-qr'); if (q) q.style.display = 'none'; }
       }
+      setTimeout(() => { if (input) { input.focus(); input.select(); } }, 30);
+    };
+    const close = () => { popover.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    const toggle = () => (popover.hidden ? open() : close());
+
+    if (btn) btn.addEventListener('click', toggle);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+
+    // Close on outside click / Escape
+    document.addEventListener('click', (e) => {
+      if (popover.hidden) return;
+      if (!popover.contains(e.target) && e.target !== btn && !btn.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !popover.hidden) close(); });
+
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        this.copyShareUrl(copyBtn);
+      });
+    }
+
+    // Native share sheet (mobile / supported browsers)
+    if (nativeBtn && navigator.share) {
+      nativeBtn.hidden = false;
+      nativeBtn.addEventListener('click', () => {
+        navigator.share({
+          title: 'Rejoignez ma salle',
+          text: 'Rejoignez-moi dans cet espace collaboratif :',
+          url: this.shareUrl,
+        }).catch(() => {});
+      });
+    }
+  },
+
+  _refreshShareLinks() {
+    const url = this.shareUrl;
+    const msg = 'Rejoignez-moi dans cet espace collaboratif : ' + url;
+    const wa = document.getElementById('share-whatsapp');
+    const em = document.getElementById('share-email');
+    if (wa) wa.href = 'https://wa.me/?text=' + encodeURIComponent(msg);
+    if (em) em.href = 'mailto:?subject=' + encodeURIComponent('Invitation — espace collaboratif') +
+      '&body=' + encodeURIComponent(msg);
+    const input = document.getElementById('share-link-input');
+    if (input) input.value = url;
+  },
+
+  copyShareUrl(copyBtn) {
+    const done = () => {
+      if (!copyBtn) return;
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = 'Copié !';
+      copyBtn.classList.add('copied');
+      setTimeout(() => { copyBtn.textContent = orig; copyBtn.classList.remove('copied'); }, 2000);
+    };
+    const fallback = () => {
+      const input = document.getElementById('share-link-input');
+      if (input) { input.focus(); input.select(); try { document.execCommand('copy'); done(); } catch (e) {} }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(this.shareUrl).then(done).catch(fallback);
+    } else {
+      fallback();
     }
   },
 
@@ -607,8 +681,8 @@ const UI = {
     menu.querySelector('[data-action="return-to-player"]').addEventListener('click', function() {
       Engine._cameraCenterTarget = null; // Reset any pending center
       var ps = Board.iso(Engine.player.x, Engine.player.y);
-      Engine.camera.x = Engine.canvas.width / 2 - ps.x * Engine.zoom;
-      Engine.camera.y = Engine.canvas.height / 2 - ps.y * Engine.zoom;
+      Engine.camera.x = Engine.viewW / 2 - ps.x * Engine.zoom;
+      Engine.camera.y = Engine.viewH / 2 - ps.y * Engine.zoom;
       self.hideContextMenu();
     });
   },

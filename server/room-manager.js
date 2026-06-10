@@ -1,7 +1,14 @@
 // Room Manager: complete server-side room state management (hardened)
 
+const crypto = require('crypto');
 const CONSTANTS = require('../shared/constants');
 const Environments = require('../client/js/environments');
+
+// Constant-time string comparison to avoid timing side-channels on the creator token.
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 class RoomManager {
   constructor() {
@@ -40,6 +47,22 @@ class RoomManager {
         }
       }
 
+      // Reclaim empty collab spaces and sub-rooms (otherwise they leak forever)
+      if (room.collabSpaces) {
+        for (const [spaceId, space] of room.collabSpaces) {
+          if (space.users.size === 0 && space.screens.size === 0) {
+            room.collabSpaces.delete(spaceId);
+          }
+        }
+      }
+      if (room.subRooms) {
+        for (const [subRoomId, sr] of room.subRooms) {
+          if (sr.participants.size === 0) {
+            room.subRooms.delete(subRoomId);
+          }
+        }
+      }
+
       // Remove truly empty rooms older than cleanup timeout
       if (room.participants.size === 0 && (now - room.createdAt > CONSTANTS.EMPTY_ROOM_CLEANUP_TIMEOUT)) {
         this._destroyRoom(roomId);
@@ -47,11 +70,21 @@ class RoomManager {
     }
   }
 
+  // Optional hook fired right before a room is removed, so the transport layer
+  // (index.js) can clear any setInterval/setTimeout it owns for that room.
+  setDestroyHook(fn) {
+    this._onDestroy = typeof fn === 'function' ? fn : null;
+  }
+
   _destroyRoom(roomId) {
+    const room = this.rooms.get(roomId);
     const timerId = this._cleanupTimers.get(roomId);
     if (timerId) {
       clearTimeout(timerId);
       this._cleanupTimers.delete(roomId);
+    }
+    if (room && this._onDestroy) {
+      try { this._onDestroy(room); } catch (e) { /* never let a hook break cleanup */ }
     }
     this.rooms.delete(roomId);
   }
@@ -96,6 +129,7 @@ class RoomManager {
       environment,
       gridSize,
       creatorSocketId: null,
+      creatorToken: crypto.randomBytes(16).toString('hex'), // secret proof of creator identity
       participants: new Map(),
       tables: new Map(),
       furniture: [],
@@ -153,9 +187,11 @@ class RoomManager {
     const pseudo = (data.pseudo || '').toString().trim().slice(0, 30) || 'Anonyme';
     let isCreator = !!(data.isCreator && !room.creatorSocketId);
 
-    if (!isCreator && room.creatorSocketId) {
+    // Creator reconnection: only the holder of the secret creatorToken can reclaim
+    // the creator slot. Pseudo matching alone is NOT trusted (anyone can copy a pseudo).
+    if (!isCreator && room.creatorSocketId && data.creatorToken && safeEqual(data.creatorToken, room.creatorToken)) {
       const oldCreator = room.participants.get(room.creatorSocketId);
-      if (oldCreator && oldCreator.disconnected && oldCreator.pseudo === pseudo) {
+      if (oldCreator && oldCreator.disconnected) {
         room.participants.delete(room.creatorSocketId);
         room.creatorSocketId = socketId;
         isCreator = true;
@@ -210,6 +246,8 @@ class RoomManager {
       participants: this.getParticipantsList(roomId),
       tables: this.getTablesList(roomId),
       theme: room.theme,
+      // Only the creator receives the token; it proves identity on reconnection.
+      creatorToken: isCreator ? room.creatorToken : undefined,
     };
   }
 
@@ -1169,9 +1207,10 @@ class RoomManager {
 
   _generateInviteCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 for clarity
+    const bytes = crypto.randomBytes(CONSTANTS.INVITE_CODE_LENGTH);
     let code = '';
     for (let i = 0; i < CONSTANTS.INVITE_CODE_LENGTH; i++) {
-      code += chars[Math.floor(Math.random() * chars.length)];
+      code += chars[bytes[i] % chars.length];
     }
     return code;
   }

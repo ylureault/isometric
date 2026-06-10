@@ -22,6 +22,7 @@ const Network = {
   onParticipantDisconnected: null,
   onReconnecting: null,
   onReconnected: null,
+  onReconnectFailed: null,
 
   init() {
     this.socket = io({
@@ -29,7 +30,7 @@ const Network = {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10000,
-      reconnectionAttempts: Infinity,
+      reconnectionAttempts: CONSTANTS.MAX_RECONNECT_ATTEMPTS,
     });
 
     this.setupSocketEvents();
@@ -50,6 +51,12 @@ const Network = {
       this.connected = false;
       this.reconnecting = true;
       if (this.onReconnecting) this.onReconnecting();
+    });
+
+    // All reconnection attempts exhausted — surface a clear dead-end to the user.
+    this.socket.io.on('reconnect_failed', () => {
+      this.reconnecting = false;
+      if (this.onReconnectFailed) this.onReconnectFailed();
     });
 
     // Remote player joined
@@ -112,6 +119,10 @@ const Network = {
   joinRoom(roomId, config, callback) {
     this.roomId = roomId;
 
+    // Reclaim a previously-created room on reconnect using the stored secret token.
+    let storedToken;
+    try { storedToken = sessionStorage.getItem('creatorToken:' + roomId) || undefined; } catch (e) { /* private mode */ }
+
     this.socket.emit('join-room', {
       roomId,
       pseudo: config.pseudo,
@@ -122,6 +133,7 @@ const Network = {
       environment: config.environment,
       gridSize: config.gridSize,
       password: config.password || undefined, // improvement #2
+      creatorToken: config.creatorToken || storedToken,
     }, (response) => {
       if (response.error) {
         if (this.onError) this.onError(response.error);
@@ -130,6 +142,11 @@ const Network = {
       }
 
       this.mySocketId = this.socket.id;
+
+      // Persist the creator token so a refresh / reconnect keeps creator rights.
+      if (response.creatorToken) {
+        try { sessionStorage.setItem('creatorToken:' + roomId, response.creatorToken); } catch (e) { /* ignore */ }
+      }
 
       // Populate remote players from existing participants
       for (const p of response.participants) {

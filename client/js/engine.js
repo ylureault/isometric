@@ -410,7 +410,23 @@ var Engine = {
     });
   },
 
-  resize: function() { this.canvas.width = window.innerWidth; this.canvas.height = window.innerHeight; },
+  resize: function() {
+    // Logical (CSS) viewport size used by all camera/layout math.
+    this.viewW = window.innerWidth;
+    this.viewH = window.innerHeight;
+    // Render at the device pixel ratio (capped at 2) for crisp output on Retina/4K
+    // without paying the full cost on very high-DPI displays.
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.style.width = this.viewW + 'px';
+    this.canvas.style.height = this.viewH + 'px';
+    this.canvas.width = Math.round(this.viewW * this.dpr);
+    this.canvas.height = Math.round(this.viewH * this.dpr);
+    // Backing-store resize resets context state — re-apply smoothing prefs.
+    if (this.ctx) {
+      this.ctx.imageSmoothingEnabled = true;
+      this.ctx.imageSmoothingQuality = 'high';
+    }
+  },
 
   genStars: function() {
     this.stars = [];
@@ -494,8 +510,8 @@ var Engine = {
       this.camera.y = this.cameraStart.y + (e.clientY - this.dragStart.y);
       // #18 Pan limits
       var maxPan = Board.gridSize * Board.tileWidth * this.zoom;
-      this.camera.x = Math.max(-maxPan, Math.min(this.canvas.width + maxPan * 0.5, this.camera.x));
-      this.camera.y = Math.max(-maxPan, Math.min(this.canvas.height + maxPan * 0.5, this.camera.y));
+      this.camera.x = Math.max(-maxPan, Math.min(this.viewW + maxPan * 0.5, this.camera.x));
+      this.camera.y = Math.max(-maxPan, Math.min(this.viewH + maxPan * 0.5, this.camera.y));
     }
     // #21 Furniture hover tooltip
     if (this.started && !this.isDragging) {
@@ -593,8 +609,8 @@ var Engine = {
     var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
     var ps = Board.iso(gp.x, gp.y);
     this._cameraCenterTarget = {
-      x: this.canvas.width / 2 - ps.x * this.zoom,
-      y: this.canvas.height / 2 - ps.y * this.zoom,
+      x: this.viewW / 2 - ps.x * this.zoom,
+      y: this.viewH / 2 - ps.y * this.zoom,
     };
   },
 
@@ -1167,7 +1183,7 @@ var Engine = {
     if (typeof UXEnhancements !== 'undefined' && UXEnhancements.shouldReduceParticles()) count = 40;
     for (var i = 0; i < count; i++) {
       this.confetti.push({
-        x: Math.random() * this.canvas.width, y: -Math.random() * 200,
+        x: Math.random() * this.viewW, y: -Math.random() * 200,
         vx: (Math.random() - 0.5) * 5, vy: Math.random() * 3 + 2,
         color: ['#FF6B6B','#FFD93D','#6BCB77','#4D96FF','#FF78C4'][Math.floor(Math.random() * 5)],
         size: Math.random() * 6 + 3, rot: Math.random() * 6, opacity: 1,
@@ -1309,8 +1325,8 @@ var Engine = {
       else { this.followTarget = null; }
     }
     var ps = Board.iso(followX, followY);
-    var tcx = this.canvas.width / 2 - ps.x * this.zoom;
-    var tcy = this.canvas.height / 2 - ps.y * this.zoom;
+    var tcx = this.viewW / 2 - ps.x * this.zoom;
+    var tcy = this.viewH / 2 - ps.y * this.zoom;
     // #16 Double-click camera centering
     if (this._cameraCenterTarget) {
       tcx = this._cameraCenterTarget.x;
@@ -1349,7 +1365,7 @@ var Engine = {
     for (var j = 0; j < this.confetti.length; j++) {
       var c = this.confetti[j];
       c.x += c.vx; c.y += c.vy; c.vy += 0.06; c.rot += 0.05; c.opacity -= 0.004;
-      if (c.opacity > 0 && c.y < this.canvas.height + 50) newConf.push(c);
+      if (c.opacity > 0 && c.y < this.viewH + 50) newConf.push(c);
     }
     this.confetti = newConf;
 
@@ -1373,8 +1389,10 @@ var Engine = {
     if (this.viewMode === 'topdown') { this.renderTopDown(ts); return; }
 
     var ctx = this.ctx;
-    var w = this.canvas.width;
-    var h = this.canvas.height;
+    var w = this.viewW;
+    var h = this.viewH;
+    // Map logical pixels -> device pixels for this frame (crisp HiDPI rendering).
+    ctx.setTransform(this.dpr || 1, 0, 0, this.dpr || 1, 0, 0);
 
     // Background — light professional with #9 subtle parallax
     var parallaxX = this.camera.x * 0.02;
@@ -1406,11 +1424,15 @@ var Engine = {
     this.tables.forEach(function(t) {
       entities.push({ type: 't', t: t, sk: t.x + t.y + (t.width + t.height) / 2 });
     });
-    entities.push({ type: 'me', sk: this.player.x + this.player.y });
+    // Tiny elevation bias (always < 1) keeps a character on a raised stage in
+    // front of the stage surface without ever crossing an iso tile boundary.
+    var meElev = Board.getElevationAt(Math.floor(this.player.x), Math.floor(this.player.y)) || 0;
+    entities.push({ type: 'me', sk: this.player.x + this.player.y + meElev * 0.01 });
     var self = this;
     Network.remotePlayers.forEach(function(p, sid) {
       if (p.opacity <= 0) return;
-      entities.push({ type: 'r', p: p, sid: sid, sk: p.renderX + p.renderY });
+      var pElev = Board.getElevationAt(Math.floor(p.renderX), Math.floor(p.renderY)) || 0;
+      entities.push({ type: 'r', p: p, sid: sid, sk: p.renderX + p.renderY + pElev * 0.01 });
     });
     // #45 Only resort when entities actually change positions
     entities.sort(function(a, b) { return a.sk - b.sk; });
@@ -1815,8 +1837,10 @@ var Engine = {
 
   renderTopDown: function(ts) {
     var ctx = this.ctx;
-    var w = this.canvas.width;
-    var h = this.canvas.height;
+    var w = this.viewW;
+    var h = this.viewH;
+    // Map logical pixels -> device pixels for this frame (crisp HiDPI rendering).
+    ctx.setTransform(this.dpr || 1, 0, 0, this.dpr || 1, 0, 0);
     var gs = Board.gridSize;
 
     // Calculate cell size to fit the screen nicely
@@ -2029,8 +2053,8 @@ var Engine = {
       // Center camera on grid
       var cellSize = this.getEditCellSize();
       this.editZoom = 1;
-      this.editCamera.x = this.canvas.width / 2 - (Board.gridSize * cellSize) / 2;
-      this.editCamera.y = this.canvas.height / 2 - (Board.gridSize * cellSize) / 2;
+      this.editCamera.x = this.viewW / 2 - (Board.gridSize * cellSize) / 2;
+      this.editCamera.y = this.viewH / 2 - (Board.gridSize * cellSize) / 2;
       this.editTool = 'place';
       this.editSelectedType = null;
       this.editDragging = null;
@@ -2045,7 +2069,7 @@ var Engine = {
   },
 
   getEditCellSize: function() {
-    var maxDim = Math.min(this.canvas.width, this.canvas.height) * 0.85;
+    var maxDim = Math.min(this.viewW, this.viewH) * 0.85;
     return Math.max(10, Math.min(40, Math.floor(maxDim / Board.gridSize)));
   },
 
@@ -2215,8 +2239,10 @@ var Engine = {
 
   renderEditMode: function(ts) {
     var ctx = this.ctx;
-    var w = this.canvas.width;
-    var h = this.canvas.height;
+    var w = this.viewW;
+    var h = this.viewH;
+    // Map logical pixels -> device pixels for this frame (crisp HiDPI rendering).
+    ctx.setTransform(this.dpr || 1, 0, 0, this.dpr || 1, 0, 0);
     var gs = Board.gridSize;
     var cellSize = this.getEditCellSize() * this.editZoom;
 

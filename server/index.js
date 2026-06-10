@@ -2,26 +2,85 @@
 
 const express = require('express');
 const http = require('http');
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 const path = require('path');
 const roomManager = require('./room-manager');
 const AudioSignaling = require('./audio-signaling');
+const CONSTANTS = require('../shared/constants');
+
+// Allowed CORS origins: '*' in dev, a strict comma-separated allow-list in prod via CLIENT_ORIGIN.
+const ALLOWED_ORIGINS = process.env.CLIENT_ORIGIN
+  ? process.env.CLIENT_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+  : '*';
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*' },
+  cors: { origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] },
   pingInterval: 10000,
   pingTimeout: 5000,
+  maxHttpBufferSize: 1e6, // 1 MB cap per message — blocks oversized payload DoS
 });
 
 const PORT = process.env.PORT || 3000;
 const audioSignaling = new AudioSignaling(io, roomManager);
 const timerIntervals = new Map(); // timerId -> intervalId, for cleanup on cancel
+const voteTimeouts = new Map(); // voteId -> timeoutId, for cleanup when a room dies
 
-app.use(express.json());
+// Returns true when targetSocketId is a real participant of roomId.
+// Guards every WebRTC relay so signals can never cross room boundaries.
+function isInRoom(roomId, targetSocketId) {
+  if (!roomId || typeof targetSocketId !== 'string') return false;
+  const room = roomManager.getRoom(roomId);
+  return !!(room && room.participants.has(targetSocketId));
+}
+
+// Lightweight per-socket token-bucket rate limiter.
+function makeRateLimiter() {
+  const buckets = new Map(); // key -> { count, resetAt }
+  return function allow(key, perSecond) {
+    const now = Date.now();
+    let b = buckets.get(key);
+    if (!b || now >= b.resetAt) {
+      b = { count: 0, resetAt: now + 1000 };
+      buckets.set(key, b);
+    }
+    b.count++;
+    return b.count <= perSecond;
+  };
+}
+
+// Minimal security headers (no external deps).
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'microphone=(self), display-capture=(self), geolocation=()');
+  next();
+});
+
+app.use(express.json({ limit: '64kb' }));
 app.use('/client', express.static(path.join(__dirname, '..', 'client')));
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
+
+app.get('/health', (req, res) => res.json({ status: 'ok', rooms: roomManager.rooms.size, uptime: process.uptime() }));
+
+// When a room is reclaimed, clear any timers/votes we own for it (prevents leaks)
+roomManager.setDestroyHook((room) => {
+  if (room.timers) {
+    for (const [timerId] of room.timers) {
+      const iv = timerIntervals.get(timerId);
+      if (iv) { clearInterval(iv); timerIntervals.delete(timerId); }
+    }
+  }
+  if (room.votes) {
+    for (const [voteId] of room.votes) {
+      const to = voteTimeouts.get(voteId);
+      if (to) { clearTimeout(to); voteTimeouts.delete(voteId); }
+    }
+  }
+});
 
 app.get('/', (req, res) => res.redirect('/client/index.html'));
 
@@ -51,8 +110,11 @@ io.on('connection', (socket) => {
   let currentRoomId = null;
   const getCurrentRoomId = () => currentRoomId;
 
-  // Setup WebRTC signaling
-  audioSignaling.setup(socket, getCurrentRoomId);
+  // Per-socket rate limiting (resets every second).
+  const rateLimit = makeRateLimiter();
+
+  // Setup WebRTC signaling (passes the room check so signals stay inside the room)
+  audioSignaling.setup(socket, getCurrentRoomId, isInRoom);
 
   // ===== JOIN / LEAVE =====
 
@@ -69,6 +131,9 @@ io.on('connection', (socket) => {
     const { roomId, pseudo, colors, isCreator } = data;
 
     let room = roomManager.getRoom(roomId);
+    if (typeof roomId !== 'string' || !roomId || roomId.length > 64) {
+      return callback({ error: 'room_not_found' });
+    }
     if (!room && isCreator) {
       room = roomManager.createRoom(roomId, {
         name: data.roomName || 'Room',
@@ -81,6 +146,9 @@ io.on('connection', (socket) => {
     const spawn = roomManager.findSpawnPosition(roomId);
     const result = roomManager.joinRoom(roomId, socket.id, {
       pseudo, colors, isCreator,
+      accessory: data.accessory,
+      password: data.password,
+      creatorToken: data.creatorToken,
       x: spawn.x, y: spawn.y,
     });
 
@@ -117,6 +185,7 @@ io.on('connection', (socket) => {
       theme: result.theme,
       furniture: furnitureState,
       activeScreenShare: room.activeScreenShare || null,
+      creatorToken: result.creatorToken, // creator stores this to reclaim the room on reconnect
       you: {
         socketId: socket.id,
         x: result.participant.x,
@@ -196,13 +265,14 @@ io.on('connection', (socket) => {
         roomManager.leaveRoom(roomId, sid);
         io.to(roomId).emit('participant-left', { socketId: sid, pseudo: pp.pseudo });
       }
-    }, 30000);
+    }, CONSTANTS.RECONNECT_TIMEOUT);
   });
 
   // ===== POSITION =====
 
   socket.on('position-update', (data) => {
     if (!currentRoomId) return;
+    if (!rateLimit('pos', CONSTANTS.RATE_LIMIT_POSITION)) return;
     const result = roomManager.updatePosition(currentRoomId, socket.id, data);
 
     // Broadcast validated position (not raw client data)
@@ -344,6 +414,7 @@ io.on('connection', (socket) => {
 
   socket.on('update-table-notes', (data) => {
     if (!currentRoomId) return;
+    if (!rateLimit('notes', CONSTANTS.RATE_LIMIT_GENERIC)) return;
     roomManager.updateTableNotes(currentRoomId, data.tableId, data.content);
     socket.to(currentRoomId).emit('table-notes-updated', {
       tableId: data.tableId,
@@ -458,6 +529,8 @@ io.on('connection', (socket) => {
 
   socket.on('wb-stroke', (data) => {
     if (!currentRoomId) return;
+    if (!rateLimit('wb', CONSTANTS.RATE_LIMIT_STROKE)) return;
+    if (!data || typeof data.strokeData !== 'object' || data.strokeData === null) return;
     data.strokeData.socketId = socket.id;
     roomManager.addWhiteboardStroke(currentRoomId, data.whiteboardId, data.strokeData);
     socket.to(currentRoomId).emit('wb-stroke', {
@@ -588,13 +661,16 @@ io.on('connection', (socket) => {
     const result = roomManager.createVote(currentRoomId, socket.id, data);
     if (result.error) return callback(result);
     io.to(currentRoomId).emit('vote-created', result.vote);
-    // Auto-end after duration
+    // Auto-end after duration — tracked so it can be cleared if the room dies
     const voteId = result.vote.id;
     const rid = currentRoomId;
-    setTimeout(() => {
+    const duration = Math.max(5, Math.min(3600, parseInt(data.duration) || 60));
+    const to = setTimeout(() => {
+      voteTimeouts.delete(voteId);
       const finalResults = roomManager.endVote(rid, voteId);
       if (finalResults) io.to(rid).emit('vote-ended', finalResults);
-    }, (data.duration || 60) * 1000);
+    }, duration * 1000);
+    voteTimeouts.set(voteId, to);
     callback(result);
   });
 
@@ -722,9 +798,9 @@ io.on('connection', (socket) => {
     });
   });
 
-  // WebRTC signaling for collab space screens
+  // WebRTC signaling for collab space screens — target must share the same room
   socket.on('collab-rtc-offer', (data) => {
-    if (!currentRoomId) return;
+    if (!currentRoomId || !isInRoom(currentRoomId, data.targetSocketId)) return;
     io.to(data.targetSocketId).emit('collab-rtc-offer', {
       fromSocketId: socket.id,
       spaceId: data.spaceId,
@@ -733,7 +809,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('collab-rtc-answer', (data) => {
-    if (!currentRoomId) return;
+    if (!currentRoomId || !isInRoom(currentRoomId, data.targetSocketId)) return;
     io.to(data.targetSocketId).emit('collab-rtc-answer', {
       fromSocketId: socket.id,
       spaceId: data.spaceId,
@@ -742,7 +818,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('collab-rtc-ice', (data) => {
-    if (!currentRoomId) return;
+    if (!currentRoomId || !isInRoom(currentRoomId, data.targetSocketId)) return;
     io.to(data.targetSocketId).emit('collab-rtc-ice', {
       fromSocketId: socket.id,
       spaceId: data.spaceId,
@@ -1004,6 +1080,7 @@ io.on('connection', (socket) => {
   // ===== REACTION TRACKING (improvement #10) =====
   socket.on('reaction', (data) => {
     if (!currentRoomId) return;
+    if (!rateLimit('react', CONSTANTS.RATE_LIMIT_GENERIC)) return;
     roomManager.incrementStat(currentRoomId, 'reactionsCount');
     socket.to(currentRoomId).emit('reaction', {
       socketId: socket.id,
@@ -1013,10 +1090,15 @@ io.on('connection', (socket) => {
 });
 
 function generateRoomId() {
+  // Crypto-secure, collision-checked, unguessable room id (base36, 10 chars).
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let id = '';
-  for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
-  return id;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const bytes = crypto.randomBytes(10);
+    let id = '';
+    for (let i = 0; i < 10; i++) id += chars[bytes[i] % chars.length];
+    if (!roomManager.getRoom(id)) return id;
+  }
+  return crypto.randomBytes(12).toString('hex');
 }
 
 server.listen(PORT, () => {

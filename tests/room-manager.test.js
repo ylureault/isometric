@@ -829,14 +829,14 @@ describe('EPIC 13 — Hardening', () => {
 
   test('Creator regains admin on rejoin after disconnect', () => {
     rm.createRoom('r1', { name: 'Test' });
-    rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    const first = rm.joinRoom('r1', 's1', { pseudo: 'Alice', colors: {}, isCreator: true });
     // Mark creator disconnected
     rm.markDisconnected('r1', 's1');
     const room = rm.getRoom('r1');
     const oldP = room.participants.get('s1');
     expect(oldP.disconnected).toBe(true);
-    // Rejoin with same pseudo but new socket
-    const r = rm.joinRoom('r1', 's2', { pseudo: 'Alice', colors: {} });
+    // Rejoin with the secret creatorToken (proof of identity), new socket
+    const r = rm.joinRoom('r1', 's2', { pseudo: 'Alice', colors: {}, creatorToken: first.creatorToken });
     expect(r.participant.role).toBe('creator');
     expect(r.participant.isAdmin).toBe(true);
     // Old socket entry removed

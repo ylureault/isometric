@@ -138,13 +138,22 @@ describe('joinRoom', () => {
     expect(r.participant.role).toBe('participant');
   });
 
-  test('creator rejoin: same pseudo reconnects as creator', () => {
+  test('creator rejoin: valid creatorToken reconnects as creator', () => {
+    rm.createRoom('r1', { name: 'T' });
+    const first = rm.joinRoom('r1', 'c1', { pseudo: 'Alice', colors: {}, isCreator: true });
+    rm.markDisconnected('r1', 'c1');
+    const r = rm.joinRoom('r1', 'c2', { pseudo: 'Alice', colors: {}, creatorToken: first.creatorToken });
+    expect(r.participant.role).toBe('creator');
+    expect(r.participant.isAdmin).toBe(true);
+  });
+
+  test('creator rejoin: impostor without token stays participant (no pseudo hijack)', () => {
     rm.createRoom('r1', { name: 'T' });
     rm.joinRoom('r1', 'c1', { pseudo: 'Alice', colors: {}, isCreator: true });
     rm.markDisconnected('r1', 'c1');
-    const r = rm.joinRoom('r1', 'c2', { pseudo: 'Alice', colors: {} });
-    expect(r.participant.role).toBe('creator');
-    expect(r.participant.isAdmin).toBe(true);
+    const r = rm.joinRoom('r1', 'evil', { pseudo: 'Alice', colors: {} });
+    expect(r.participant.role).toBe('participant');
+    expect(r.participant.isAdmin).toBe(false);
   });
 
   test('position with x/y provided is clamped', () => {

@@ -6,11 +6,19 @@ class AudioSignaling {
     this.roomManager = roomManager;
   }
 
-  setup(socket, getCurrentRoomId) {
-    // WebRTC signaling: offer
+  setup(socket, getCurrentRoomId, isInRoom) {
+    // Fallback if no room guard is provided (keeps backward compatibility / tests)
+    const sameRoom = typeof isInRoom === 'function'
+      ? isInRoom
+      : (roomId, target) => {
+          const room = this.roomManager.getRoom(roomId);
+          return !!(room && room.participants.has(target));
+        };
+
+    // WebRTC signaling: offer — relayed only to a peer in the same room
     socket.on('rtc-offer', (data) => {
       const roomId = getCurrentRoomId();
-      if (!roomId) return;
+      if (!roomId || !sameRoom(roomId, data.targetSocketId)) return;
       const { targetSocketId, offer } = data;
       this.io.to(targetSocketId).emit('rtc-offer', {
         fromSocketId: socket.id,
@@ -21,7 +29,7 @@ class AudioSignaling {
     // WebRTC signaling: answer
     socket.on('rtc-answer', (data) => {
       const roomId = getCurrentRoomId();
-      if (!roomId) return;
+      if (!roomId || !sameRoom(roomId, data.targetSocketId)) return;
       const { targetSocketId, answer } = data;
       this.io.to(targetSocketId).emit('rtc-answer', {
         fromSocketId: socket.id,
@@ -32,7 +40,7 @@ class AudioSignaling {
     // WebRTC signaling: ICE candidate
     socket.on('rtc-ice-candidate', (data) => {
       const roomId = getCurrentRoomId();
-      if (!roomId) return;
+      if (!roomId || !sameRoom(roomId, data.targetSocketId)) return;
       const { targetSocketId, candidate } = data;
       this.io.to(targetSocketId).emit('rtc-ice-candidate', {
         fromSocketId: socket.id,
@@ -79,8 +87,10 @@ class AudioSignaling {
       }
     });
 
-    // Screen share RTC signaling (separate from audio)
+    // Screen share RTC signaling (separate from audio) — same-room guard applies
     socket.on('screen-rtc-offer', (data) => {
+      const roomId = getCurrentRoomId();
+      if (!roomId || !sameRoom(roomId, data.targetSocketId)) return;
       const { targetSocketId, offer } = data;
       this.io.to(targetSocketId).emit('screen-rtc-offer', {
         fromSocketId: socket.id,
@@ -89,6 +99,8 @@ class AudioSignaling {
     });
 
     socket.on('screen-rtc-answer', (data) => {
+      const roomId = getCurrentRoomId();
+      if (!roomId || !sameRoom(roomId, data.targetSocketId)) return;
       const { targetSocketId, answer } = data;
       this.io.to(targetSocketId).emit('screen-rtc-answer', {
         fromSocketId: socket.id,
@@ -97,6 +109,8 @@ class AudioSignaling {
     });
 
     socket.on('screen-rtc-ice-candidate', (data) => {
+      const roomId = getCurrentRoomId();
+      if (!roomId || !sameRoom(roomId, data.targetSocketId)) return;
       const { targetSocketId, candidate } = data;
       this.io.to(targetSocketId).emit('screen-rtc-ice-candidate', {
         fromSocketId: socket.id,
