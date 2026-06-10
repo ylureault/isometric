@@ -66,6 +66,7 @@ var Engine = {
 
   init: function() {
     this.player.colors = Object.assign({}, CONSTANTS.DEFAULT_COLORS);
+    try { var sv = localStorage.getItem('insuffle_view'); if (sv === 'topdown' || sv === 'iso') this.viewMode = sv; } catch (err) {}
     this.canvas = document.getElementById('game-canvas');
     this.ctx = this.canvas.getContext('2d');
     this.minimapCanvas = document.getElementById('minimap-canvas');
@@ -89,6 +90,20 @@ var Engine = {
     this.canvas.addEventListener('dblclick', function(e) { self.onDblClick(e); });
     this.canvas.addEventListener('mousedown', function(e) { self.onMouseDown(e); });
     this.canvas.addEventListener('mousemove', function(e) { self.onMouseMove(e); });
+    // Glisser-déposer du mobilier depuis la palette (mode édition)
+    this.canvas.addEventListener('dragover', function(e) {
+      if (!self.editMode || !self._dragFurnitureType) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      var gp = self.editScreenToGrid(e.clientX, e.clientY);
+      self.editMouseGrid = { x: Math.floor(gp.x), y: Math.floor(gp.y) };
+    });
+    this.canvas.addEventListener('drop', function(e) {
+      if (!self.editMode || !self._dragFurnitureType) return;
+      e.preventDefault();
+      var gp = self.editScreenToGrid(e.clientX, e.clientY);
+      self.placeFurnitureAt(self._dragFurnitureType, gp.x, gp.y);
+    });
     this.canvas.addEventListener('mouseup', function(e) { self.onMouseUp(e); });
     this.canvas.addEventListener('click', function(e) { self.onClick(e); });
 
@@ -479,15 +494,28 @@ var Engine = {
     this.zoom = Math.max(CONSTANTS.ZOOM_MIN, Math.min(CONSTANTS.ZOOM_MAX, this.zoom + d));
   },
 
+  // Un overlay modal est-il ouvert ? (tableaux, partage, raccourcis)
+  // Les raccourcis de la scène ne doivent jamais agir « derrière » un overlay.
+  _uiOverlayOpen: function() {
+    var ids = ['postit-overlay', 'whiteboard-overlay', 'collab-space-overlay', 'shortcuts-modal'];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (el && el.style.display !== 'none' && el.style.display !== '') return true;
+      if (el && getComputedStyle(el).display !== 'none' && el.style.display === '' ) return true;
+    }
+    return false;
+  },
+
   onKeyDown: function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable) return;
+    if (e.code !== 'Escape' && this._uiOverlayOpen()) return;
     this.keys[e.code] = true;
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].indexOf(e.code) >= 0) e.preventDefault();
     if (e.code === 'KeyM') { var m = Audio.toggleMute(); this.player.isMuted = m; UI.updateMuteButton(m); }
     if (e.code === 'KeyH') Network.socket.emit('toggle-hand', {});
     if (e.code === 'Tab') { e.preventDefault(); var mc = document.getElementById('minimap-container'); if (mc) mc.style.display = mc.style.display === 'none' ? 'block' : 'none'; }
     if (e.key === '?') UI.toggleShortcutsModal();
-    if (e.code === 'KeyV' && !this.editMode) { this.viewMode = this.viewMode === 'iso' ? 'topdown' : 'iso'; UI.showNotification('Vue : ' + (this.viewMode === 'iso' ? 'Isométrique' : 'Vue de dessus')); if (typeof UXEnhancements !== 'undefined') UXEnhancements.fadeViewTransition(); }
+    if (e.code === 'KeyV' && !this.editMode) { this.viewMode = this.viewMode === 'iso' ? 'topdown' : 'iso'; try { localStorage.setItem('insuffle_view', this.viewMode); } catch (err) {} UI.showNotification('Vue : ' + (this.viewMode === 'iso' ? 'Isométrique' : 'Plan de salle')); if (typeof UXEnhancements !== 'undefined') UXEnhancements.fadeViewTransition(); }
     if (e.code === 'KeyE' && this.player.isAdmin) this.toggleEditMode();
     if (e.code === 'Escape') { if (this.editMode) { this.toggleEditMode(); return; } UI.hideContextMenu(); if (UI.shortcutsModalOpen) UI.toggleShortcutsModal(); if (UI.adminPanelOpen) UI.toggleAdminPanel(); }
     if (e.code === 'Space' && this.player.isAdmin && !this.player.isBroadcasting) {
@@ -571,7 +599,7 @@ var Engine = {
   _showFurnitureTooltip: function(mx, my) {
     var tooltip = document.getElementById('furniture-tooltip');
     if (!tooltip) return;
-    var gp = Board.screenToGrid(mx, my, this.camera.x, this.camera.y, this.zoom);
+    var gp = this.screenToGridView(mx, my);
     var cx = Math.floor(gp.x), cy = Math.floor(gp.y);
     var found = null;
     for (var i = Board.furniture.length - 1; i >= 0; i--) {
@@ -604,7 +632,7 @@ var Engine = {
       if (this.isDragging) {
         var movedDist = Math.abs(e.clientX - this.dragStart.x) + Math.abs(e.clientY - this.dragStart.y);
         if (movedDist < 5) {
-          var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
+          var gp = this.screenToGridView(e.clientX, e.clientY);
           var self = this;
 
           // Check if right-clicking on furniture (admin)
@@ -654,12 +682,43 @@ var Engine = {
   // #16 Double-click to center camera on a point
   onDblClick: function(e) {
     if (!this.started || this.editMode) return;
-    var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
+    if (this.viewMode === 'topdown') return; // le plan est déjà centré
+    var gp = this.screenToGridView(e.clientX, e.clientY);
     var ps = Board.iso(gp.x, gp.y);
     this._cameraCenterTarget = {
       x: this.viewW / 2 - ps.x * this.zoom,
       y: this.viewH / 2 - ps.y * this.zoom,
     };
+  },
+
+  // Case praticable la plus proche autour d'un point (pour marcher vers un
+  // meuble plein) — on privilégie le côté d'où vient le joueur.
+  findWalkableNear: function(cx, cy, fromX, fromY) {
+    var best = null, bestScore = Infinity;
+    for (var r = 1; r <= 2; r++) {
+      for (var ddy = -r; ddy <= r; ddy++) {
+        for (var ddx = -r; ddx <= r; ddx++) {
+          if (Math.max(Math.abs(ddx), Math.abs(ddy)) !== r) continue;
+          var tx = cx + ddx, ty = cy + ddy;
+          if (!Board.isInBounds(tx, ty) || Board.isSolid(tx, ty)) continue;
+          var score = (tx - fromX) * (tx - fromX) + (ty - fromY) * (ty - fromY);
+          if (score < bestScore) { bestScore = score; best = { x: tx, y: ty }; }
+        }
+      }
+      if (best) return best;
+    }
+    return best;
+  },
+
+  // Conversion écran -> grille selon la vue active (iso ou plan de salle)
+  screenToGridView: function(mx, my) {
+    if (this.viewMode === 'topdown' && this._tdView) {
+      return {
+        x: (mx - this._tdView.ox) / this._tdView.cell,
+        y: (my - this._tdView.oy) / this._tdView.cell,
+      };
+    }
+    return Board.screenToGrid(mx, my, this.camera.x, this.camera.y, this.zoom);
   },
 
   selectedFurniture: null,
@@ -668,7 +727,7 @@ var Engine = {
     UI.hideContextMenu();
     if (!this.started) return;
     if (this.editMode) { this.onEditClick(e); return; }
-    var gp = Board.screenToGrid(e.clientX, e.clientY, this.camera.x, this.camera.y, this.zoom);
+    var gp = this.screenToGridView(e.clientX, e.clientY);
     var clickX = Math.floor(gp.x);
     var clickY = Math.floor(gp.y);
     var px = this.player.x;
@@ -678,7 +737,7 @@ var Engine = {
     // Les pastilles sont enregistrées en coordonnées monde par drawZoneLabels.
     var wpx = (e.clientX - this.camera.x) / this.zoom;
     var wpy = (e.clientY - this.camera.y) / this.zoom;
-    if (this._zonePills) {
+    if (this._zonePills && this.viewMode !== 'topdown') {
       for (var zp = 0; zp < this._zonePills.length; zp++) {
         var pill = this._zonePills[zp];
         if (wpx >= pill.x0 && wpx <= pill.x1 && wpy >= pill.y0 && wpy <= pill.y1) {
@@ -848,7 +907,8 @@ var Engine = {
       }
     }
 
-    // Check other furniture clicks
+    // Clic sur un meuble : l'admin le sélectionne; tout le monde marche
+    // jusqu'à lui (case adjacente libre si le meuble est plein).
     for (var j = Board.furniture.length - 1; j >= 0; j--) {
       var fitem = Board.furniture[j];
       var fdef = Environments.furnitureTypes[fitem.type];
@@ -856,11 +916,13 @@ var Engine = {
       if (clickX >= fitem.x && clickX < fitem.x + (fdef.width || 1) && clickY >= fitem.y && clickY < fitem.y + (fdef.height || 1)) {
         // #22 Click feedback: brief highlight on clicked furniture
         this._flashFurniture = { item: fitem, time: performance.now() };
-        // Admin: select furniture for move/delete
-        if (this.player.isAdmin && fitem.id) {
-          this.selectedFurniture = fitem;
-          UI.showNotification(fdef.name + ' s\u00e9lectionn\u00e9 \u2014 Clic droit pour les options');
-          return;
+        // La sélection admin se fait au clic droit (menu contextuel) ou en
+        // mode édition — le clic gauche reste toujours un déplacement.
+        if (!Board.isSolid(gp.x, gp.y)) {
+          this.moveTarget = { x: gp.x, y: gp.y, setAt: performance.now() };
+        } else {
+          var adj = this.findWalkableNear(fitem.x + (fdef.width || 1) / 2, fitem.y + (fdef.height || 1) / 2, px, py);
+          if (adj) this.moveTarget = { x: adj.x, y: adj.y, setAt: performance.now() };
         }
         return;
       }
@@ -868,9 +930,16 @@ var Engine = {
     // Click on empty space: deselect
     this.selectedFurniture = null;
 
-    // Clic sur le sol : on s'y rend (design — « Clic : aller à un endroit »)
-    if (gp.x > 0.5 && gp.y > 0.5 && gp.x < Board.gridSize - 0.5 && gp.y < Board.gridSize - 0.5 && !Board.isSolid(gp.x, gp.y)) {
-      this.moveTarget = { x: gp.x, y: gp.y, setAt: performance.now() };
+    // Clic sur le sol : on s'y rend (design — « Clic : aller à un endroit »).
+    // Aucun clic n'est « mort » : une case occupée envoie vers la case libre
+    // la plus proche, pour un déplacement toujours réactif.
+    if (gp.x > 0.5 && gp.y > 0.5 && gp.x < Board.gridSize - 0.5 && gp.y < Board.gridSize - 0.5) {
+      if (!Board.isSolid(gp.x, gp.y)) {
+        this.moveTarget = { x: gp.x, y: gp.y, setAt: performance.now() };
+      } else {
+        var near = this.findWalkableNear(gp.x, gp.y, px, py);
+        if (near) this.moveTarget = { x: near.x, y: near.y, setAt: performance.now() };
+      }
     }
   },
 
@@ -1357,10 +1426,17 @@ var Engine = {
         this.moveTarget = null;
       } else {
         dx = mtx / mtd; dy = mty / mtd;
-        // Si on bute contre un obstacle, on abandonne la cible proprement
-        var probeX = this.player.x + dx * 0.3;
-        var probeY = this.player.y + dy * 0.3;
-        if (Board.isSolid(probeX, this.player.y) && Board.isSolid(this.player.x, probeY)) {
+        // Contournement : si l'axe X est bloqué on glisse sur Y, et inversement.
+        var blockedX = Board.isSolid(this.player.x + dx * 0.35, this.player.y);
+        var blockedY = Board.isSolid(this.player.x, this.player.y + dy * 0.35);
+        if (blockedX && !blockedY) { dx = 0; dy = dy > 0 ? 1 : (dy < 0 ? -1 : 0); }
+        else if (blockedY && !blockedX) { dy = 0; dx = dx > 0 ? 1 : (dx < 0 ? -1 : 0); }
+        else if (blockedX && blockedY) {
+          // Coin bloquant : on abandonne sans gigoter
+          this.moveTarget = null; dx = 0; dy = 0;
+        }
+        // Cible inatteignable depuis trop longtemps : on s'arrête proprement
+        if (this.moveTarget && performance.now() - this.moveTarget.setAt > 12000) {
           this.moveTarget = null; dx = 0; dy = 0;
         }
       }
@@ -1515,7 +1591,14 @@ var Engine = {
       var item = furn[fi];
       var def = Environments.furnitureTypes[item.type];
       if (!def) continue;
-      var sk = item.x + item.y + ((def.width || 1) + (def.height || 1)) / 2;
+      var sk;
+      if (def.isStage || def.isCarpet || def.isZone || def.isCollabSpace || (def.drawHeight || 0) === 0) {
+        // Plateformes et tapis : on marche dessus, ils se dessinent comme du
+        // sol — jamais par-dessus un avatar qui se tient dessus.
+        sk = item.x + item.y - 50;
+      } else {
+        sk = item.x + item.y + ((def.width || 1) + (def.height || 1)) / 2;
+      }
       entities.push({ type: 'f', item: item, sk: sk });
     }
     this.tables.forEach(function(t) {
@@ -2084,67 +2167,54 @@ var Engine = {
 
   // ===== TOP-DOWN NAVIGATION VIEW =====
 
+  // Vue de dessus — « Plan de salle » au design Insuffle Espace.
+  // Grille centrée à l'écran (caméra indépendante de la vue iso), molette pour
+  // zoomer. Les coordonnées du dernier rendu sont mémorisées dans _tdView pour
+  // que clics, survols et téléportations tombent exactement où l'on pointe.
   renderTopDown: function(ts) {
     var ctx = this.ctx;
     var w = this.viewW;
     var h = this.viewH;
-    // Map logical pixels -> device pixels for this frame (crisp HiDPI rendering).
     ctx.setTransform(this.dpr || 1, 0, 0, this.dpr || 1, 0, 0);
     var gs = Board.gridSize;
 
-    // Calculate cell size to fit the screen nicely
-    var cellSize = Math.min((w - 40) / gs, (h - 100) / gs) * this.zoom;
+    var cellSize = Math.min((w - 360) / gs, (h - 160) / gs) * this.zoom;
+    cellSize = Math.max(6, cellSize);
     var gridW = gs * cellSize;
     var gridH = gs * cellSize;
+    var ox = (w - gridW) / 2;
+    var oy = (h - gridH) / 2 + 10;
+    this._tdView = { ox: ox, oy: oy, cell: cellSize };
 
-    // Center with camera offset
-    var ox = this.camera.x + (w - gridW) / 2;
-    var oy = this.camera.y + (h - gridH) / 2;
-
-    // Background (thémé)
-    ctx.fillStyle = this.themeColor('--bg-2', '#dfe4f5');
+    // Fond thémé + halo (cohérent avec la vue iso)
+    var bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0, this.themeColor('--bg-1', '#eef1fc'));
+    bgGrad.addColorStop(1, this.themeColor('--bg-2', '#dfe4f5'));
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Floor tiles
+    // Plateau : cadre arrondi avec ombre douce
+    ctx.save();
+    ctx.shadowColor = 'rgba(20,24,60,.30)';
+    ctx.shadowBlur = 40;
+    ctx.shadowOffsetY = 16;
+    ctx.fillStyle = this.themeColor('--floor-edge', '#a9c0a6');
+    ctx.beginPath();
+    ctx.roundRect(ox - 10, oy - 10, gridW + 20, gridH + 20, 18);
+    ctx.fill();
+    ctx.restore();
+
+    // Damier
     for (var y = 0; y < gs; y++) {
       for (var x = 0; x < gs; x++) {
         ctx.fillStyle = (x + y) % 2 === 0 ? Board.floorColor1 : Board.floorColor2;
-        ctx.fillRect(ox + x * cellSize, oy + y * cellSize, cellSize, cellSize);
+        ctx.fillRect(ox + x * cellSize, oy + y * cellSize, cellSize + 0.5, cellSize + 0.5);
       }
     }
 
-    // Grid lines
-    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-    ctx.lineWidth = 0.5;
-    for (var i = 0; i <= gs; i++) {
-      ctx.beginPath();
-      ctx.moveTo(ox + i * cellSize, oy);
-      ctx.lineTo(ox + i * cellSize, oy + gridH);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(ox, oy + i * cellSize);
-      ctx.lineTo(ox + gridW, oy + i * cellSize);
-      ctx.stroke();
-    }
-
-    // Walls
-    ctx.strokeStyle = '#888';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(ox, oy);
-    ctx.lineTo(ox + gridW, oy);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(ox, oy);
-    ctx.lineTo(ox, oy + gridH);
-    ctx.stroke();
-
-    // Furniture
-    var furnitureColors = {};
-    for (var type in Environments.furnitureTypes) {
-      furnitureColors[type] = Environments.furnitureTypes[type].color;
-    }
-
+    // Mobilier : tuiles arrondies, point accent sur l'interactif
+    var accent = this.themeColor('--accent', '#5b6cff');
+    var ink = this.themeColor('--ink', '#1d2138');
     for (var fi = 0; fi < Board.furniture.length; fi++) {
       var item = Board.furniture[fi];
       var def = Environments.furnitureTypes[item.type];
@@ -2153,119 +2223,136 @@ var Engine = {
       var fh = (def.height || 1) * cellSize;
       var fx = ox + item.x * cellSize;
       var fy = oy + item.y * cellSize;
+      var interactive = def.isWhiteboard || def.isPostItBoard || def.isCollabSpace || def.isDoor;
 
+      ctx.save();
+      ctx.shadowColor = 'rgba(20,24,60,.18)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
       ctx.fillStyle = def.color || '#999';
-      ctx.fillRect(fx + 1, fy + 1, fw - 2, fh - 2);
-      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(fx + 1, fy + 1, fw - 2, fh - 2);
+      ctx.beginPath();
+      ctx.roundRect(fx + 1.5, fy + 1.5, Math.max(3, fw - 3), Math.max(3, fh - 3), Math.min(7, cellSize * 0.3));
+      ctx.fill();
+      ctx.restore();
 
-      // Type label
-      if (cellSize > 15) {
-        ctx.font = Math.max(8, Math.min(11, cellSize * 0.35)) + 'px "Segoe UI", sans-serif';
-        ctx.fillStyle = '#fff';
+      if (interactive) {
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.arc(fx + fw - 6, fy + 6, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (cellSize > 17 && (def.width || 1) * (def.height || 1) >= 2) {
+        ctx.font = '700 ' + Math.max(8, Math.min(11, cellSize * 0.32)) + 'px "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(def.name, fx + fw / 2, fy + fh / 2);
       }
     }
 
-    // Tables
+    // Tables de travail : cadre pointillé accent + nom
     var self = this;
     this.tables.forEach(function(t) {
       var tx = ox + t.x * cellSize;
       var ty = oy + t.y * cellSize;
       var tw = t.width * cellSize;
       var th = t.height * cellSize;
-      ctx.strokeStyle = '#e67e22';
+      ctx.strokeStyle = self._withAlpha(accent, 0.65);
       ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.strokeRect(tx, ty, tw, th);
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.roundRect(tx, ty, tw, th, 8);
+      ctx.stroke();
       ctx.setLineDash([]);
       if (t.name && cellSize > 12) {
-        ctx.font = 'bold 10px "Segoe UI", sans-serif';
-        ctx.fillStyle = '#e67e22';
+        ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = accent;
         ctx.textAlign = 'center';
-        ctx.fillText(t.name, tx + tw / 2, ty + th / 2);
+        ctx.fillText(t.name, tx + tw / 2, ty - 7);
       }
     });
 
-    // Remote players
-    Network.remotePlayers.forEach(function(p) {
-      if (p.opacity <= 0) return;
-      var rpx = ox + p.renderX * cellSize;
-      var rpy = oy + p.renderY * cellSize;
-      // Proximity circle
+    // Marqueur de destination (clic-pour-se-déplacer)
+    if (this.moveTarget) {
+      var mtx = ox + this.moveTarget.x * cellSize;
+      var mty = oy + this.moveTarget.y * cellSize;
+      var mtPulse = ((performance.now() - this.moveTarget.setAt) / 700) % 1;
+      ctx.strokeStyle = this._withAlpha(accent, 0.55 * (1 - mtPulse));
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(rpx, rpy, CONSTANTS.AUDIO_RADIUS * cellSize, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(46,204,113,0.05)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(46,204,113,0.2)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
+      ctx.arc(mtx, mty, 5 + mtPulse * 16, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.setLineDash([]);
-      // Player dot
+      ctx.fillStyle = this._withAlpha(accent, 0.8);
       ctx.beginPath();
-      ctx.arc(rpx, rpy, Math.max(4, cellSize * 0.3), 0, Math.PI * 2);
-      ctx.fillStyle = p.colors ? p.colors.shirt : '#2ecc71';
+      ctx.arc(mtx, mty, 3.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      // Name
-      if (cellSize > 12) {
-        ctx.font = '9px "Segoe UI", sans-serif';
-        ctx.fillStyle = '#555';
-        ctx.textAlign = 'center';
-        ctx.fillText(p.pseudo || '', rpx, rpy - Math.max(6, cellSize * 0.4));
-      }
-    });
+    }
 
-    // Local player
+    // Pastille de joueur : pion + anneau + pseudo
+    function drawPawn(px, py, fill, ring, pseudo, isMe) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(20,24,60,.35)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(5, cellSize * 0.32), 0, Math.PI * 2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = ring;
+      ctx.lineWidth = isMe ? 2.5 : 1.5;
+      ctx.stroke();
+      if (pseudo && cellSize > 11) {
+        ctx.font = '700 10px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'center';
+        var pw = ctx.measureText(pseudo).width + 12;
+        var pyy = py - Math.max(12, cellSize * 0.55);
+        ctx.fillStyle = isMe ? accent : self.themeColor('--panel-solid', '#fff');
+        ctx.beginPath();
+        ctx.roundRect(px - pw / 2, pyy - 8, pw, 15, 999);
+        ctx.fill();
+        ctx.fillStyle = isMe ? '#fff' : ink;
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pseudo, px, pyy);
+      }
+    }
+
+    // Cercle de parole du joueur local (rayon de la salle)
     var lpx = ox + this.player.x * cellSize;
     var lpy = oy + this.player.y * cellSize;
-    // Proximity circle
     ctx.beginPath();
     ctx.arc(lpx, lpy, this.player.audioRadius * cellSize, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(52,152,219,0.06)';
+    ctx.fillStyle = this._withAlpha(accent, 0.06);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(52,152,219,0.3)';
+    ctx.strokeStyle = this._withAlpha(accent, 0.30);
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    // Player dot
-    ctx.beginPath();
-    ctx.arc(lpx, lpy, Math.max(5, cellSize * 0.35), 0, Math.PI * 2);
-    ctx.fillStyle = this.player.colors ? this.player.colors.shirt : '#3498db';
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    // Direction arrow
-    var dx = this.player.direction.dx || 0;
-    var dy = this.player.direction.dy || 0;
-    if (dx !== 0 || dy !== 0) {
-      var len = Math.sqrt(dx * dx + dy * dy);
+
+    Network.remotePlayers.forEach(function(p) {
+      if (p.opacity <= 0) return;
+      drawPawn(ox + p.renderX * cellSize, oy + p.renderY * cellSize,
+        p.colors ? p.colors.shirt : '#39b58a', '#ffffff', p.pseudo || '', false);
+    });
+    drawPawn(lpx, lpy, this.player.colors ? this.player.colors.shirt : accent, '#ffffff', this.player.pseudo || 'Vous', true);
+
+    // Flèche de direction
+    var ddx = this.player.direction.dx || 0;
+    var ddy = this.player.direction.dy || 0;
+    if (ddx !== 0 || ddy !== 0) {
+      var dl = Math.sqrt(ddx * ddx + ddy * ddy);
       ctx.beginPath();
       ctx.moveTo(lpx, lpy);
-      ctx.lineTo(lpx + (dx / len) * cellSize * 0.6, lpy + (dy / len) * cellSize * 0.6);
+      ctx.lineTo(lpx + (ddx / dl) * cellSize * 0.6, lpy + (ddy / dl) * cellSize * 0.6);
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    // Name
-    ctx.font = 'bold 10px "Segoe UI", sans-serif';
-    ctx.fillStyle = '#3498db';
+
+    // Bandeau d'aide discret
+    ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = this.themeColor('--muted', '#737b96');
     ctx.textAlign = 'center';
-    ctx.fillText(this.player.pseudo || 'Vous', lpx, lpy - Math.max(8, cellSize * 0.45));
-
-    // HUD info
-    ctx.font = '11px "Segoe UI", sans-serif';
-    ctx.fillStyle = '#999';
-    ctx.textAlign = 'left';
-    ctx.fillText('Vue de dessus — Appuyez sur V pour basculer en vue isométrique', 16, h - 70);
-
-    // Minimap not needed in topdown
+    ctx.fillText('Plan de salle — V : vue isométrique · Clic : se déplacer · Molette : zoom', w / 2, h - 76);
   },
 
   // ===== TABLE NOTES DEBOUNCE (improvement #7) =====
@@ -2439,23 +2526,33 @@ var Engine = {
     }
   },
 
+  // Placement vérifié (limites de grille) + synchro serveur — partagé entre
+  // le clic en mode placement et le glisser-déposer depuis la palette.
+  placeFurnitureAt: function(type, gx, gy) {
+    var def = Environments.furnitureTypes[type];
+    if (!def) return;
+    gx = Math.floor(gx); gy = Math.floor(gy);
+    if (gx < 0 || gy < 0 || gx + (def.width || 1) > Board.gridSize || gy + (def.height || 1) > Board.gridSize) {
+      UI.showNotification('Hors de la salle — déposez sur la grille', 'warning');
+      return;
+    }
+    Network.socket.emit('add-furniture', { type: type, x: gx, y: gy }, function(r) {
+      if (r && r.success) {
+        Board.furniture.push(r.item);
+        Board.buildCollisionMap();
+        UI.showNotification(def.name + ' placé avec succès');
+      } else if (r && r.error) {
+        UI.showNotification('Placement impossible (' + r.error + ')', 'warning');
+      }
+    });
+  },
+
   onEditClick: function(e) {
     if (this.editIsPanning) return;
     var gp = this.editScreenToGrid(e.clientX, e.clientY);
 
     if (this.editTool === 'place' && this.editSelectedType) {
-      var def = Environments.furnitureTypes[this.editSelectedType];
-      if (!def) return;
-      if (gp.x < 0 || gp.y < 0 || gp.x + (def.width || 1) > Board.gridSize || gp.y + (def.height || 1) > Board.gridSize) return;
-
-      var self = this;
-      Network.socket.emit('add-furniture', { type: this.editSelectedType, x: gp.x, y: gp.y }, function(r) {
-        if (r && r.success) {
-          Board.furniture.push(r.item);
-          Board.buildCollisionMap();
-          UI.showNotification(def.name + ' placé avec succès');
-        }
-      });
+      this.placeFurnitureAt(this.editSelectedType, gp.x, gp.y);
       return;
     }
 

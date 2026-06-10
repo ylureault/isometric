@@ -374,7 +374,8 @@ const UI = {
     // View toggle button (#13 smooth transition)
     document.getElementById('btn-view-toggle')?.addEventListener('click', () => {
       Engine.viewMode = Engine.viewMode === 'iso' ? 'topdown' : 'iso';
-      this.showNotification('Vue : ' + (Engine.viewMode === 'iso' ? 'Isom\u00e9trique' : 'Vue de dessus'));
+      try { localStorage.setItem('insuffle_view', Engine.viewMode); } catch (e) {}
+      this.showNotification('Vue : ' + (Engine.viewMode === 'iso' ? 'Isométrique' : 'Plan de salle'));
       // #40 Smooth view mode transition
       if (typeof UXEnhancements !== 'undefined') UXEnhancements.fadeViewTransition();
       // #12 Update compass rotation for view mode
@@ -2292,13 +2293,28 @@ const UI = {
 
   // ===== EDIT MODE TOOLBAR =====
 
+  // Icônes du mobilier, partagées entre catalogue admin et palette d'édition
+  furnitureIcons: {
+    desk: '🪑', chair: '💺', plant: '🌿', palmTree: '🌴', partition: '🔲',
+    largeTable: '📐', roundTable: '⭕', screen: '🖥️', couch: '🛋️',
+    coffeeTable: '☕', bookshelf: '📚', whiteboard: '📋', postItBoard: '📌',
+    stage: '🎭', smallStage: '🎭', podium: '🎤', projector: '📽️', waterCooler: '🚰',
+    filingCabinet: '🗄️', standingDesk: '🖥️', lamp: '💡',
+    collabSpace: '🤝', carpet: '🟫', largeCarpet: '🟫',
+    door: '🚪', conferencePhone: '📞', trashBin: '🗑️', clock: '🕐',
+  },
+
   showEditToolbar(show) {
     var toolbar = document.getElementById('edit-toolbar');
     if (!toolbar) return;
     toolbar.style.display = show ? 'flex' : 'none';
 
+    var palette = document.getElementById('edit-palette');
+    if (palette) palette.style.display = show ? 'flex' : 'none';
+
     if (show) {
       this.buildEditCatalog();
+      this.buildEditPalette();
       this.updateEditToolButtons();
       var gridInfo = document.getElementById('edit-grid-info');
       if (gridInfo) gridInfo.textContent = Board.gridSize + 'x' + Board.gridSize;
@@ -2307,6 +2323,67 @@ const UI = {
     // Hide/show normal toolbar
     var normalToolbar = document.getElementById('toolbar');
     if (normalToolbar) normalToolbar.style.display = show ? 'none' : 'flex';
+  },
+
+  // Palette visuelle : cliquer sélectionne, glisser-déposer place directement.
+  buildEditPalette() {
+    var palette = document.getElementById('edit-palette');
+    if (!palette || palette.dataset.built) return;
+    palette.dataset.built = '1';
+    var self = this;
+
+    var title = document.createElement('div');
+    title.className = 'edit-palette-title';
+    title.textContent = 'Mobilier — cliquez ou glissez dans la salle';
+    palette.appendChild(title);
+
+    var grid = document.createElement('div');
+    grid.className = 'edit-palette-grid';
+    palette.appendChild(grid);
+
+    for (var type in Environments.furnitureTypes) {
+      var def = Environments.furnitureTypes[type];
+      if (def.isZone) continue;
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'edit-palette-card';
+      card.draggable = true;
+      card.dataset.type = type;
+      card.title = def.name + ' (' + (def.width || 1) + '×' + (def.height || 1) + ')';
+      card.innerHTML = '<span class="epc-ic">' + (this.furnitureIcons[type] || '📦') + '</span>' +
+        '<span class="epc-name">' + def.name + '</span>' +
+        '<span class="epc-size">' + (def.width || 1) + '×' + (def.height || 1) + '</span>';
+
+      card.addEventListener('click', (function(t, c) {
+        return function() {
+          Engine.editSelectedType = t;
+          Engine.editTool = 'place';
+          self.updateEditToolButtons();
+          grid.querySelectorAll('.edit-palette-card').forEach(function(x) { x.classList.remove('sel'); });
+          c.classList.add('sel');
+          var sel = document.getElementById('edit-catalog-select');
+          if (sel) sel.value = t;
+        };
+      })(type, card));
+
+      card.addEventListener('dragstart', (function(t, c) {
+        return function(e) {
+          Engine._dragFurnitureType = t;
+          Engine.editSelectedType = t;
+          Engine.editTool = 'place';
+          c.classList.add('dragging');
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.setData('text/plain', t);
+          }
+        };
+      })(type, card));
+      card.addEventListener('dragend', (function(c) {
+        return function() { c.classList.remove('dragging'); Engine._dragFurnitureType = null; };
+      })(card));
+
+      grid.appendChild(card);
+    }
   },
 
   buildEditCatalog() {

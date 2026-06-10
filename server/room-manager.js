@@ -995,6 +995,10 @@ class RoomManager {
     wb.strokes = [];
     wb.texts = [];
     wb.postits = [];
+        this._persist(roomId);
+        this._persist(roomId);
+        this._persist(roomId);
+        this._persist(roomId);
     return { success: true };
   }
 

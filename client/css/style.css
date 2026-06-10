@@ -1567,6 +1567,43 @@ html[data-theme="nuit"] .ob-brand-img { filter: brightness(0) invert(1); opacity
 .edit-quit-btn:hover { background: rgba(231,76,60,0.2); }
 .edit-quit-btn:active { transform: scale(0.97); }
 
+/* ===== Palette de mobilier (mode édition) ===== */
+.edit-palette {
+  position: fixed; top: 64px; left: 14px; bottom: 14px; width: 212px;
+  border-radius: var(--r); z-index: 36;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.edit-palette-title {
+  padding: 13px 14px 9px; font-size: 11px; font-weight: 800;
+  letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px solid var(--panel-border);
+}
+.edit-palette-grid {
+  flex: 1; overflow-y: auto; padding: 10px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  align-content: start;
+}
+.edit-palette-grid::-webkit-scrollbar { width: 6px; }
+.edit-palette-grid::-webkit-scrollbar-thumb { background: rgba(125,135,170,.3); border-radius: 3px; }
+.edit-palette-card {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 6px 8px; border-radius: 13px;
+  background: rgba(125,135,170,.08); border: 1.5px solid transparent;
+  cursor: grab; font-family: inherit; transition: .13s;
+}
+.edit-palette-card:hover { transform: translateY(-2px); background: rgba(125,135,170,.16); }
+.edit-palette-card:active { cursor: grabbing; }
+.edit-palette-card.sel {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.edit-palette-card.dragging { opacity: .5; }
+.epc-ic { font-size: 22px; line-height: 1; }
+.epc-name { font-size: 10.5px; font-weight: 700; color: var(--ink); text-align: center; line-height: 1.15; }
+.epc-size { font-size: 9px; font-weight: 700; color: var(--muted); }
+/* Le menu déroulant reste fonctionnel mais cède la place à la palette */
+.edit-toolbar .edit-toolbar-section:first-child { display: none; }
+
 /* ===== Empty States ===== */
 .empty-state {
   text-align: center; padding: var(--space-lg) var(--space-md);
