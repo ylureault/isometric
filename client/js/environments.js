@@ -283,6 +283,8 @@ const Environments = {
       description: 'Petites tables rondes avec paperboard — conversations qui essaiment.',
       furniture: (gs) => {
         const items = [];
+        // L'estrade : seul endroit d'où l'on parle à toute la salle
+        items.push({ type: 'smallStage', x: Math.max(1, Math.floor(gs / 2) - 1), y: 0 });
         const clamp = (v) => Math.max(1, Math.min(gs - 2, v));
         // A grid of café tables, each with 4 seats + a paperboard alongside.
         const cols = gs >= 26 ? 3 : 2;
@@ -316,6 +318,8 @@ const Environments = {
       description: 'Grand cercle d\'ouverture + zones de thèmes en marché des idées.',
       furniture: function (gs) {
         const items = [];
+        // L'estrade : seul endroit d'où l'on parle à toute la salle
+        items.push({ type: 'smallStage', x: Math.max(1, Math.floor(gs / 2) - 1), y: 0 });
         const clamp = (v) => Math.max(1, Math.min(gs - 2, v));
         const cx = Math.floor(gs / 2), cy = Math.floor(gs / 2);
         // Opening circle of chairs (the marketplace).
@@ -343,12 +347,72 @@ const Environments = {
         return items;
       },
     },
+    'fishbowl': {
+      name: 'Fishbowl',
+      floorColor1: '#b6c4cf', floorColor2: '#aab8c4', wallColor: '#e8eef3',
+      description: 'Cercle intérieur qui débat, cercle extérieur qui écoute — une chaise libre pour entrer.',
+      furniture: (gs) => {
+        const items = [];
+        // L'estrade : seul endroit d'où l'on parle à toute la salle
+        items.push({ type: 'smallStage', x: Math.max(1, Math.floor(gs / 2) - 1), y: 0 });
+        const cx = gs / 2, cy = gs / 2 + 1;
+        // Cercle intérieur : 5 chaises (dont la « chaise libre »)
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+          items.push({ type: 'chair', x: Math.round(cx + Math.cos(a) * 2.2), y: Math.round(cy + Math.sin(a) * 2.2) });
+        }
+        // Cercle extérieur : 12 chaises d'écoute
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          items.push({ type: 'chair', x: Math.round(cx + Math.cos(a) * 5.2), y: Math.round(cy + Math.sin(a) * 5.2) });
+        }
+        items.push({ type: 'zoneMarker', x: Math.round(cx) - 2, y: Math.round(cy) - 2 });
+        items.push({ type: 'whiteboard', x: 1, y: 1 });
+        items.push({ type: 'plant', x: 1, y: gs - 2 });
+        items.push({ type: 'plant', x: gs - 2, y: gs - 2 });
+        return items;
+      },
+    },
+    '1-2-4-all': {
+      name: '1-2-4-Tous',
+      floorColor1: '#c7bfa6', floorColor2: '#bbb29a', wallColor: '#f0ead9',
+      description: 'Réflexion solo, puis duos, puis quatuors, puis tous ensemble — zones progressives.',
+      furniture: (gs) => {
+        const items = [];
+        // L'estrade : seul endroit d'où l'on parle à toute la salle
+        items.push({ type: 'smallStage', x: Math.max(1, Math.floor(gs / 2) - 1), y: 0 });
+        // Zone « 1 » : réflexion solo
+        for (let i = 0; i < 4; i++) items.push({ type: 'chair', x: 2 + i * 2, y: 3 });
+        items.push({ type: 'zoneMarker', x: 1, y: 2 });
+        // Zone « 2 » : duos face à face
+        for (let i = 0; i < 3; i++) {
+          items.push({ type: 'chair', x: gs - 5, y: 2 + i * 3 });
+          items.push({ type: 'chair', x: gs - 3, y: 2 + i * 3 });
+        }
+        items.push({ type: 'zoneMarker', x: gs - 6, y: 1 });
+        // Zone « 4 » : deux tables de quatre
+        items.push({ type: 'roundTable', x: 3, y: gs - 7 });
+        items.push({ type: 'chair', x: 2, y: gs - 7 }); items.push({ type: 'chair', x: 5, y: gs - 7 });
+        items.push({ type: 'chair', x: 3, y: gs - 8 }); items.push({ type: 'chair', x: 3, y: gs - 5 });
+        items.push({ type: 'roundTable', x: gs - 6, y: gs - 7 });
+        items.push({ type: 'chair', x: gs - 7, y: gs - 7 }); items.push({ type: 'chair', x: gs - 4, y: gs - 7 });
+        items.push({ type: 'chair', x: gs - 6, y: gs - 8 }); items.push({ type: 'chair', x: gs - 6, y: gs - 5 });
+        items.push({ type: 'zoneMarker', x: 2, y: gs - 8 });
+        items.push({ type: 'zoneMarker', x: gs - 7, y: gs - 8 });
+        // « Tous » : grand tapis central de restitution
+        items.push({ type: 'largeCarpet', x: Math.floor(gs / 2) - 2, y: Math.floor(gs / 2) - 2 });
+        items.push({ type: 'whiteboard', x: 1, y: Math.floor(gs / 2) });
+        return items;
+      },
+    },
     'cercle': {
       name: 'Cercle (codéveloppement)',
       floorColor1: '#b8b0a0', floorColor2: '#aca492', wallColor: '#efe8da',
       description: 'Cercle de parole resserré autour d\'un paperboard — codir, codév, rétro.',
       furniture: function (gs) {
         const items = [];
+        // L'estrade : seul endroit d'où l'on parle à toute la salle
+        items.push({ type: 'smallStage', x: Math.max(1, Math.floor(gs / 2) - 1), y: 0 });
         const clamp = (v) => Math.max(1, Math.min(gs - 2, v));
         const cx = Math.floor(gs / 2), cy = Math.floor(gs / 2);
         items.push({ type: 'carpet', x: clamp(cx - 1), y: clamp(cy - 1) });

@@ -1584,6 +1584,10 @@ var Engine = {
     // Draw grid
     Board.drawGrid(ctx, 0, 0, this.player.x, this.player.y);
 
+    // Zones communes nommées (World Café, Forum Ouvert…) : bordure pointillée
+    // légère + nom de musicien — tout le monde sait où aller.
+    this.drawZoneAreas(ctx);
+
     // Collect entities for depth sort
     var entities = [];
     var furn = Board.furniture;
@@ -1925,6 +1929,60 @@ var Engine = {
       ctx.beginPath();
       ctx.arc(isoPos.x, isoPos.y, glowR, 0, Math.PI * 2);
       ctx.fill();
+    }
+  },
+
+  // Noms d'espaces : musiciens et musiciennes iconiques, attribués de façon
+  // déterministe (ordre stable des zones) — identiques pour tout le monde
+  // sans synchronisation serveur.
+  ZONE_NAMES: ['Daft Punk', 'Nina Simone', 'Miles Davis', 'Björk', 'Bowie',
+    'Aretha', 'Coltrane', 'Édith Piaf', 'Stromae', 'Air', 'Gainsbourg',
+    'Angèle', 'Prince', 'Camille', 'Vivaldi', 'Fela Kuti'],
+
+  drawZoneAreas: function(ctx) {
+    var zones = [];
+    for (var i = 0; i < Board.furniture.length; i++) {
+      var item = Board.furniture[i];
+      var def = Environments.furnitureTypes[item.type];
+      if (!def || (!def.isZone && !def.isCollabSpace)) continue;
+      zones.push({ item: item, def: def });
+    }
+    if (!zones.length) return;
+    // Ordre stable (y puis x) pour des noms identiques chez tous
+    zones.sort(function(a, b) {
+      return (a.item.y - b.item.y) || (a.item.x - b.item.x);
+    });
+    var accent = this.themeColor('--accent', '#5b6cff');
+    var muted = this.themeColor('--muted', '#737b96');
+    for (var z = 0; z < zones.length; z++) {
+      var it = zones[z].item, df = zones[z].def;
+      var w = df.width || 1, h = df.height || 1;
+      var pA = Board.iso(it.x, it.y), pB = Board.iso(it.x + w, it.y);
+      var pC = Board.iso(it.x + w, it.y + h), pD = Board.iso(it.x, it.y + h);
+      ctx.save();
+      ctx.strokeStyle = this._withAlpha(accent, 0.35);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([7, 6]);
+      ctx.lineDashOffset = -(performance.now() / 90) % 13; // fourmille doucement
+      ctx.beginPath();
+      ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y);
+      ctx.lineTo(pC.x, pC.y); ctx.lineTo(pD.x, pD.y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Nom discret au sommet de la zone
+      var name = this.ZONE_NAMES[z % this.ZONE_NAMES.length] + ' · ' + (z + 1);
+      ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = this._withAlpha(accent, 0.10);
+      var tw = ctx.measureText(name).width;
+      ctx.beginPath();
+      ctx.roundRect(pA.x - tw / 2 - 8, pA.y - 18, tw + 16, 17, 999);
+      ctx.fill();
+      ctx.fillStyle = muted;
+      ctx.fillText(name, pA.x, pA.y - 4);
+      ctx.restore();
     }
   },
 
