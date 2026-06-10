@@ -1105,4 +1105,16 @@ server.listen(PORT, () => {
   console.log(`Espace Collaboratif running at http://localhost:${PORT}`);
 });
 
+// Graceful shutdown: persist all live rooms before exiting.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try { roomManager.flush(); } catch (e) { /* best effort */ }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 2000).unref();
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
 module.exports = { app, server, io };

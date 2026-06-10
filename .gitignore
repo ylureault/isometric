@@ -22,3 +22,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Persisted room data
+data/

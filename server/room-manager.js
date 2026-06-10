@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const CONSTANTS = require('../shared/constants');
 const Environments = require('../client/js/environments');
+const Persistence = require('./persistence');
 
 // Constant-time string comparison to avoid timing side-channels on the creator token.
 function safeEqual(a, b) {
@@ -11,12 +12,152 @@ function safeEqual(a, b) {
 }
 
 class RoomManager {
-  constructor() {
+  constructor(opts) {
+    opts = opts || {};
     this.rooms = new Map();
     this._cleanupTimers = new Map(); // roomId -> timeoutId for empty room cleanup
 
+    // Durable storage. Disabled under test (NODE_ENV=test) so the suite stays
+    // hermetic; enabled in normal runs so rooms survive restarts and long gaps.
+    const persistEnabled = opts.persist != null
+      ? opts.persist
+      : process.env.NODE_ENV !== 'test' && process.env.PERSIST !== 'off';
+    this.persistence = new Persistence({ enabled: persistEnabled, dir: opts.persistDir });
+
+    // Rehydrate previously saved rooms (so a URL still works weeks later).
+    if (this.persistence.enabled) {
+      for (const snap of this.persistence.loadAll()) {
+        try {
+          const room = this._hydrate(snap);
+          if (room) this.rooms.set(room.id, room);
+        } catch (e) {
+          console.error('[room-manager] failed to hydrate room', snap && snap.id, e.message);
+        }
+      }
+      // Autosave active rooms so a crash loses at most a few seconds of work.
+      this._autosaveInterval = setInterval(() => this._autosave(), 15000);
+      if (this._autosaveInterval.unref) this._autosaveInterval.unref();
+    }
+
     // Periodic sweep: clean up stale rooms, disconnected zombies, orphaned timers
     this._sweepInterval = setInterval(() => this._periodicSweep(), CONSTANTS.ROOM_CLEANUP_INTERVAL);
+  }
+
+  // --- Persistence: snapshot / hydrate ---
+
+  // Build a plain, durable snapshot of a room (drops live/socket-bound state).
+  _snapshot(room) {
+    const tables = [];
+    for (const [, t] of room.tables) {
+      tables.push({ id: t.id, name: t.name, x: t.x, y: t.y, width: t.width, height: t.height, shape: t.shape });
+    }
+    const whiteboards = [];
+    for (const [, wb] of room.whiteboards) {
+      whiteboards.push({
+        id: wb.id, x: wb.x, y: wb.y, radius: wb.radius, tableId: wb.tableId,
+        strokes: wb.strokes || [], texts: wb.texts || [], postits: wb.postits || [],
+      });
+    }
+    const tableNotes = [];
+    for (const [tid, n] of room.tableNotes) tableNotes.push([tid, n]);
+    const themePresets = [];
+    for (const [name, t] of room.themePresets) themePresets.push([name, t]);
+    const subRooms = [];
+    if (room.subRooms) {
+      for (const [, sr] of room.subRooms) {
+        subRooms.push({ id: sr.id, name: sr.name, x: sr.x, y: sr.y, width: sr.width, height: sr.height });
+      }
+    }
+    return {
+      id: room.id, name: room.name, environment: room.environment, gridSize: room.gridSize,
+      format: room.format || null,
+      creatorToken: room.creatorToken, inviteCode: room.inviteCode, password: room.password,
+      theme: room.theme, themePresets, furniture: room.furniture || [],
+      tables, tableNotes, whiteboards, subRooms,
+      audioRadius: room.audioRadius, stats: room.stats, closed: room.closed,
+      createdAt: room.createdAt,
+      nextTableId: room.nextTableId, nextWhiteboardId: room.nextWhiteboardId,
+      nextVoteId: room.nextVoteId, nextTimerId: room.nextTimerId, nextJoinOrder: room.nextJoinOrder,
+      savedAt: Date.now(),
+    };
+  }
+
+  // Rebuild a full in-memory room from a snapshot (empty live state).
+  _hydrate(snap) {
+    if (!snap || !snap.id) return null;
+    const room = {
+      id: snap.id,
+      name: snap.name || 'Room',
+      environment: snap.environment || 'open-space',
+      gridSize: snap.gridSize || CONSTANTS.GRID_DEFAULT,
+      format: snap.format || null,
+      creatorSocketId: null,
+      creatorToken: snap.creatorToken || crypto.randomBytes(16).toString('hex'),
+      participants: new Map(),
+      tables: new Map(),
+      furniture: Array.isArray(snap.furniture) ? snap.furniture : [],
+      theme: snap.theme || { floorColor1: null, floorColor2: null, bgColor: '#0a0a1a', glowColor: '#7eb8da', mode: 'dark', preset: null },
+      themePresets: new Map(snap.themePresets || []),
+      activeScreenShare: null,
+      whiteboards: new Map(),
+      votes: new Map(),
+      timers: new Map(),
+      tableNotes: new Map(snap.tableNotes || []),
+      raisedHands: new Map(),
+      collabSpaces: new Map(),
+      subRooms: new Map(),
+      chatHistory: [],
+      closed: !!snap.closed,
+      createdAt: snap.createdAt || Date.now(),
+      nextTableId: snap.nextTableId || 1,
+      nextWhiteboardId: snap.nextWhiteboardId || 1,
+      nextVoteId: snap.nextVoteId || 1,
+      nextTimerId: snap.nextTimerId || 1,
+      nextJoinOrder: snap.nextJoinOrder || 1,
+      password: snap.password || null,
+      inviteCode: snap.inviteCode || this._generateInviteCode(),
+      audioRadius: snap.audioRadius || CONSTANTS.AUDIO_RADIUS,
+      stats: snap.stats || { messagesSent: 0, reactionsCount: 0, timeActive: Date.now() },
+    };
+    for (const t of (snap.tables || [])) {
+      room.tables.set(t.id, { id: t.id, name: t.name, x: t.x, y: t.y, width: t.width, height: t.height, shape: t.shape, participants: new Set() });
+    }
+    for (const wb of (snap.whiteboards || [])) {
+      room.whiteboards.set(wb.id, {
+        id: wb.id, x: wb.x, y: wb.y, radius: wb.radius, tableId: wb.tableId,
+        strokes: wb.strokes || [], texts: wb.texts || [], postits: wb.postits || [],
+        activeUsers: new Set(),
+      });
+    }
+    for (const sr of (snap.subRooms || [])) {
+      room.subRooms.set(sr.id, { id: sr.id, name: sr.name, x: sr.x, y: sr.y, width: sr.width, height: sr.height, participants: new Set() });
+    }
+    return room;
+  }
+
+  _persist(roomId) {
+    if (!this.persistence.enabled) return;
+    this.persistence.save(roomId, () => {
+      const r = this.rooms.get(roomId);
+      return r ? this._snapshot(r) : null;
+    });
+  }
+
+  // Save every room that currently has people in it (called on an interval).
+  _autosave() {
+    for (const [roomId, room] of this.rooms) {
+      if (room.participants.size > 0) this._persist(roomId);
+    }
+  }
+
+  flush() {
+    if (!this.persistence.enabled) return;
+    for (const [roomId, room] of this.rooms) {
+      if (room.participants.size > 0) {
+        this.persistence._writeNow(roomId, () => this._snapshot(room));
+      }
+    }
+    this.persistence.flushAll();
   }
 
   // --- Periodic maintenance ---
@@ -63,9 +204,9 @@ class RoomManager {
         }
       }
 
-      // Remove truly empty rooms older than cleanup timeout
+      // Evict truly empty rooms from memory (snapshot kept on disk)
       if (room.participants.size === 0 && (now - room.createdAt > CONSTANTS.EMPTY_ROOM_CLEANUP_TIMEOUT)) {
-        this._destroyRoom(roomId);
+        this._evictRoom(roomId);
       }
     }
   }
@@ -76,6 +217,26 @@ class RoomManager {
     this._onDestroy = typeof fn === 'function' ? fn : null;
   }
 
+  // Evict an empty room from memory but KEEP its durable snapshot on disk, so a
+  // returning participant (even weeks later) gets the room back via lazy-load.
+  _evictRoom(roomId) {
+    const room = this.rooms.get(roomId);
+    const timerId = this._cleanupTimers.get(roomId);
+    if (timerId) {
+      clearTimeout(timerId);
+      this._cleanupTimers.delete(roomId);
+    }
+    if (room && this._onDestroy) {
+      try { this._onDestroy(room); } catch (e) { /* never let a hook break cleanup */ }
+    }
+    // Persist a final snapshot before dropping it from memory.
+    if (room && this.persistence.enabled) {
+      this.persistence._writeNow(roomId, () => this._snapshot(room));
+    }
+    this.rooms.delete(roomId);
+  }
+
+  // Permanently delete a room: from memory AND from disk (used by closeRoom).
   _destroyRoom(roomId) {
     const room = this.rooms.get(roomId);
     const timerId = this._cleanupTimers.get(roomId);
@@ -87,6 +248,7 @@ class RoomManager {
       try { this._onDestroy(room); } catch (e) { /* never let a hook break cleanup */ }
     }
     this.rooms.delete(roomId);
+    this.persistence.remove(roomId);
   }
 
   _scheduleRoomCleanup(roomId) {
@@ -97,9 +259,10 @@ class RoomManager {
       this._cleanupTimers.delete(roomId);
       const r = this.rooms.get(roomId);
       if (r && r.participants.size === 0) {
-        this._destroyRoom(roomId);
+        this._evictRoom(roomId);
       }
     }, CONSTANTS.EMPTY_ROOM_CLEANUP_TIMEOUT);
+    if (tid.unref) tid.unref();
 
     this._cleanupTimers.set(roomId, tid);
   }
@@ -160,14 +323,37 @@ class RoomManager {
       inviteCode, // improvement #20
       audioRadius: CONSTANTS.AUDIO_RADIUS, // improvement #24: configurable audio radius
       stats: { messagesSent: 0, reactionsCount: 0, timeActive: Date.now() }, // improvement #10
+      format: (typeof config.format === 'string') ? config.format : (config.environment || null),
     };
 
     this.rooms.set(roomId, room);
+    this._persist(roomId);
     return room;
   }
 
   getRoom(roomId) {
-    return this.rooms.get(roomId) || null;
+    let room = this.rooms.get(roomId);
+    if (room) return room;
+    // Lazy-load an evicted room from its durable snapshot (e.g. a returning user).
+    if (this.persistence.enabled && typeof roomId === 'string') {
+      const snap = this._readSnapshot(roomId);
+      if (snap) {
+        room = this._hydrate(snap);
+        if (room) { this.rooms.set(roomId, room); return room; }
+      }
+    }
+    return null;
+  }
+
+  _readSnapshot(roomId) {
+    try {
+      const fs = require('fs');
+      const file = this.persistence._file(roomId);
+      if (!fs.existsSync(file)) return null;
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (e) {
+      return null;
+    }
   }
 
   joinRoom(roomId, socketId, data) {
@@ -189,12 +375,17 @@ class RoomManager {
 
     // Creator reconnection: only the holder of the secret creatorToken can reclaim
     // the creator slot. Pseudo matching alone is NOT trusted (anyone can copy a pseudo).
-    if (!isCreator && room.creatorSocketId && data.creatorToken && safeEqual(data.creatorToken, room.creatorToken)) {
-      const oldCreator = room.participants.get(room.creatorSocketId);
-      if (oldCreator && oldCreator.disconnected) {
-        room.participants.delete(room.creatorSocketId);
-        room.creatorSocketId = socketId;
+    if (!isCreator && data.creatorToken && safeEqual(data.creatorToken, room.creatorToken)) {
+      if (!room.creatorSocketId) {
+        // Slot is free (server restart or room rehydrated from disk) — token wins.
         isCreator = true;
+      } else {
+        const oldCreator = room.participants.get(room.creatorSocketId);
+        if (oldCreator && oldCreator.disconnected) {
+          room.participants.delete(room.creatorSocketId);
+          room.creatorSocketId = socketId;
+          isCreator = true;
+        }
       }
     }
 
@@ -1277,6 +1468,10 @@ class RoomManager {
       clearInterval(this._sweepInterval);
       this._sweepInterval = null;
     }
+    if (this._autosaveInterval) {
+      clearInterval(this._autosaveInterval);
+      this._autosaveInterval = null;
+    }
     for (const [, tid] of this._cleanupTimers) {
       clearTimeout(tid);
     }
@@ -1284,4 +1479,6 @@ class RoomManager {
   }
 }
 
-module.exports = new RoomManager();
+const instance = new RoomManager();
+instance.RoomManager = RoomManager; // expose class for isolated/persistence tests
+module.exports = instance;
