@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=2.0.0">
   <style>
     .mobile-block { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(160deg,#5b6cff 0%,#3a3f8f 100%); z-index:99999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; color:#fff; font-family:'Segoe UI',sans-serif; }
     .mobile-block h1 { font-size:2rem; margin-bottom:16px; }
@@ -28,15 +28,14 @@
     <a href="https://www.insuffle.com">Retour sur insuffle.com</a>
   </div>
   <div class="landing-container" id="landing">
-    <div class="landing-card">
-      <div class="insuffle-branding">
-        <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" class="insuffle-logo">
-      </div>
-      <div>
-        <h1>Espace Collaboratif</h1>
-        <p class="landing-subtitle">Créez un espace isométrique pour vos réunions, ateliers et séminaires à distance. Sans inscription : un lien unique à partager, et tout le monde se retrouve.</p>
-      </div>
+    <div class="landing-hero">
+      <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" class="insuffle-logo">
+      <h1 class="hero-title">Votre espace d'équipe,<br><span class="hero-grad">vivant et isométrique</span></h1>
+      <p class="hero-sub">Réunions, ateliers et séminaires dans un espace où l'on se déplace, se regroupe et se parle naturellement. Sans inscription — un lien unique à partager.</p>
+    </div>
 
+    <div class="landing-cols">
+    <div class="landing-card">
       <div class="form-group">
         <label for="room-name">Nom de la salle</label>
         <input type="text" id="room-name" placeholder="Ma réunion d'équipe" maxlength="50">
@@ -78,6 +77,12 @@
       <button class="btn btn-secondary" id="btn-join">Rejoindre</button>
     </div>
 
+    <figure class="landing-preview" aria-label="Aperçu de l'espace collaboratif">
+      <img src="assets/preview.png?v=2.0.0" alt="Aperçu d'une salle : avatars, bureaux, tableau blanc et chat" loading="lazy">
+      <figcaption><span class="live-dot"></span> Salle en direct — audio par proximité, tableaux, partage d'écran</figcaption>
+    </figure>
+    </div><!-- /landing-cols -->
+
     <!-- #48 Feature highlights -->
     <div class="landing-features">
       <div class="landing-feature">
@@ -108,8 +113,8 @@
     <div class="landing-footer">Made with &#10084;&#65039; by <a href="https://www.insuffle.com" target="_blank">Insuffle</a></div>
   </div>
 
-  <script src="../shared/constants.js"></script>
-  <script src="js/themes.js"></script>
+  <script src="../shared/constants.js?v=2.0.0"></script>
+  <script src="js/themes.js?v=2.0.0"></script>
   <script>
     // Continuité d'ambiance : on retrouve le thème choisi en salle
     if (typeof Themes !== 'undefined') Themes.restore();

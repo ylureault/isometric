@@ -416,6 +416,10 @@ const Board = {
   drawFurnitureItem(ctx, item, offsetX, offsetY) {
     var def = Environments.furnitureTypes[item.type];
     if (!def) return;
+    // Rendu « Insuffle Espace » : volumes doux du design pour les types portés
+    if (typeof DesignFurni !== 'undefined' && DesignFurni.canDraw(item.type)) {
+      return DesignFurni.draw(ctx, this, item, def);
+    }
     if (def.isStage) return this.drawStage(ctx, item, def);
     if (def.isPlant) return this.drawPlant(ctx, item, def);
     if (def.isScreen) return this.drawScreen(ctx, item, def);

@@ -662,6 +662,24 @@ var Engine = {
     var px = this.player.x;
     var py = this.player.y;
 
+    // Clic sur une étiquette de zone (pastille flottante) : cible directe.
+    // Les pastilles sont enregistrées en coordonnées monde par drawZoneLabels.
+    var wpx = (e.clientX - this.camera.x) / this.zoom;
+    var wpy = (e.clientY - this.camera.y) / this.zoom;
+    if (this._zonePills) {
+      for (var zp = 0; zp < this._zonePills.length; zp++) {
+        var pill = this._zonePills[zp];
+        if (wpx >= pill.x0 && wpx <= pill.x1 && wpy >= pill.y0 && wpy <= pill.y1) {
+          // Recale le clic sur la tuile du meuble : les détections suivantes
+          // (porte, espace collab, tableau) le traitent comme un clic direct.
+          clickX = Math.floor(pill.item.x);
+          clickY = Math.floor(pill.item.y);
+          gp = { x: pill.item.x + 0.5, y: pill.item.y + 0.5 };
+          break;
+        }
+      }
+    }
+
     // Teleport cooldown (prevent double-click spam)
     if (this._lastTeleport && Date.now() - this._lastTeleport < 1000) {
       // Skip door check during cooldown
@@ -1772,6 +1790,7 @@ var Engine = {
   // Étiquettes de zones du design : pastille flottante au-dessus des
   // meubles interactifs (tableau blanc, mur collaboratif, espace partagé, portes)
   drawZoneLabels: function(ctx) {
+    this._zonePills = [];
     if (this.zoom < 0.55) return; // illisible en dézoom fort
     var panelBg = this.themeColor('--panel-solid', '#ffffff');
     var panelBorder = this.themeColor('--panel-border', 'rgba(20,28,60,.08)');
@@ -1802,6 +1821,8 @@ var Engine = {
       var pillW = padX * 2 + dotW + wLabel + sepW + wHint;
       var pillH = 26;
       var x0 = pos.x - pillW / 2, y0 = topY - pillH / 2;
+      // Zone cliquable (coordonnées monde, marge généreuse)
+      this._zonePills.push({ x0: x0 - 6, y0: y0 - 6, x1: x0 + pillW + 6, y1: y0 + pillH + 6, item: item, def: def });
 
       ctx.shadowColor = 'rgba(20,24,60,.28)';
       ctx.shadowBlur = 14;

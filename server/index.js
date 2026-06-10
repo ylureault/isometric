@@ -61,8 +61,19 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '64kb' }));
-app.use('/client', express.static(path.join(__dirname, '..', 'client')));
-app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
+// Le HTML n'est jamais mis en cache (il référence les assets versionnés ?v=) ;
+// les assets statiques peuvent l'être brièvement et sont revalidés.
+const staticOpts = {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
+    }
+  },
+};
+app.use('/client', express.static(path.join(__dirname, '..', 'client'), staticOpts));
+app.use('/shared', express.static(path.join(__dirname, '..', 'shared'), staticOpts));
 
 app.get('/health', (req, res) => res.json({ status: 'ok', rooms: roomManager.rooms.size, uptime: process.uptime() }));
 
