@@ -775,6 +775,16 @@ body.ui-dark-mode .share-close:hover { background: rgba(255,255,255,0.1); color:
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* #2 La vie de la salle, floutée, derrière l'onboarding — on sent qu'il
+   se passe quelque chose de l'autre côté */
+.avatar-config-overlay::before {
+  content: ''; position: absolute; inset: 0;
+  background: url(../assets/preview.png) center/cover no-repeat;
+  filter: blur(16px) saturate(1.05);
+  opacity: .30;
+  pointer-events: none;
+}
+.avatar-config-panel { position: relative; z-index: 1; }
 .avatar-config-panel {
   background: var(--panel-solid); border-radius: 28px;
   box-shadow: 0 50px 120px -40px rgba(10,14,40,.55);
@@ -1566,6 +1576,18 @@ html[data-theme="nuit"] .ob-brand-img { filter: brightness(0) invert(1); opacity
 }
 .edit-quit-btn:hover { background: rgba(231,76,60,0.2); }
 .edit-quit-btn:active { transform: scale(0.97); }
+
+/* ===== PiP de son propre partage d'écran ===== */
+#self-share-pip {
+  position: fixed; right: 18px; bottom: 90px; width: 220px;
+  border-radius: 14px; z-index: 44; border: 2px solid var(--accent);
+  box-shadow: var(--shadow); background: #000;
+}
+
+/* ===== Respecte « réduire les animations » du système ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
 
 /* ===== Statuts & minuteur géant (Facilitation) ===== */
 .status-pop {

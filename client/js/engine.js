@@ -1450,6 +1450,12 @@ var Engine = {
       var dt = Math.min((ts - self.lastTime) / 1000, 0.1);
       self.lastTime = ts;
       self.update(dt);
+      // #99 Économie : onglet en arrière-plan → on garde la logique réseau
+      // mais on ne rend plus qu'à ~4 images/s
+      if (document.hidden) {
+        setTimeout(function() { requestAnimationFrame(loop); }, 250);
+        return;
+      }
       self.render(ts);
       requestAnimationFrame(loop);
     }
@@ -1754,6 +1760,8 @@ var Engine = {
 
     // Statuts, humeurs et jeu (module Facilitation)
     if (typeof Facilitation !== 'undefined' && Facilitation.draw) Facilitation.draw(ctx);
+    // Traces de pas, boussole admin (module Extras)
+    if (typeof Extras !== 'undefined' && Extras.draw) Extras.draw(ctx);
 
     // #2 Particle trail behind walking character
     if (typeof UXEnhancements !== 'undefined') {
