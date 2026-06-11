@@ -2001,7 +2001,10 @@ html[data-theme="nuit"] .ob-brand-img { filter: brightness(0) invert(1); opacity
 }
 
 /* ===== Tooltip utility ===== */
-[title] { position: relative; }
+/* Surtout pas de [title] universel : il forçait position:relative sur des
+   éléments posés en absolu (poignée du panneau admin → panneau cassé).
+   On ne cible que les boutons qui utilisent les tooltips maison. */
+.toolbar-btn[title], .reaction-btn[title], .tool[title] { position: relative; }
 
 /* ===== Skip link for accessibility ===== */
 .skip-link {

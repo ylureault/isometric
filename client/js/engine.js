@@ -2705,17 +2705,30 @@ var Engine = {
     var gs = Board.gridSize;
     var cellSize = this.getEditCellSize() * this.editZoom;
 
-    // White background
-    ctx.fillStyle = '#f5f5f5';
+    // Fond thémé + plateau arrondi (cohérent avec le reste du design)
+    var bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0, this.themeColor('--bg-1', '#eef1fc'));
+    bgGrad.addColorStop(1, this.themeColor('--bg-2', '#dfe4f5'));
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
     ctx.save();
     ctx.translate(this.editCamera.x, this.editCamera.y);
 
+    ctx.save();
+    ctx.shadowColor = 'rgba(20,24,60,.25)';
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = this.themeColor('--floor-edge', '#a9c0a6');
+    ctx.beginPath();
+    ctx.roundRect(-8, -8, gs * cellSize + 16, gs * cellSize + 16, 14);
+    ctx.fill();
+    ctx.restore();
+
     // Draw floor tiles
     for (var y = 0; y < gs; y++) {
       for (var x = 0; x < gs; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? '#bdc6b1' : '#b1bca4';
+        ctx.fillStyle = (x + y) % 2 === 0 ? Board.floorColor1 : Board.floorColor2;
         ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
       }
     }
@@ -2771,33 +2784,41 @@ var Engine = {
       var fx = item.x * cellSize;
       var fy = item.y * cellSize;
 
-      // Fill
+      // Tuile arrondie avec ombre douce (design)
+      var rr = Math.min(8, cellSize * 0.3);
+      ctx.save();
+      ctx.shadowColor = 'rgba(20,24,60,.18)';
+      ctx.shadowBlur = 5;
+      ctx.shadowOffsetY = 2;
       ctx.fillStyle = def.color || '#ccc';
-      ctx.fillRect(fx + 1, fy + 1, fw - 2, fh - 2);
+      ctx.beginPath();
+      ctx.roundRect(fx + 1.5, fy + 1.5, Math.max(3, fw - 3), Math.max(3, fh - 3), rr);
+      ctx.fill();
+      ctx.restore();
 
-      // Border
+      // Surbrillance selon l'outil actif
       var isHovered = (this.editHovered === item);
-      if (isHovered && this.editTool === 'delete') {
-        ctx.strokeStyle = '#e74c3c';
-        ctx.lineWidth = 3;
-      } else if (isHovered && this.editTool === 'move') {
-        ctx.strokeStyle = '#3498db';
-        ctx.lineWidth = 3;
-      } else {
-        ctx.strokeStyle = this.darkenColor(def.color || '#ccc', 0.3);
-        ctx.lineWidth = 1.5;
+      if (isHovered) {
+        ctx.strokeStyle = this.editTool === 'delete' ? '#e0564e'
+          : this.editTool === 'move' ? this.themeColor('--accent', '#5b6cff')
+          : this.themeColor('--accent-2', '#ff9d7a');
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(fx + 1.5, fy + 1.5, Math.max(3, fw - 3), Math.max(3, fh - 3), rr);
+        ctx.stroke();
       }
-      ctx.strokeRect(fx + 1, fy + 1, fw - 2, fh - 2);
 
-      // Type name centered
-      var fontSize = Math.max(7, Math.min(12, cellSize * 0.35));
-      ctx.font = 'bold ' + fontSize + 'px "Segoe UI", sans-serif';
-      ctx.fillStyle = '#333';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      var label = def.name;
-      if (label.length > 12 && cellSize < 25) label = label.substring(0, 10) + '..';
-      ctx.fillText(label, fx + fw / 2, fy + fh / 2);
+      // Nom centré, lisible
+      if (cellSize > 14 && (def.width || 1) * (def.height || 1) >= 2) {
+        var fontSize = Math.max(8, Math.min(12, cellSize * 0.32));
+        ctx.font = '700 ' + fontSize + 'px "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        var label = def.name;
+        if (label.length > 12 && cellSize < 25) label = label.substring(0, 10) + '…';
+        ctx.fillText(label, fx + fw / 2, fy + fh / 2);
+      }
     }
 
     // Draw players as colored circles

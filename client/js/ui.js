@@ -2323,6 +2323,16 @@ const UI = {
     // Hide/show normal toolbar
     var normalToolbar = document.getElementById('toolbar');
     if (normalToolbar) normalToolbar.style.display = show ? 'none' : 'flex';
+
+    // En édition, on fait place nette : le chrome de la scène s'efface
+    var hudEl = document.getElementById('hud');
+    if (hudEl) hudEl.style.display = show ? 'none' : 'flex';
+    var chatEl = document.getElementById('chat-container');
+    if (chatEl) chatEl.style.display = show ? 'none' : 'flex';
+    var miniEl = document.getElementById('minimap-container');
+    if (miniEl) miniEl.style.display = show ? 'none' : 'block';
+    var pillEl = document.getElementById('table-space-pill');
+    if (pillEl && show) pillEl.style.display = 'none';
   },
 
   // Palette visuelle : cliquer sélectionne, glisser-déposer place directement.
