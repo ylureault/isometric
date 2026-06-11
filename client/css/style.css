@@ -1567,6 +1567,25 @@ html[data-theme="nuit"] .ob-brand-img { filter: brightness(0) invert(1); opacity
 .edit-quit-btn:hover { background: rgba(231,76,60,0.2); }
 .edit-quit-btn:active { transform: scale(0.97); }
 
+/* ===== Statuts & minuteur géant (Facilitation) ===== */
+.status-pop {
+  position: fixed; z-index: 95; display: flex; gap: 4px;
+  padding: 8px; border-radius: 999px;
+}
+.status-choice {
+  width: 38px; height: 38px; border-radius: 50%; border: none;
+  background: transparent; font-size: 19px; cursor: pointer;
+  display: grid; place-items: center; transition: .13s;
+}
+.status-choice:hover { background: rgba(125,135,170,.16); transform: translateY(-2px) scale(1.1); }
+.status-clear { font-size: 14px; color: var(--muted); }
+.timer-display-global.timer-huge {
+  top: 50%; transform: translate(-50%, -50%) scale(1);
+  padding: 28px 56px; border-radius: 32px;
+}
+.timer-display-global.timer-huge #timer-global-time { font-size: 11vh; line-height: 1; }
+.timer-display-global.timer-huge .timer-label { font-size: 18px; }
+
 /* ===== Palette de mobilier (mode édition) ===== */
 .edit-palette {
   position: fixed; top: 64px; left: 14px; bottom: 14px; width: 212px;

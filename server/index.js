@@ -194,6 +194,7 @@ io.on('connection', (socket) => {
       participants: result.participants,
       tables: result.tables,
       theme: result.theme,
+      chat: result.chat || [],
       furniture: furnitureState,
       activeScreenShare: room.activeScreenShare || null,
       creatorToken: result.creatorToken, // creator stores this to reclaim the room on reconnect
@@ -923,14 +924,8 @@ io.on('connection', (socket) => {
     if (!room) return;
     const p = room.participants.get(socket.id);
     if (!p) return;
-    const text = (data.text || '').toString().trim().slice(0, 200);
-    if (!text) return; // ignore empty messages
-    const msg = {
-      socketId: socket.id,
-      pseudo: p.pseudo,
-      text,
-      timestamp: now,
-    };
+    const msg = roomManager.addChatMessage(currentRoomId, socket.id, data.text);
+    if (!msg) return; // message vide
     io.to(currentRoomId).emit('chat-message', msg);
   });
 
@@ -1052,6 +1047,74 @@ io.on('connection', (socket) => {
     }
     io.to(currentRoomId).emit('all-muted', { by: socket.id });
     callback(result);
+  });
+
+  // ===== VERROUILLAGE DE SALLE =====
+  socket.on('set-room-locked', (data, callback) => {
+    if (!currentRoomId) return callback && callback({ error: 'not_in_room' });
+    const result = roomManager.setRoomLocked(currentRoomId, socket.id, data && data.locked);
+    if (result.error) return callback && callback(result);
+    io.to(currentRoomId).emit('room-locked-changed', { locked: result.locked });
+    callback && callback(result);
+  });
+
+  // ===== STATUT / HUMEUR =====
+  socket.on('set-status', (data, callback) => {
+    if (!currentRoomId) return;
+    if (!rateLimit('status', CONSTANTS.RATE_LIMIT_GENERIC)) return;
+    const result = roomManager.setParticipantStatus(currentRoomId, socket.id, data && data.status);
+    if (result.error) return callback && callback(result);
+    io.to(currentRoomId).emit('status-changed', { socketId: socket.id, status: result.status });
+    callback && callback(result);
+  });
+
+  // ===== REGROUPEMENT (répartition en groupes, cloche de rappel) =====
+  socket.on('admin-teleport', (data, callback) => {
+    if (!currentRoomId) return callback && callback({ error: 'not_in_room' });
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return callback && callback({ error: 'room_not_found' });
+    const requester = room.participants.get(socket.id);
+    if (!requester || !requester.isAdmin) return callback && callback({ error: 'not_admin' });
+    const moves = Array.isArray(data && data.moves) ? data.moves.slice(0, CONSTANTS.MAX_PARTICIPANTS) : [];
+    const applied = [];
+    for (const mv of moves) {
+      if (!mv || typeof mv.x !== 'number' || typeof mv.y !== 'number') continue;
+      const target = room.participants.get(mv.socketId);
+      if (!target) continue;
+      const x = Math.max(0.5, Math.min(room.gridSize - 0.5, mv.x));
+      const y = Math.max(0.5, Math.min(room.gridSize - 0.5, mv.y));
+      target.x = x; target.y = y;
+      applied.push({ socketId: mv.socketId, x, y });
+    }
+    for (const mv of applied) {
+      io.to(currentRoomId).emit('participant-moved', {
+        socketId: mv.socketId, x: mv.x, y: mv.y,
+        direction: { dx: 0, dy: 1 }, isWalking: false, walkPhase: 0,
+      });
+      io.to(mv.socketId).emit('force-moved', { x: mv.x, y: mv.y, reason: (data && data.reason) || null });
+    }
+    callback && callback({ success: true, moved: applied.length });
+  });
+
+  // ===== CANAL DE JEU (Gendarmes & Voleurs…) =====
+  // Simple relais : le démarrage/arrêt est réservé à l'admin, le reste est
+  // libre et limité en débit. L'état du jeu vit chez les clients (jeu
+  // d'ambiance, sans enjeu de triche).
+  socket.on('game-event', (data) => {
+    if (!currentRoomId || !data || typeof data.action !== 'string') return;
+    if (!rateLimit('game', CONSTANTS.RATE_LIMIT_GENERIC)) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p) return;
+    if ((data.action === 'start' || data.action === 'stop') && !p.isAdmin) return;
+    io.to(currentRoomId).emit('game-event', {
+      action: data.action.slice(0, 20),
+      socketId: socket.id,
+      target: typeof data.target === 'string' ? data.target.slice(0, 40) : null,
+      seed: typeof data.seed === 'number' ? data.seed : null,
+      duration: typeof data.duration === 'number' ? Math.min(600, data.duration) : null,
+    });
   });
 
   // ===== AUDIO RADIUS (improvement #24) =====

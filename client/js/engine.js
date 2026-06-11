@@ -275,6 +275,24 @@ var Engine = {
     // Improvement #22: force muted by admin
     s.on('force-muted', function() { self.player.isMuted = true; Audio.isMuted = true; Audio._applyMuteState(); UI.updateMuteButton(true); UI.showNotification('Vous avez été mis en sourdine'); });
     // Improvement #24: audio radius changed
+    s.on('force-moved', function(d) {
+      self.player.x = d.x; self.player.y = d.y;
+      self.moveTarget = null;
+      Network.sendPosition(d.x, d.y, self.player.direction, false, 0);
+      if (d.reason) UI.showNotification(d.reason);
+    });
+    s.on('room-locked-changed', function(d) {
+      UI.showNotification(d.locked ? '🔒 Salle verrouillée — plus personne ne peut entrer' : '🔓 Salle déverrouillée');
+      var btn = document.getElementById('btn-lock-room');
+      if (btn) btn.textContent = d.locked ? '🔓 Déverrouiller la salle' : '🔒 Verrouiller la salle';
+      if (btn) btn.dataset.locked = d.locked ? '1' : '';
+    });
+    s.on('status-changed', function(d) {
+      if (typeof Facilitation !== 'undefined') Facilitation.onStatus(d.socketId, d.status);
+    });
+    s.on('game-event', function(d) {
+      if (typeof Facilitation !== 'undefined') Facilitation.onGameEvent(d);
+    });
     s.on('audio-radius-changed', function(d) {
       self.player.audioRadius = d.audioRadius;
       self._radiusChangedAt = performance.now();
@@ -399,7 +417,16 @@ var Engine = {
       isCreator: this.roomConfig.isCreator, roomName: this.roomConfig.name,
       environment: this.roomConfig.environment, gridSize: this.roomConfig.gridSize,
     }, function(r) {
-      if (r.error) { UI.showError(r.error); return; }
+      if (r.error) {
+        var msgs = {
+          room_locked: 'Cette salle est verrouillée — la session a commencé. Contactez l\'organisateur.',
+          room_full: 'Cette salle est complète.',
+          room_closed: 'Cette salle a été fermée.',
+          invalid_password: 'Mot de passe incorrect.',
+        };
+        UI.showError(msgs[r.error] || r.error);
+        return;
+      }
       self.player.x = r.you.x; self.player.y = r.you.y;
       self.player.role = r.you.role; self.player.isAdmin = r.you.isAdmin;
       self.roomConfig.name = r.room.name;
@@ -433,6 +460,12 @@ var Engine = {
         Board.buildCollisionMap();
       }
       if (r.tables) r.tables.forEach(function(t) { self.tables.set(t.id, t); });
+      // Historique du chat : on retrouve la conversation en arrivant
+      if (r.chat && r.chat.length && self.renderChatMessage) {
+        r.chat.forEach(function(m) { self.renderChatMessage(m); });
+        var box = document.getElementById('chat-messages');
+        if (box) box.scrollTop = box.scrollHeight;
+      }
       UI.showCopyLink(self.roomConfig.roomId);
       UI.updateAdminUI(self.player.isAdmin);
       // Restore active screen share if one is in progress
@@ -1027,17 +1060,36 @@ var Engine = {
       }
     });
 
-    Network.socket.on('chat-message', function(msg) {
+    // Échappe PUIS rend les liens cliquables (jamais l'inverse : XSS)
+    self.linkifyChat = function(text) {
+      var safe = self.escapeHtml(text);
+      return safe.replace(/(https?:\/\/[^\s<]+)/g,
+        '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    };
+    // La couleur de l'auteur = la couleur du haut de son avatar
+    self.chatAuthorColor = function(socketId) {
+      if (socketId === Network.mySocketId && self.player.colors) return self.player.colors.shirt;
+      var rp = Network.remotePlayers.get(socketId);
+      return (rp && rp.colors) ? rp.colors.shirt : null;
+    };
+    self.renderChatMessage = function(msg) {
       if (!messages) return;
-      var emptyEl = document.getElementById("chat-empty-state");
+      var emptyEl = document.getElementById('chat-empty-state');
       if (emptyEl) emptyEl.remove();
-      // Clear typing for sender
-      delete typingUsers[msg.socketId];
-
       var div = document.createElement('div');
       div.className = 'chat-msg';
-      div.innerHTML = '<span class="chat-msg-author">' + self.escapeHtml(msg.pseudo || 'Anonyme') + ':</span> ' + self.escapeHtml(msg.text);
+      var color = self.chatAuthorColor(msg.socketId);
+      div.innerHTML = '<span class="chat-msg-author"' + (color ? ' style="color:' + color + '"' : '') + '>' +
+        self.escapeHtml(msg.pseudo || 'Anonyme') + ':</span> ' + self.linkifyChat(msg.text);
       messages.appendChild(div);
+      return div;
+    };
+
+    Network.socket.on('chat-message', function(msg) {
+      if (!messages) return;
+      // Clear typing for sender
+      delete typingUsers[msg.socketId];
+      self.renderChatMessage(msg);
 
       // #26 Auto-scroll or show "new messages" button
       if (!userIsScrolledUp) {
@@ -1699,6 +1751,9 @@ var Engine = {
 
     // Étiquettes de zones (design) au-dessus des meubles interactifs
     this.drawZoneLabels(ctx);
+
+    // Statuts, humeurs et jeu (module Facilitation)
+    if (typeof Facilitation !== 'undefined' && Facilitation.draw) Facilitation.draw(ctx);
 
     // #2 Particle trail behind walking character
     if (typeof UXEnhancements !== 'undefined') {

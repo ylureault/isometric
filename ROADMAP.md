@@ -13,6 +13,16 @@ porte la voix à toute la salle + mute admin, espace d'écran par table,
 tableaux/paperboards illimités et persistants (post-its sauvés à chaque
 ajout), salles récentes, Open Graph/favicon, anti-cache définitif.
 
+## ✅ Fait aussi (vague facilitation)
+Statuts & humeur (bouton 😊 dans le dock, AFK auto 😴, badges au-dessus des
+têtes), kit du facilitateur dans l'onglet Participants (🎲 répartir en
+groupes vers les tables, 📣 rassembler en cercle au centre, 🎡 tirage au
+sort avec projecteur, 📊 ROTI, 🌦 météo d'équipe, ⚡ boost d'énergie,
+🔒 verrouillage de salle), minuteur géant au clic + gong WebAudio,
+push-to-talk (touche P puis Espace maintenu), chat : liens cliquables,
+couleur d'auteur, historique rejoué à l'arrivée, jeu Gendarmes & Voleurs
+(rôles par graine partagée, capture par contact, prison, délivrance, 2 min).
+
 ## 🎯 Prochaine vague (specs prêtes)
 - **Statuts & humeur** (#11-13) : event serveur additif `set-status {emoji}`
   relayé + stocké sur le participant; badge à côté du pseudo; AFK auto 3 min.

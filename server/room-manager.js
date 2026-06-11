@@ -74,7 +74,7 @@ class RoomManager {
       creatorToken: room.creatorToken, inviteCode: room.inviteCode, password: room.password,
       theme: room.theme, themePresets, furniture: room.furniture || [],
       tables, tableNotes, whiteboards, subRooms,
-      audioRadius: room.audioRadius, stats: room.stats, closed: room.closed,
+      audioRadius: room.audioRadius, stats: room.stats, closed: room.closed, locked: room.locked,
       createdAt: room.createdAt,
       nextTableId: room.nextTableId, nextWhiteboardId: room.nextWhiteboardId,
       nextVoteId: room.nextVoteId, nextTimerId: room.nextTimerId, nextJoinOrder: room.nextJoinOrder,
@@ -108,6 +108,7 @@ class RoomManager {
       subRooms: new Map(),
       chatHistory: [],
       closed: !!snap.closed,
+      locked: !!snap.locked,
       createdAt: snap.createdAt || Date.now(),
       nextTableId: snap.nextTableId || 1,
       nextWhiteboardId: snap.nextWhiteboardId || 1,
@@ -312,6 +313,7 @@ class RoomManager {
       tableNotes: new Map(),
       raisedHands: new Map(),
       chatHistory: [], // improvement #18: limited chat history
+      locked: false, // salle verrouillée : on n'entre plus (le créateur passe)
       closed: false,
       createdAt: Date.now(),
       nextTableId: 1,
@@ -360,6 +362,9 @@ class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return { error: 'room_not_found' };
     if (room.closed) return { error: 'room_closed' };
+    if (room.locked && !(data.creatorToken && data.creatorToken === room.creatorToken)) {
+      return { error: 'room_locked' };
+    }
     // Improvement #2: password protection
     if (room.password && !data.isCreator) {
       if (!data.password || data.password !== room.password) {
@@ -437,6 +442,7 @@ class RoomManager {
       participants: this.getParticipantsList(roomId),
       tables: this.getTablesList(roomId),
       theme: room.theme,
+      chat: room.chatHistory.slice(-50),
       // Only the creator receives the token; it proves identity on reconnection.
       creatorToken: isCreator ? room.creatorToken : undefined,
     };
@@ -1442,6 +1448,30 @@ class RoomManager {
       }
     }
     return { success: true, muted };
+  }
+
+  // ===== VERROUILLAGE DE SALLE =====
+
+  setRoomLocked(roomId, requesterId, locked) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const requester = room.participants.get(requesterId);
+    if (!requester || !requester.isAdmin) return { error: 'not_admin' };
+    room.locked = !!locked;
+    this._persist(roomId);
+    return { success: true, locked: room.locked };
+  }
+
+  // ===== STATUT / HUMEUR DU PARTICIPANT =====
+
+  setParticipantStatus(roomId, socketId, status) {
+    const room = this.rooms.get(roomId);
+    if (!room) return { error: 'room_not_found' };
+    const p = room.participants.get(socketId);
+    if (!p) return { error: 'not_in_room' };
+    const clean = (typeof status === 'string') ? status.slice(0, 8) : '';
+    p.status = clean || null;
+    return { success: true, status: p.status };
   }
 
   // ===== CONFIGURABLE AUDIO RADIUS (improvement #24) =====
