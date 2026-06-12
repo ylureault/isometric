@@ -2300,7 +2300,7 @@ const UI = {
     coffeeTable: '☕', bookshelf: '📚', whiteboard: '📋', postItBoard: '📌',
     stage: '🎭', smallStage: '🎭', podium: '🎤', projector: '📽️', waterCooler: '🚰',
     filingCabinet: '🗄️', standingDesk: '🖥️', lamp: '💡',
-    collabSpace: '🤝', carpet: '🟫', largeCarpet: '🟫',
+    collabSpace: '🤝', carpet: '🟫', largeCarpet: '🟫', zoneMarker: '🗣️',
     door: '🚪', conferencePhone: '📞', trashBin: '🗑️', clock: '🕐',
   },
 
@@ -2353,7 +2353,6 @@ const UI = {
 
     for (var type in Environments.furnitureTypes) {
       var def = Environments.furnitureTypes[type];
-      if (def.isZone) continue;
       var card = document.createElement('button');
       card.type = 'button';
       card.className = 'edit-palette-card';

@@ -372,6 +372,15 @@ const Audio = {
       else if (localTableId && localTableId === remoteTableId) {
         volume = 1;
       }
+      // 3bis. Espace de discussion matérialisé (zone, salon, espace collab) :
+      // tout le monde s'y entend, comme autour d'une vraie table
+      else if (typeof Engine !== 'undefined' && Engine.zoneIndexAt &&
+               (function() {
+                 var zl = Engine.zoneIndexAt(localPlayer.x, localPlayer.y);
+                 return zl >= 0 && zl === Engine.zoneIndexAt(remotePlayer.renderX, remotePlayer.renderY);
+               })()) {
+        volume = 1;
+      }
       // 4. Proximity audio
       else {
         const dist = Math.sqrt(

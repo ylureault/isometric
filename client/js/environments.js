@@ -63,7 +63,7 @@ const Environments = {
       color: '#c4a06a', topColor: '#d4b07a', drawHeight: 35, isPostItBoard: true,
     },
     zoneMarker: {
-      name: 'Zone', width: 4, height: 4, solid: false,
+      name: 'Zone de discussion', width: 4, height: 4, solid: false,
       color: 'rgba(100,160,200,0.12)', topColor: 'rgba(100,160,200,0.2)', drawHeight: 0, isZone: true,
     },
     smallStage: {

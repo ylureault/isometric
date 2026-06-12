@@ -2002,29 +2002,78 @@ var Engine = {
     'Aretha', 'Coltrane', 'Édith Piaf', 'Stromae', 'Air', 'Gainsbourg',
     'Angèle', 'Prince', 'Camille', 'Vivaldi', 'Fela Kuti'],
 
-  drawZoneAreas: function(ctx) {
+  // Zones de discussion : tout le monde s'y entend, comme autour d'une table.
+  // (zones, espaces collab et tapis/salons — géométrie partagée par tous)
+  _buildDiscussionZones: function() {
     var zones = [];
     for (var i = 0; i < Board.furniture.length; i++) {
       var item = Board.furniture[i];
       var def = Environments.furnitureTypes[item.type];
-      if (!def || (!def.isZone && !def.isCollabSpace)) continue;
-      zones.push({ item: item, def: def });
+      if (!def || (!def.isZone && !def.isCollabSpace && !def.isCarpet)) continue;
+      var zw = item.width || def.width || 1;
+      var zh = item.height || def.height || 1;
+      zones.push({
+        item: item, def: def,
+        x0: item.x, y0: item.y,
+        x1: item.x + zw, y1: item.y + zh,
+      });
     }
-    if (!zones.length) return;
     // Ordre stable (y puis x) pour des noms identiques chez tous
-    zones.sort(function(a, b) {
-      return (a.item.y - b.item.y) || (a.item.x - b.item.x);
-    });
+    zones.sort(function(a, b) { return (a.item.y - b.item.y) || (a.item.x - b.item.x); });
+    for (var z = 0; z < zones.length; z++) {
+      zones[z].name = this.ZONE_NAMES[z % this.ZONE_NAMES.length] + ' · ' + (z + 1);
+    }
+    this._discussionZones = zones;
+    return zones;
+  },
+
+  // Index de la zone de discussion contenant (x, y), -1 sinon
+  zoneIndexAt: function(x, y) {
+    var zs = this._discussionZones || this._buildDiscussionZones();
+    for (var i = 0; i < zs.length; i++) {
+      var z = zs[i];
+      if (x >= z.x0 && x < z.x1 && y >= z.y0 && y < z.y1) return i;
+    }
+    return -1;
+  },
+
+  drawZoneAreas: function(ctx) {
+    var zones = this._buildDiscussionZones();
+    if (!zones.length) return;
     var accent = this.themeColor('--accent', '#5b6cff');
     var muted = this.themeColor('--muted', '#737b96');
+    var ink = this.themeColor('--ink', '#1d2138');
+    var myZone = this.zoneIndexAt(this.player.x, this.player.y);
+
     for (var z = 0; z < zones.length; z++) {
       var it = zones[z].item, df = zones[z].def;
-      var w = df.width || 1, h = df.height || 1;
+      var w = it.width || df.width || 1, h = it.height || df.height || 1;
       var pA = Board.iso(it.x, it.y), pB = Board.iso(it.x + w, it.y);
       var pC = Board.iso(it.x + w, it.y + h), pD = Board.iso(it.x, it.y + h);
+
+      // Qui est dans cet espace ? (soi + les autres)
+      var count = 0;
+      if (myZone === z) count++;
+      Network.remotePlayers.forEach(function(p) {
+        if (p.opacity <= 0) return;
+        if (p.renderX >= zones[z].x0 && p.renderX < zones[z].x1 &&
+            p.renderY >= zones[z].y0 && p.renderY < zones[z].y1) count++;
+      });
+      var active = count >= 2;       // conversation en cours
+      var mine = myZone === z;       // j'y suis
+
       ctx.save();
-      ctx.strokeStyle = this._withAlpha(accent, 0.35);
-      ctx.lineWidth = 1.5;
+      // L'espace s'illumine doucement quand on y est ou qu'on y discute
+      if (mine || active) {
+        ctx.fillStyle = this._withAlpha(accent, mine ? 0.07 : 0.04);
+        ctx.beginPath();
+        ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y);
+        ctx.lineTo(pC.x, pC.y); ctx.lineTo(pD.x, pD.y);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.strokeStyle = this._withAlpha(accent, mine ? 0.75 : (active ? 0.5 : 0.35));
+      ctx.lineWidth = mine ? 2.5 : 1.5;
       ctx.setLineDash([7, 6]);
       ctx.lineDashOffset = -(performance.now() / 90) % 13; // fourmille doucement
       ctx.beginPath();
@@ -2033,19 +2082,30 @@ var Engine = {
       ctx.closePath();
       ctx.stroke();
       ctx.setLineDash([]);
-      // Nom discret au sommet de la zone
-      var name = this.ZONE_NAMES[z % this.ZONE_NAMES.length] + ' · ' + (z + 1);
+
+      // Nom de l'espace + occupation
+      var name = zones[z].name + (count > 0 ? '  🗣 ' + count : '');
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillStyle = this._withAlpha(accent, 0.10);
       var tw = ctx.measureText(name).width;
+      ctx.fillStyle = mine ? this._withAlpha(accent, 0.92) : this._withAlpha(accent, 0.10);
       ctx.beginPath();
       ctx.roundRect(pA.x - tw / 2 - 8, pA.y - 18, tw + 16, 17, 999);
       ctx.fill();
-      ctx.fillStyle = muted;
+      ctx.fillStyle = mine ? '#ffffff' : muted;
       ctx.fillText(name, pA.x, pA.y - 4);
       ctx.restore();
+    }
+
+    // Entrée / sortie d'un espace : on le dit clairement
+    if (myZone !== this._lastZoneIdx) {
+      if (myZone >= 0) {
+        UI.showNotification('🗣 Espace « ' + zones[myZone].name + ' » — tout le monde s\'entend ici');
+      } else if (this._lastZoneIdx >= 0 && this._lastZoneIdx < zones.length) {
+        UI.showNotification('Vous quittez « ' + zones[this._lastZoneIdx].name + ' »');
+      }
+      this._lastZoneIdx = myZone;
     }
   },
 
@@ -2340,8 +2400,8 @@ var Engine = {
       var item = Board.furniture[fi];
       var def = Environments.furnitureTypes[item.type];
       if (!def) continue;
-      var fw = (def.width || 1) * cellSize;
-      var fh = (def.height || 1) * cellSize;
+      var fw = (item.width || def.width || 1) * cellSize;
+      var fh = (item.height || def.height || 1) * cellSize;
       var fx = ox + item.x * cellSize;
       var fy = oy + item.y * cellSize;
       var interactive = def.isWhiteboard || def.isPostItBoard || def.isCollabSpace || def.isDoor;
@@ -2673,6 +2733,30 @@ var Engine = {
     var gp = this.editScreenToGrid(e.clientX, e.clientY);
 
     if (this.editTool === 'place' && this.editSelectedType) {
+      var selDef = Environments.furnitureTypes[this.editSelectedType];
+      // Zones et tapis : on les DESSINE en deux clics (coin A puis coin B)
+      if (selDef && (selDef.isZone || selDef.isCollabSpace || selDef.isCarpet)) {
+        if (!this._zoneDrawStart) {
+          this._zoneDrawStart = { x: Math.floor(gp.x), y: Math.floor(gp.y) };
+          UI.showNotification('🗣 Coin posé — cliquez le coin opposé pour dessiner l\'espace');
+          return;
+        }
+        var a = this._zoneDrawStart;
+        this._zoneDrawStart = null;
+        var zx = Math.min(a.x, Math.floor(gp.x));
+        var zy = Math.min(a.y, Math.floor(gp.y));
+        var zw = Math.min(14, Math.abs(Math.floor(gp.x) - a.x) + 1);
+        var zh = Math.min(14, Math.abs(Math.floor(gp.y) - a.y) + 1);
+        var self2 = this;
+        Network.socket.emit('add-furniture', { type: this.editSelectedType, x: zx, y: zy, width: zw, height: zh }, function(r) {
+          if (r && r.success) {
+            Board.furniture.push(r.item);
+            Board.buildCollisionMap();
+            UI.showNotification('Espace de ' + zw + '×' + zh + ' dessiné — tout le monde s\'y entendra');
+          }
+        });
+        return;
+      }
       this.placeFurnitureAt(this.editSelectedType, gp.x, gp.y);
       return;
     }
@@ -2787,8 +2871,8 @@ var Engine = {
       var item = Board.furniture[fi];
       var def = Environments.furnitureTypes[item.type];
       if (!def) continue;
-      var fw = (def.width || 1) * cellSize;
-      var fh = (def.height || 1) * cellSize;
+      var fw = (item.width || def.width || 1) * cellSize;
+      var fh = (item.height || def.height || 1) * cellSize;
       var fx = item.x * cellSize;
       var fy = item.y * cellSize;
 

@@ -865,6 +865,13 @@ class RoomManager {
       x: Math.max(0, Math.min(gs - 1, Number(furnitureData.x) || 0)),
       y: Math.max(0, Math.min(gs - 1, Number(furnitureData.y) || 0)),
     };
+    // Zones dessinées par l'admin : dimensions personnalisées bornées
+    if (furnitureData.width !== undefined) {
+      item.width = Math.max(1, Math.min(14, parseInt(furnitureData.width) || 1));
+    }
+    if (furnitureData.height !== undefined) {
+      item.height = Math.max(1, Math.min(14, parseInt(furnitureData.height) || 1));
+    }
     // Improvement #6: validate rotation to 0/90/180/270
     if (furnitureData.rotation !== undefined) {
       const rot = parseInt(furnitureData.rotation) || 0;
