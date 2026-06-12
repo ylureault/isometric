@@ -256,6 +256,18 @@ var Engine = {
     s.on('timer-paused', function(d) { if (UI.activeTimer) UI.activeTimer.paused = d.paused; });
     s.on('timer-cancelled', function(d) { UI.activeTimer = null; UI.hideTimer(); UI.showNotification('Minuteur annulé'); });
     s.on('furniture-added', function(i) { Board.furniture.push(i); Board.buildCollisionMap(); });
+    s.on('zone-label-changed', function(d) {
+      self._zoneLabels = self._zoneLabels || {};
+      if (d.label) self._zoneLabels[d.key] = d.label;
+      else delete self._zoneLabels[d.key];
+      self._zonesSig = null;
+      UI.showNotification(d.label ? '✏️ Espace renommé : « ' + d.label + ' »' : 'Nom d\'espace réinitialisé');
+    });
+    s.on('furniture-updated', function(d) {
+      var f = Board.furniture.find(function(it) { return it.id === d.item.id; });
+      if (f) Object.assign(f, d.item);
+      self._zonesSig = null; // les noms d'espaces se rafraîchissent
+    });
     s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); });
     s.on('furniture-moved', function(d) {
       var f = Board.furniture.find(function(item) { return item.id === d.furnitureId; });
@@ -461,6 +473,8 @@ var Engine = {
         Board.buildCollisionMap();
       }
       if (r.tables) r.tables.forEach(function(t) { self.tables.set(t.id, t); });
+      self._zoneLabels = r.zoneLabels || {};
+      self._zonesSig = null;
       // Historique du chat : on retrouve la conversation en arrivant
       if (r.chat && r.chat.length && self.renderChatMessage) {
         r.chat.forEach(function(m) { self.renderChatMessage(m); });
@@ -717,6 +731,24 @@ var Engine = {
   onDblClick: function(e) {
     if (!this.started || this.editMode) return;
     if (this.viewMode === 'topdown') return; // le plan est déjà centré
+    // #16 Admin : double-clic sur le nom d'un espace = le renommer
+    if (this.player.isAdmin && this._zoneNamePills) {
+      var wx = (e.clientX - this.camera.x) / this.zoom;
+      var wy = (e.clientY - this.camera.y) / this.zoom;
+      for (var zp = 0; zp < this._zoneNamePills.length; zp++) {
+        var pill = this._zoneNamePills[zp];
+        if (wx >= pill.x0 && wx <= pill.x1 && wy >= pill.y0 && wy <= pill.y1) {
+          var zKey = Math.floor(pill.item.x) + ',' + Math.floor(pill.item.y);
+          var current = (this._zoneLabels && this._zoneLabels[zKey]) || '';
+          var nv = prompt('Nom de cet espace (vide = nom automatique) :', current);
+          if (nv === null) return;
+          Network.socket.emit('set-zone-label', { key: zKey, label: nv }, function(r) {
+            if (r && r.error) UI.showNotification('Renommage réservé à l\'administrateur', 'warning');
+          });
+          return;
+        }
+      }
+    }
     var gp = this.screenToGridView(e.clientX, e.clientY);
     var ps = Board.iso(gp.x, gp.y);
     this._cameraCenterTarget = {
@@ -2049,8 +2081,12 @@ var Engine = {
     zones.sort(function(a, b) { return (a.item.y - b.item.y) || (a.item.x - b.item.x); });
     for (var z = 0; z < zones.length; z++) {
       zones[z].private = !!zones[z].def.isPrivate;
-      zones[z].name = (zones[z].private ? 'Salle ' : '') +
-        this.ZONE_NAMES[z % this.ZONE_NAMES.length] + ' · ' + (z + 1);
+      var zoneKey = Math.floor(zones[z].x0) + ',' + Math.floor(zones[z].y0);
+      zones[z].key = zoneKey;
+      zones[z].name = (this._zoneLabels && this._zoneLabels[zoneKey]) ||
+        zones[z].item.label ||
+        ((zones[z].private ? 'Salle ' : '') +
+         this.ZONE_NAMES[z % this.ZONE_NAMES.length] + ' · ' + (z + 1));
     }
     this._discussionZones = zones;
     return zones;
@@ -2127,6 +2163,8 @@ var Engine = {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       var tw = ctx.measureText(name).width;
+      if (!z) this._zoneNamePills = [];
+      this._zoneNamePills.push({ x0: pA.x - tw / 2 - 10, y0: pA.y - 22, x1: pA.x + tw / 2 + 10, y1: pA.y + 2, item: it });
       ctx.fillStyle = mine ? this._withAlpha(accent, 0.92) : this._withAlpha(accent, 0.10);
       ctx.beginPath();
       ctx.roundRect(pA.x - tw / 2 - 8, pA.y - 18, tw + 16, 17, 999);

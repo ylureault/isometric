@@ -74,7 +74,7 @@ class RoomManager {
       creatorToken: room.creatorToken, inviteCode: room.inviteCode, password: room.password,
       theme: room.theme, themePresets, furniture: room.furniture || [],
       tables, tableNotes, whiteboards, subRooms,
-      audioRadius: room.audioRadius, stats: room.stats, closed: room.closed, locked: room.locked,
+      audioRadius: room.audioRadius, stats: room.stats, closed: room.closed, locked: room.locked, zoneLabels: room.zoneLabels || {},
       createdAt: room.createdAt,
       nextTableId: room.nextTableId, nextWhiteboardId: room.nextWhiteboardId,
       nextVoteId: room.nextVoteId, nextTimerId: room.nextTimerId, nextJoinOrder: room.nextJoinOrder,
@@ -109,6 +109,7 @@ class RoomManager {
       chatHistory: [],
       closed: !!snap.closed,
       locked: !!snap.locked,
+      zoneLabels: snap.zoneLabels || {},
       createdAt: snap.createdAt || Date.now(),
       nextTableId: snap.nextTableId || 1,
       nextWhiteboardId: snap.nextWhiteboardId || 1,
@@ -313,6 +314,7 @@ class RoomManager {
       tableNotes: new Map(),
       raisedHands: new Map(),
       chatHistory: [], // improvement #18: limited chat history
+      zoneLabels: {}, // noms personnalisés des espaces, clé « x,y »
       locked: false, // salle verrouillée : on n'entre plus (le créateur passe)
       closed: false,
       createdAt: Date.now(),
@@ -441,6 +443,7 @@ class RoomManager {
       tables: this.getTablesList(roomId),
       theme: room.theme,
       chat: room.chatHistory.slice(-50),
+      zoneLabels: room.zoneLabels || {},
       // Only the creator receives the token; it proves identity on reconnection.
       creatorToken: isCreator ? room.creatorToken : undefined,
     };

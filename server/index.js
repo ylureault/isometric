@@ -195,6 +195,7 @@ io.on('connection', (socket) => {
       tables: result.tables,
       theme: result.theme,
       chat: result.chat || [],
+      zoneLabels: result.zoneLabels || {},
       furniture: furnitureState,
       activeScreenShare: room.activeScreenShare || null,
       creatorToken: result.creatorToken, // creator stores this to reclaim the room on reconnect
@@ -1054,6 +1055,39 @@ io.on('connection', (socket) => {
     }
     io.to(currentRoomId).emit('all-muted', { by: socket.id });
     callback(result);
+  });
+
+  // ===== RENOMMAGE D'UN ESPACE PAR POSITION (presets inclus) =====
+  socket.on('set-zone-label', (data, callback) => {
+    if (!currentRoomId) return callback && callback({ error: 'not_in_room' });
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return callback && callback({ error: 'room_not_found' });
+    const requester = room.participants.get(socket.id);
+    if (!requester || !requester.isAdmin) return callback && callback({ error: 'not_admin' });
+    const key = (typeof data.key === 'string') ? data.key.slice(0, 20) : null;
+    if (!key || !/^\d+,\d+$/.test(key)) return callback && callback({ error: 'invalid_key' });
+    if (!room.zoneLabels) room.zoneLabels = {};
+    const label = (typeof data.label === 'string') ? data.label.trim().slice(0, 40) : '';
+    if (label) room.zoneLabels[key] = label;
+    else delete room.zoneLabels[key];
+    io.to(currentRoomId).emit('zone-label-changed', { key, label: label || null });
+    callback && callback({ success: true });
+  });
+
+  // ===== RENOMMAGE D'UN ESPACE (label de mobilier) =====
+  socket.on('update-furniture', (data, callback) => {
+    if (!currentRoomId) return callback && callback({ error: 'not_in_room' });
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return callback && callback({ error: 'room_not_found' });
+    const requester = room.participants.get(socket.id);
+    if (!requester || !requester.isAdmin) return callback && callback({ error: 'not_admin' });
+    const item = (room.furniture || []).find(f => f.id === (data && data.furnitureId));
+    if (!item) return callback && callback({ error: 'not_found' });
+    if (typeof data.label === 'string') {
+      item.label = data.label.trim().slice(0, 40) || undefined;
+    }
+    io.to(currentRoomId).emit('furniture-updated', { item });
+    callback && callback({ success: true, item });
   });
 
   // ===== MUTE INDIVIDUEL VERROUILLÉ (admin) =====
