@@ -121,7 +121,12 @@ const Network = {
 
     // Reclaim a previously-created room on reconnect using the stored secret token.
     let storedToken;
-    try { storedToken = sessionStorage.getItem('creatorToken:' + roomId) || undefined; } catch (e) { /* private mode */ }
+    try {
+      // localStorage : être admin survit à la fermeture de l'onglet et aux
+      // retours des semaines plus tard (migration douce depuis sessionStorage)
+      storedToken = localStorage.getItem('creatorToken:' + roomId) ||
+        sessionStorage.getItem('creatorToken:' + roomId) || undefined;
+    } catch (e) { /* private mode */ }
 
     this.socket.emit('join-room', {
       roomId,
@@ -145,7 +150,7 @@ const Network = {
 
       // Persist the creator token so a refresh / reconnect keeps creator rights.
       if (response.creatorToken) {
-        try { sessionStorage.setItem('creatorToken:' + roomId, response.creatorToken); } catch (e) { /* ignore */ }
+        try { localStorage.setItem('creatorToken:' + roomId, response.creatorToken); } catch (e) { /* ignore */ }
       }
 
       // Populate remote players from existing participants

@@ -25,6 +25,29 @@ var Facilitation = (function() {
     if (emoji) statuses[Network.mySocketId] = emoji;
     else delete statuses[Network.mySocketId];
     Network.socket.emit('set-status', { status: emoji || '' }, function() {});
+    // Le statut choisi survit aux rechargements (pas le 😴 automatique)
+    if (!auto) {
+      try {
+        if (emoji) localStorage.setItem('insuffle_status', emoji);
+        else localStorage.removeItem('insuffle_status');
+      } catch (e) {}
+    }
+  }
+
+  // À chaque (re)connexion : on réémet son statut sauvegardé
+  function restoreMyStatus() {
+    var saved = null;
+    try { saved = localStorage.getItem('insuffle_status'); } catch (e) {}
+    if (!saved) return;
+    var tries = 0;
+    var t = setInterval(function() {
+      if (++tries > 30) { clearInterval(t); return; }
+      if (typeof Engine === 'undefined' || !Engine.started || !Network.mySocketId) return;
+      clearInterval(t);
+      setMyStatus(saved, false);
+      var btn = document.getElementById('btn-status');
+      if (btn) btn.textContent = saved;
+    }, 1000);
   }
 
   function buildStatusButton() {
@@ -355,6 +378,10 @@ var Facilitation = (function() {
     // Badges de statut au-dessus des têtes
     function badge(sid, x, y) {
       var st = statuses[sid];
+      if (!st && sid !== Network.mySocketId) {
+        var rp = Network.remotePlayers.get(sid);
+        if (rp && rp.status) st = rp.status;
+      }
       var role = game && game.roles[sid];
       var txt = '';
       if (role === 'cop') txt = '👮';
@@ -405,6 +432,7 @@ var Facilitation = (function() {
       if (typeof Network === 'undefined' || !Network.socket) return;
       clearInterval(wait);
       buildStatusButton();
+      restoreMyStatus();
       buildFacilitationKit();
       wireTimerExtras();
       wirePushToTalk();

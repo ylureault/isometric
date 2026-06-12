@@ -381,17 +381,15 @@ class RoomManager {
     // Creator reconnection: only the holder of the secret creatorToken can reclaim
     // the creator slot. Pseudo matching alone is NOT trusted (anyone can copy a pseudo).
     if (!isCreator && data.creatorToken && safeEqual(data.creatorToken, room.creatorToken)) {
-      if (!room.creatorSocketId) {
-        // Slot is free (server restart or room rehydrated from disk) — token wins.
-        isCreator = true;
-      } else {
-        const oldCreator = room.participants.get(room.creatorSocketId);
-        if (oldCreator && oldCreator.disconnected) {
-          room.participants.delete(room.creatorSocketId);
-          room.creatorSocketId = socketId;
-          isCreator = true;
-        }
+      // Le jeton EST la preuve d'identité : il reprend toujours le rôle de
+      // créateur. Si l'ancienne connexion traîne encore (rechargement de
+      // page, autre onglet), c'est la même personne — on retire l'ancienne
+      // entrée pour que la plus récente porte le rôle.
+      if (room.creatorSocketId && room.creatorSocketId !== socketId) {
+        room.participants.delete(room.creatorSocketId);
       }
+      room.creatorSocketId = socketId;
+      isCreator = true;
     }
 
     const defaultColors = CONSTANTS.DEFAULT_COLORS;
@@ -580,6 +578,7 @@ class RoomManager {
         walkPhase: p.walkPhase,
         role: p.role,
         isAdmin: p.isAdmin,
+        status: p.status || null,
         isMuted: p.isMuted,
         tableId: p.tableId,
         handRaised: p.handRaised,
