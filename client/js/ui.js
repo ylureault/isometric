@@ -814,6 +814,14 @@ const UI = {
           if (p && confirm(`Voulez-vous vraiment exclure ${p.pseudo} de la salle ?`)) {
             Network.socket.emit('kick-participant', { targetSocketId: sid }, () => {});
           }
+        } else if (action === 'mutelock') {
+          const locking = btn.textContent.indexOf('Verrouiller') >= 0;
+          Network.socket.emit('set-participant-muted', { socketId: sid, locked: locking }, (r) => {
+            if (r && r.success) {
+              btn.textContent = locking ? '🎙 Libérer micro' : '🔇 Verrouiller micro';
+              UI.showNotification(locking ? 'Micro verrouillé — il ne peut plus se réactiver' : 'Micro libéré');
+            }
+          });
         } else if (action === 'promote') {
           Network.socket.emit('promote-admin', { targetSocketId: sid }, () => {});
         } else if (action === 'demote') {
@@ -840,6 +848,7 @@ const UI = {
         actions += `<button class="admin-action-btn" data-action="demote" data-socketid="${socketId}">Rétrograder</button>`;
       }
       if (p.role !== 'creator') {
+        actions += `<button class="admin-action-btn" data-action="mutelock" data-socketid="${socketId}">🔇 Verrouiller micro</button>`;
         actions += `<button class="admin-action-btn danger" data-action="kick" data-socketid="${socketId}">Exclure</button>`;
       }
     }

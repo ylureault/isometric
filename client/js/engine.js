@@ -273,6 +273,7 @@ var Engine = {
     // Improvement #4: room renamed
     s.on('room-renamed', function(d) { self.roomConfig.name = d.name; UI.showNotification('Salle renommée : ' + d.name); });
     // Improvement #22: force muted by admin
+    s.on('mute-unlocked', function() { UI.showNotification('🎙 Votre micro a été libéré par l\'animateur'); });
     s.on('force-muted', function() { self.player.isMuted = true; Audio.isMuted = true; Audio._applyMuteState(); UI.updateMuteButton(true); UI.showNotification('Vous avez été mis en sourdine'); });
     // Improvement #24: audio radius changed
     s.on('force-moved', function(d) {
@@ -1781,6 +1782,20 @@ var Engine = {
 
     // Marqueur de destination du clic-pour-se-déplacer (pulsation accent)
     if (this.moveTarget) {
+      // #68 Chemin prévu : pointillé discret du joueur vers la destination
+      var fromPos = Board.iso(this.player.x, this.player.y);
+      var toPos = Board.iso(this.moveTarget.x, this.moveTarget.y);
+      ctx.save();
+      ctx.strokeStyle = this._withAlpha(this.themeColor('--accent', '#5b6cff'), 0.35);
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 8]);
+      ctx.lineDashOffset = -(performance.now() / 60) % 14;
+      ctx.beginPath();
+      ctx.moveTo(fromPos.x, fromPos.y);
+      ctx.lineTo(toPos.x, toPos.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
       var mtPos = Board.iso(this.moveTarget.x, this.moveTarget.y);
       var mtAge = (performance.now() - this.moveTarget.setAt) / 1000;
       var mtPulse = (mtAge * 1.4) % 1;

@@ -366,6 +366,13 @@ io.on('connection', (socket) => {
 
   socket.on('mute-changed', (data) => {
     if (!currentRoomId) return;
+    // Hard mute : un micro verrouillé par l'admin ne peut pas se réactiver
+    const roomHM = roomManager.getRoom(currentRoomId);
+    const pHM = roomHM && roomHM.participants.get(socket.id);
+    if (pHM && pHM.muteLocked && data.muted === false) {
+      socket.emit('force-muted');
+      return;
+    }
     roomManager.setMuted(currentRoomId, socket.id, data.muted);
     socket.to(currentRoomId).emit('participant-mute-changed', {
       socketId: socket.id,
@@ -1047,6 +1054,26 @@ io.on('connection', (socket) => {
     }
     io.to(currentRoomId).emit('all-muted', { by: socket.id });
     callback(result);
+  });
+
+  // ===== MUTE INDIVIDUEL VERROUILLÉ (admin) =====
+  socket.on('set-participant-muted', (data, callback) => {
+    if (!currentRoomId) return callback && callback({ error: 'not_in_room' });
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return callback && callback({ error: 'room_not_found' });
+    const requester = room.participants.get(socket.id);
+    if (!requester || !requester.isAdmin) return callback && callback({ error: 'not_admin' });
+    const target = room.participants.get(data && data.socketId);
+    if (!target) return callback && callback({ error: 'not_found' });
+    target.muteLocked = !!(data && data.locked);
+    if (target.muteLocked) {
+      target.isMuted = true;
+      io.to(data.socketId).emit('force-muted');
+    } else {
+      io.to(data.socketId).emit('mute-unlocked');
+    }
+    socket.to(currentRoomId).emit('participant-mute-changed', { socketId: data.socketId, muted: target.isMuted });
+    callback && callback({ success: true, locked: target.muteLocked });
   });
 
   // ===== VERROUILLAGE DE SALLE =====
