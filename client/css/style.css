@@ -488,7 +488,10 @@ body.ui-dark-mode .share-close:hover { background: rgba(255,255,255,0.1); color:
   0% { opacity: .5; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.35); }
 }
-#btn-mute.muted { background: rgba(125,135,170,.14); color: var(--ink); box-shadow: none; }
+#btn-mute.muted {
+  background: var(--color-danger); color: #fff;
+  box-shadow: 0 0 0 4px rgba(224,86,78,.25);
+}
 #btn-mute.muted::after { animation: none; opacity: 0; }
 .toolbar-btn.sharing { background: var(--color-success-light); color: var(--color-success); }
 .toolbar-btn.hand-raised {

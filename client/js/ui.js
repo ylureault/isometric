@@ -338,10 +338,12 @@ const UI = {
       });
     });
 
-    // Mute button
+    // Mute button — synchronise TOUT l'état (badge avatar compris)
     document.getElementById('btn-mute')?.addEventListener('click', () => {
       const muted = Audio.toggleMute();
+      Engine.player.isMuted = muted;
       this.updateMuteButton(muted);
+      this.showNotification(muted ? '🔇 Micro coupé' : '🎙 Micro activé');
     });
 
     // Voice volume slider
@@ -506,6 +508,7 @@ const UI = {
     const btn = document.getElementById('btn-mute');
     if (!btn) return;
     btn.classList.toggle('muted', muted);
+    btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
     btn.title = muted ? 'Activer le micro (M)' : 'Couper le micro (M)';
     btn.innerHTML = muted
       ? '<svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M1.5 4.5l2.1-2.1L21 19.9l-2.1 2.1-4.4-4.4c-.6.3-1.3.5-2 .6V22h-1.5v-3.8C7.7 17.7 5 15 5 11.5h1.5c0 3 2.5 5.5 5.5 5.5.6 0 1.1-.1 1.6-.3L12 15.1c-.2 0-.3 0-.5 0-1.9 0-3.5-1.6-3.5-3.5v-.6L1.5 4.5zM12 1c1.9 0 3.5 1.6 3.5 3.5v7c0 .3 0 .5-.1.8l5.1 5.1c.3-.9.5-1.8.5-2.9h1.5c0 1.4-.3 2.8-.8 4L15.5 12.3V4.5C15.5 2.6 13.9 1 12 1z"/></svg>'
