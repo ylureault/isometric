@@ -548,7 +548,10 @@ class RoomManager {
   }
 
   getRoomInfo(roomId) {
-    const room = this.rooms.get(roomId);
+    // getRoom (et non rooms.get) : recharge une salle évincée depuis le
+    // disque — sinon l'API répond « introuvable » pour une salle qui
+    // existe, pendant que le join socket, lui, la fait revivre.
+    const room = this.getRoom(roomId);
     if (!room) return null;
     return {
       id: room.id,

@@ -348,7 +348,14 @@ var Engine = {
     if (loadingBar) loadingBar.style.display = 'block';
     if (!this.roomConfig.isCreator) {
       fetch('/api/rooms/' + this.roomConfig.roomId).then(function(resp) {
-        if (!resp.ok) { if (loadingBar) loadingBar.style.display = 'none'; UI.showError('Cette salle est introuvable. V\u00e9rifiez le lien et r\u00e9essayez.'); return; }
+        if (!resp.ok) {
+          // Pré-contrôle non bloquant : le join socket est la seule autorité
+          // (il sait faire revivre une salle depuis le disque). S'il échoue,
+          // son erreur précise s'affichera.
+          if (loadingBar) loadingBar.style.display = 'none';
+          self.initBoard();
+          return null;
+        }
         return resp.json();
       }).then(function(info) {
         if (!info) return;
@@ -432,6 +439,7 @@ var Engine = {
     }, function(r) {
       if (r.error) {
         var msgs = {
+          room_not_found: 'Cette salle n\'existe pas ou a été supprimée. Vérifiez le lien.',
           room_locked: 'Cette salle est verrouillée — la session a commencé. Contactez l\'organisateur.',
           room_full: 'Cette salle est complète.',
           room_closed: 'Cette salle a été fermée.',
