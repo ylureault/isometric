@@ -1043,7 +1043,8 @@ var Engine = {
     function sendMessage() {
       if (!input || !input.value.trim()) return;
       var text = input.value.trim();
-      Network.socket.emit('chat-message', { text: text });
+      var pk = self.myPrivateZoneKey ? self.myPrivateZoneKey() : null;
+      Network.socket.emit('chat-message', pk ? { text: text, zoneKey: pk } : { text: text });
       Network.socket.emit('chat-typing', { typing: false });
       self.player.chatBubble = { text: text, time: Date.now() };
       input.value = '';
@@ -1107,6 +1108,11 @@ var Engine = {
     };
     self.renderChatMessage = function(msg) {
       if (!messages) return;
+      // #13 Message de salle fermée : visible uniquement par ses occupants
+      if (msg.zoneKey && msg.socketId !== Network.mySocketId &&
+          msg.zoneKey !== (self.myPrivateZoneKey ? self.myPrivateZoneKey() : null)) {
+        return;
+      }
       var emptyEl = document.getElementById('chat-empty-state');
       if (emptyEl) emptyEl.remove();
       var div = document.createElement('div');
@@ -1120,7 +1126,8 @@ var Engine = {
         self.playSfx && self.playSfx('notification');
       }
       var color = self.chatAuthorColor(msg.socketId);
-      div.innerHTML = '<span class="chat-msg-author"' + (color ? ' style="color:' + color + '"' : '') + '>' +
+      div.innerHTML = (msg.zoneKey ? '<span title="Visible uniquement dans la salle">🚪 </span>' : '') +
+        '<span class="chat-msg-author"' + (color ? ' style="color:' + color + '"' : '') + '>' +
         self.escapeHtml(msg.pseudo || 'Anonyme') + ':</span> ' + self.linkifyChat(msg.text);
       messages.appendChild(div);
       return div;
@@ -2090,6 +2097,14 @@ var Engine = {
     }
     this._discussionZones = zones;
     return zones;
+  },
+
+  // Clé de la salle fermée où je suis (« x,y »), sinon null
+  myPrivateZoneKey: function() {
+    var zi = this.zoneIndexAt(this.player.x, this.player.y);
+    if (zi < 0 || !this.zoneIsPrivate(zi)) return null;
+    var z = (this._discussionZones || [])[zi];
+    return z ? z.key : null;
   },
 
   // La zone d'index donné est-elle une salle fermée (conversation isolée) ?

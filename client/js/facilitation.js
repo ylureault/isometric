@@ -210,6 +210,35 @@ var Facilitation = (function() {
     lockBtn.id = 'btn-lock-room';
     box.appendChild(lockBtn);
 
+    // Dissoudre l'espace où je suis : tout le monde retourne à l'open space
+    box.appendChild(adminButton('💨 Dissoudre mon espace', 'Évacue tous les occupants de l\'espace où vous êtes vers le centre', function() {
+      var zi = Engine.zoneIndexAt(Engine.player.x, Engine.player.y);
+      if (zi < 0) { UI.showNotification('Placez-vous dans l\'espace à dissoudre'); return; }
+      var z = Engine._discussionZones[zi];
+      var gs = Board.gridSize;
+      var moves = [];
+      var inside = function(px, py) { return px >= z.x0 && px < z.x1 && py >= z.y0 && py < z.y1; };
+      var spot = function(i, n) {
+        var a = (i / Math.max(1, n)) * Math.PI * 2;
+        return { x: gs / 2 + Math.cos(a) * 2, y: gs / 2 + Math.sin(a) * 2 };
+      };
+      var people = [];
+      if (inside(Engine.player.x, Engine.player.y)) people.push(Network.mySocketId);
+      Network.remotePlayers.forEach(function(p, sid) { if (inside(p.renderX, p.renderY)) people.push(sid); });
+      people.forEach(function(sid, i) { var sp = spot(i, people.length); moves.push({ socketId: sid, x: sp.x, y: sp.y }); });
+      Network.socket.emit('admin-teleport', { moves: moves, reason: '💨 « ' + z.name + ' » est dissous — retour au centre' }, function() {});
+      // Si l'espace a été dessiné (id serveur), on le retire aussi
+      if (z.item.id) {
+        Network.socket.emit('remove-furniture', { furnitureId: z.item.id }, function(r) {
+          if (r && r.success) {
+            Board.furniture = Board.furniture.filter(function(f) { return f.id !== z.item.id; });
+            Board.buildCollisionMap();
+            Engine._zonesSig = null;
+          }
+        });
+      }
+    }));
+
     // Gendarmes & Voleurs
     box.appendChild(adminButton('👮 Gendarmes & Voleurs (2 min)', 'Petit jeu d\'énergie : un tiers de gendarmes, attrapez les voleurs !', function() {
       Network.socket.emit('game-event', { action: 'start', seed: Math.floor(Math.random() * 1e9), duration: 120 });

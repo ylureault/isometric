@@ -934,6 +934,10 @@ io.on('connection', (socket) => {
     if (!p) return;
     const msg = roomManager.addChatMessage(currentRoomId, socket.id, data.text);
     if (!msg) return; // message vide
+    // #13 Message émis depuis une salle fermée : marqué, filtré à l'affichage
+    if (typeof data.zoneKey === 'string' && /^\d+,\d+$/.test(data.zoneKey)) {
+      msg.zoneKey = data.zoneKey.slice(0, 20);
+    }
     io.to(currentRoomId).emit('chat-message', msg);
   });
 
