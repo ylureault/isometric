@@ -432,7 +432,12 @@ const Audio = {
         }
         peer.currentVolume = volume;
         if (peer.audioElement) {
-          peer.audioElement.volume = volume * this.masterVolume;
+          // Fondu doux (~200 ms) : entrer/sortir d'une salle ou d'un cercle
+          // ne coupe plus la voix brutalement
+          var target = volume * this.masterVolume;
+          var cur = peer.audioElement.volume;
+          var next = cur + (target - cur) * 0.35;
+          peer.audioElement.volume = Math.abs(next - target) < 0.02 ? target : next;
         }
       }
     }

@@ -47,6 +47,47 @@ couleur d'auteur, historique rejoué à l'arrivée, jeu Gendarmes & Voleurs
   case, prison dans un coin, délivrance par contact, 2 min, confettis).
   Client-autoritaire assumé (jeu d'ambiance, pas de triche qui compte).
 
+## 📌 Demandés explicitement — specs prêtes (vague suivante)
+- **#2 SFU audio** : migrer le mesh WebRTC vers LiveKit (cloud ou
+  auto-hébergé) — indispensable au-delà de ~10 micros. Garder l'API
+  Audio.updateProximity comme couche de volumes.
+- **#4/#5 Périphériques + test micro** : enumerateDevices dans
+  l'onboarding, vu-mètre AnalyserNode, choix mémorisé.
+- **#12 Hard mute admin** : flag serveur muteLocked sur le participant,
+  vérifié dans mute-changed.
+- **#13 Chat par salle fermée** : champ zone dans chat-message; le client
+  filtre l'affichage selon sa salle; l'historique reste global pour
+  l'admin.
+- **#16/#17 Renommer/redimensionner les zones** : événement additif
+  update-furniture {id, label?, width?, height?} (admin), libellé
+  prioritaire sur le nom musicien.
+- **#22 Dissoudre une salle** : bouton admin sur la zone → admin-teleport
+  des occupants vers l'open space + suppression du meuble.
+- **#23 Murs iso des salles fermées** : 4 parois translucides dessinées
+  en volumes (DesignFurni), porte sur le côté le plus proche du centre.
+- **#25/#27/#28 Sous-salles sans onglet + vue d'ensemble + hub** : refonte
+  navigation — charger une sous-salle = rejoindre une room socket sans
+  recharger la page (Engine.reset + join), fil d'Ariane en room card.
+- **#41-50 Gros œuvre tableaux** : export PDF (jsPDF), lasso, mode
+  présentation (événement wb-follow), couleur=auteur/anonyme, undo
+  suppression, double-clic=post-it, templates Lean Coffee/Speed Boat/4L,
+  verrou consigne, compteur isoloir, indicateur de co-édition.
+- **#52-54/#58 Facilitation** : bâton de parole (file serveur), consigne
+  flottante par table (champ topic), timer par table, groupes par taille.
+- **#66/#68 Caméra** : zoom vers le curseur (compenser camera lors du
+  wheel), aperçu du chemin (ligne pointillée vers moveTarget).
+- **#72 Rotation design** : appliquer item.rotation aux builders
+  DesignFurni (échange w/d + miroir).
+- **#74 Test de charge** : scénario e2e 100×100, 200 meubles, 30 bots.
+- **#75 Spectateur mobile** : room.html?spectate=1 sans mobile-block,
+  vue seule + chat, pas de micro.
+- **#84 ✅ fait** (mentions) · **#94-97 refactor** : découpage CSS/JS par
+  composant, bundler esbuild, JSDoc types stricts.
+- **#99 Cache-busting auto** : middleware express qui réécrit ?v= avec
+  CONSTANTS.VERSION au service du HTML.
+- **#100 Quota data/** : taille max par snapshot + purge configurable
+  des salles inactives > N jours.
+
 ## 🔭 Ensuite
 - PiP du partage d'écran (le sien #79, celui des autres #83), pointeur
   laser (#80), partage d'onglet avec son (#84), demande de partage (#82).

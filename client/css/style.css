@@ -999,6 +999,11 @@ html[data-theme="nuit"] .ob-brand-img { filter: brightness(0) invert(1); opacity
   to { opacity: 1; transform: translateY(0); }
 }
 .chat-msg-author { font-weight: 800; color: var(--accent); margin-right: var(--space-xs); }
+.chat-msg-mention {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-left: 3px solid var(--accent);
+  padding: 4px 8px; border-radius: 8px;
+}
 .chat-msg-system { color: var(--muted); font-style: italic; font-size: 12px; }
 .chat-empty-state {
   text-align: center; padding: var(--space-lg) var(--space-md);

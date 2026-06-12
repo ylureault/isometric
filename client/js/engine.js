@@ -1078,6 +1078,14 @@ var Engine = {
       if (emptyEl) emptyEl.remove();
       var div = document.createElement('div');
       div.className = 'chat-msg';
+      // #84 Mention de mon pseudo : message mis en avant + petit ping
+      var me = (self.player.pseudo || '').toLowerCase();
+      if (me && msg.socketId !== Network.mySocketId &&
+          (msg.text || '').toLowerCase().indexOf('@' + me) >= 0) {
+        div.classList.add('chat-msg-mention');
+        self.initSfx && self.initSfx();
+        self.playSfx && self.playSfx('notification');
+      }
       var color = self.chatAuthorColor(msg.socketId);
       div.innerHTML = '<span class="chat-msg-author"' + (color ? ' style="color:' + color + '"' : '') + '>' +
         self.escapeHtml(msg.pseudo || 'Anonyme') + ':</span> ' + self.linkifyChat(msg.text);
@@ -2005,6 +2013,10 @@ var Engine = {
   // Zones de discussion : tout le monde s'y entend, comme autour d'une table.
   // (zones, espaces collab et tapis/salons — géométrie partagée par tous)
   _buildDiscussionZones: function() {
+    // Cache : on ne reconstruit que si le mobilier a changé
+    var sig = Board.furniture.length + ':' + (Board.furniture.length ? (Board.furniture[Board.furniture.length - 1].id || '') : '');
+    if (this._discussionZones && this._zonesSig === sig) return this._discussionZones;
+    this._zonesSig = sig;
     var zones = [];
     for (var i = 0; i < Board.furniture.length; i++) {
       var item = Board.furniture[i];
@@ -2107,6 +2119,57 @@ var Engine = {
       ctx.fillStyle = mine ? '#ffffff' : muted;
       ctx.fillText(name, pA.x, pA.y - 4);
       ctx.restore();
+    }
+
+    // #15 Qui est avec moi ? — ligne vivante dans la room card
+    var hereRow = document.getElementById('rc-here');
+    if (myZone >= 0) {
+      var names = [];
+      Network.remotePlayers.forEach(function(p) {
+        if (p.opacity <= 0) return;
+        if (p.renderX >= zones[myZone].x0 && p.renderX < zones[myZone].x1 &&
+            p.renderY >= zones[myZone].y0 && p.renderY < zones[myZone].y1) names.push(p.pseudo || '?');
+      });
+      if (!hereRow) {
+        var rows = document.querySelector('.rc-rows');
+        if (rows) {
+          hereRow = document.createElement('div');
+          hereRow.className = 'rc-row';
+          hereRow.id = 'rc-here';
+          rows.appendChild(hereRow);
+        }
+      }
+      if (hereRow) {
+        hereRow.style.display = 'flex';
+        hereRow.textContent = (zones[myZone].private ? '🚪 ' : '🗣 ') + zones[myZone].name +
+          (names.length ? ' — avec ' + names.slice(0, 3).join(', ') + (names.length > 3 ? ' +' + (names.length - 3) : '') : ' — seul·e ici');
+      }
+    } else if (hereRow) {
+      hereRow.style.display = 'none';
+    }
+
+    // #21 Toc-toc : quelqu'un entre dans MON espace → petit son discret
+    if (myZone >= 0) {
+      var nowIn = {};
+      Network.remotePlayers.forEach(function(p, sid) {
+        if (p.opacity <= 0) return;
+        if (p.renderX >= zones[myZone].x0 && p.renderX < zones[myZone].x1 &&
+            p.renderY >= zones[myZone].y0 && p.renderY < zones[myZone].y1) nowIn[sid] = true;
+      });
+      var prevIn = this._zoneOccupants || {};
+      var self9 = this;
+      Object.keys(nowIn).forEach(function(sid) {
+        if (!prevIn[sid] && performance.now() - (self9._lastKnock || 0) > 3000) {
+          self9._lastKnock = performance.now();
+          self9.initSfx && self9.initSfx();
+          self9.playSfx && self9.playSfx('notification');
+          var rp = Network.remotePlayers.get(sid);
+          if (rp && zones[myZone].private) UI.showNotification('🚪 ' + (rp.pseudo || 'Quelqu\'un') + ' entre dans la salle');
+        }
+      });
+      this._zoneOccupants = nowIn;
+    } else {
+      this._zoneOccupants = {};
     }
 
     // Entrée / sortie d'un espace : on le dit clairement
@@ -2465,6 +2528,31 @@ var Engine = {
         ctx.fillText(t.name, tx + tw / 2, ty - 7);
       }
     });
+
+    // #24 Espaces de discussion sur le plan : pointillés (ouverts),
+    // trait plein chaud (salles fermées), avec leur nom
+    var planZones = this._buildDiscussionZones();
+    for (var pz = 0; pz < planZones.length; pz++) {
+      var zz = planZones[pz];
+      var zx = ox + zz.x0 * cellSize, zy = oy + zz.y0 * cellSize;
+      var zw = (zz.x1 - zz.x0) * cellSize, zh = (zz.y1 - zz.y0) * cellSize;
+      ctx.strokeStyle = zz.private
+        ? this._withAlpha(this.themeColor('--accent-2', '#ff9d7a'), 0.8)
+        : this._withAlpha(accent, 0.5);
+      ctx.lineWidth = zz.private ? 2.5 : 1.5;
+      ctx.setLineDash(zz.private ? [] : [5, 4]);
+      ctx.beginPath();
+      ctx.roundRect(zx, zy, zw, zh, 6);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (cellSize > 13) {
+        ctx.font = '700 10px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = zz.private ? this.themeColor('--accent-2', '#ff9d7a') : this._withAlpha(accent, 0.8);
+        ctx.fillText((zz.private ? '🚪 ' : '🗣 ') + zz.name, zx + 5, zy + 4);
+      }
+    }
 
     // Marqueur de destination (clic-pour-se-déplacer)
     if (this.moveTarget) {
