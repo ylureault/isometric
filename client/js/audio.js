@@ -360,9 +360,20 @@ const Audio = {
       const localTableId = localPlayer.tableId || null;
       const remoteTableId = remotePlayer.tableId || null;
 
+      // Salles fermées : conversation isolée des deux côtés
+      var zl = (typeof Engine !== 'undefined' && Engine.zoneIndexAt) ? Engine.zoneIndexAt(localPlayer.x, localPlayer.y) : -1;
+      var zr = (typeof Engine !== 'undefined' && Engine.zoneIndexAt) ? Engine.zoneIndexAt(remotePlayer.renderX, remotePlayer.renderY) : -1;
+      var isolated = Engine.zoneIsPrivate &&
+        ((Engine.zoneIsPrivate(zl) || Engine.zoneIsPrivate(zr)) && zl !== zr);
+
       // 1. Admin broadcast (Space key): heard by everyone at full volume
+      // (l'annonce du facilitateur traverse même les salles fermées)
       if (remotePlayer.isBroadcasting) {
         volume = 1;
+      }
+      // 1bis. Salle fermée : rien n'entre, rien ne sort (sauf l'annonce admin)
+      else if (isolated) {
+        volume = 0;
       }
       // 2. Stage: anyone on stage is heard by everyone
       else if (remoteOnStage && !remotePlayer.isMuted) {
@@ -372,13 +383,8 @@ const Audio = {
       else if (localTableId && localTableId === remoteTableId) {
         volume = 1;
       }
-      // 3bis. Espace de discussion matérialisé (zone, salon, espace collab) :
-      // tout le monde s'y entend, comme autour d'une vraie table
-      else if (typeof Engine !== 'undefined' && Engine.zoneIndexAt &&
-               (function() {
-                 var zl = Engine.zoneIndexAt(localPlayer.x, localPlayer.y);
-                 return zl >= 0 && zl === Engine.zoneIndexAt(remotePlayer.renderX, remotePlayer.renderY);
-               })()) {
+      // 3bis. Espace de discussion : tout le monde s'y entend
+      else if (zl >= 0 && zl === zr) {
         volume = 1;
       }
       // 4. Proximity audio

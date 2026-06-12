@@ -2300,7 +2300,7 @@ const UI = {
     coffeeTable: '☕', bookshelf: '📚', whiteboard: '📋', postItBoard: '📌',
     stage: '🎭', smallStage: '🎭', podium: '🎤', projector: '📽️', waterCooler: '🚰',
     filingCabinet: '🗄️', standingDesk: '🖥️', lamp: '💡',
-    collabSpace: '🤝', carpet: '🟫', largeCarpet: '🟫', zoneMarker: '🗣️',
+    collabSpace: '🤝', carpet: '🟫', largeCarpet: '🟫', zoneMarker: '🗣️', privateRoom: '🚪',
     door: '🚪', conferencePhone: '📞', trashBin: '🗑️', clock: '🕐',
   },
 

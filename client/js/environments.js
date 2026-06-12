@@ -62,6 +62,11 @@ const Environments = {
       name: 'Tableau Post-it', width: 1, height: 2, solid: true,
       color: '#c4a06a', topColor: '#d4b07a', drawHeight: 35, isPostItBoard: true,
     },
+    privateRoom: {
+      name: 'Salle fermée', width: 4, height: 4, solid: false,
+      color: 'rgba(91,108,255,0.10)', topColor: 'rgba(91,108,255,0.16)', drawHeight: 0,
+      isZone: true, isPrivate: true,
+    },
     zoneMarker: {
       name: 'Zone de discussion', width: 4, height: 4, solid: false,
       color: 'rgba(100,160,200,0.12)', topColor: 'rgba(100,160,200,0.2)', drawHeight: 0, isZone: true,

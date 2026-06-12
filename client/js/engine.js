@@ -2021,10 +2021,18 @@ var Engine = {
     // Ordre stable (y puis x) pour des noms identiques chez tous
     zones.sort(function(a, b) { return (a.item.y - b.item.y) || (a.item.x - b.item.x); });
     for (var z = 0; z < zones.length; z++) {
-      zones[z].name = this.ZONE_NAMES[z % this.ZONE_NAMES.length] + ' · ' + (z + 1);
+      zones[z].private = !!zones[z].def.isPrivate;
+      zones[z].name = (zones[z].private ? 'Salle ' : '') +
+        this.ZONE_NAMES[z % this.ZONE_NAMES.length] + ' · ' + (z + 1);
     }
     this._discussionZones = zones;
     return zones;
+  },
+
+  // La zone d'index donné est-elle une salle fermée (conversation isolée) ?
+  zoneIsPrivate: function(idx) {
+    var zs = this._discussionZones || this._buildDiscussionZones();
+    return idx >= 0 && idx < zs.length && !!zs[idx].private;
   },
 
   // Index de la zone de discussion contenant (x, y), -1 sinon
@@ -2072,9 +2080,12 @@ var Engine = {
         ctx.closePath();
         ctx.fill();
       }
-      ctx.strokeStyle = this._withAlpha(accent, mine ? 0.75 : (active ? 0.5 : 0.35));
-      ctx.lineWidth = mine ? 2.5 : 1.5;
-      ctx.setLineDash([7, 6]);
+      var priv = zones[z].private;
+      ctx.strokeStyle = priv
+        ? this._withAlpha(this.themeColor('--accent-2', '#ff9d7a'), mine ? 0.9 : 0.55)
+        : this._withAlpha(accent, mine ? 0.75 : (active ? 0.5 : 0.35));
+      ctx.lineWidth = priv ? (mine ? 3 : 2) : (mine ? 2.5 : 1.5);
+      ctx.setLineDash(priv ? [] : [7, 6]);
       ctx.lineDashOffset = -(performance.now() / 90) % 13; // fourmille doucement
       ctx.beginPath();
       ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y);
@@ -2084,7 +2095,7 @@ var Engine = {
       ctx.setLineDash([]);
 
       // Nom de l'espace + occupation
-      var name = zones[z].name + (count > 0 ? '  🗣 ' + count : '');
+      var name = (zones[z].private ? '🚪 ' : '') + zones[z].name + (count > 0 ? '  🗣 ' + count : '');
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
@@ -2101,7 +2112,9 @@ var Engine = {
     // Entrée / sortie d'un espace : on le dit clairement
     if (myZone !== this._lastZoneIdx) {
       if (myZone >= 0) {
-        UI.showNotification('🗣 Espace « ' + zones[myZone].name + ' » — tout le monde s\'entend ici');
+        UI.showNotification(zones[myZone].private
+          ? '🚪 « ' + zones[myZone].name + ' » — conversation privée : vous n\'entendez plus que cette salle'
+          : '🗣 Espace « ' + zones[myZone].name + ' » — tout le monde s\'entend ici');
       } else if (this._lastZoneIdx >= 0 && this._lastZoneIdx < zones.length) {
         UI.showNotification('Vous quittez « ' + zones[this._lastZoneIdx].name + ' »');
       }
