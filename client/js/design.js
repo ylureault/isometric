@@ -180,10 +180,58 @@
     }, 600);
   }
 
+  // #5 Test micro avant d'entrer : vu-mètre live, libération propre du flux
+  function wireMicTest() {
+    var btn = document.getElementById('mic-test');
+    var bar = document.getElementById('mic-test-bar');
+    var label = document.getElementById('mic-test-label');
+    if (!btn || !navigator.mediaDevices) return;
+    var stream = null, raf = null, ac = null, stopT = null;
+    function stop(msg) {
+      if (raf) cancelAnimationFrame(raf);
+      if (stopT) clearTimeout(stopT);
+      if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
+      if (ac) try { ac.close(); } catch (e) {}
+      stream = null; raf = null; ac = null;
+      btn.classList.remove('active');
+      bar.style.width = '0%';
+      label.textContent = msg || '🎙 Tester mon micro';
+    }
+    btn.addEventListener('click', function() {
+      if (stream) { stop(); return; }
+      label.textContent = '… autorisation ?';
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function(st) {
+        stream = st;
+        btn.classList.add('active');
+        label.textContent = 'Parlez ! (clic pour arrêter)';
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        var src = ac.createMediaStreamSource(st);
+        var an = ac.createAnalyser();
+        an.fftSize = 512;
+        src.connect(an);
+        var data = new Uint8Array(an.frequencyBinCount);
+        var heard = false;
+        (function tick() {
+          an.getByteFrequencyData(data);
+          var sum = 0;
+          for (var i = 0; i < data.length; i++) sum += data[i];
+          var lvl = Math.min(100, (sum / data.length) * 1.8);
+          bar.style.width = lvl + '%';
+          if (lvl > 18 && !heard) { heard = true; label.textContent = '✅ On vous entend parfaitement'; }
+          raf = requestAnimationFrame(tick);
+        })();
+        stopT = setTimeout(function() { stop(heard ? '✅ Micro OK — re-tester' : '🎙 Tester mon micro'); }, 8000);
+      }).catch(function() {
+        stop('❌ Micro refusé — vérifiez les permissions du navigateur');
+      });
+    });
+  }
+
   function init() {
     buildSwatches();
     buildAccessoryChips();
     wireRandomAvatar();
+    wireMicTest();
     wireShareLink();
     wireThemes();
     wireRadiusPresets();

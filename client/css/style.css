@@ -251,6 +251,23 @@ html[data-theme="nuit"] .insuffle-logo { filter: brightness(0) invert(1); opacit
 }
 .recent-chip:hover { border-color: var(--accent); color: var(--ink); transform: translateY(-1px); }
 .recent-chip .rc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+/* #5 Test micro de l'onboarding : vu-mètre dans le bouton */
+.mic-test {
+  margin-top: 8px; width: 100%; position: relative; overflow: hidden;
+  padding: 9px 12px; border-radius: 11px; border: 1.5px solid var(--panel-border);
+  background: rgba(125,135,170,.08); color: var(--muted);
+  font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: border-color .15s;
+}
+.mic-test:hover { border-color: var(--accent); color: var(--ink); }
+.mic-test.active { border-color: var(--accent); color: var(--ink); }
+.mic-test-bar {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  transition: width .08s linear;
+}
+.mic-test-label { position: relative; }
+
 /* Bouton avatar aléatoire */
 .ob-random { font-size: 12px; }
 .ob-random:hover { border-color: var(--accent); color: var(--ink); }
