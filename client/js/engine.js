@@ -474,6 +474,7 @@ var Engine = {
           room_full: 'Cette salle est complète.',
           room_closed: 'Cette salle a été fermée.',
           invalid_password: 'Mot de passe incorrect.',
+          invalid_code: 'Code de création invalide. Contactez-nous sur insuffle.com/contactez-nous pour obtenir une clé.',
         };
         UI.showError(msgs[r.error] || r.error);
         return;
@@ -758,13 +759,17 @@ var Engine = {
             if (foundSubRoom) return;
           }
 
-          // Otherwise show player context menu or return-to-player (#20)
-          var foundPlayer = false;
+          // Otherwise show player context menu — target the CLOSEST participant
+          // under/near the cursor (tolerant radius so it's easy to right-click
+          // someone, e.g. to promote them administrator).
+          var closest = null, closestDist = 2.6, closestSid = null;
           Network.remotePlayers.forEach(function(rp, sid) {
+            if (rp.opacity !== undefined && rp.opacity <= 0) return;
             var dist = Math.sqrt((gp.x - rp.renderX) * (gp.x - rp.renderX) + (gp.y - rp.renderY) * (gp.y - rp.renderY));
-            if (dist < 1.5) { UI.showContextMenu(e.clientX, e.clientY, sid, rp); foundPlayer = true; }
+            if (dist < closestDist) { closestDist = dist; closest = rp; closestSid = sid; }
           });
-          if (!foundPlayer) { UI.showReturnToPlayerMenu(e.clientX, e.clientY); }
+          if (closest) { UI.showContextMenu(e.clientX, e.clientY, closestSid, closest); }
+          else { UI.showReturnToPlayerMenu(e.clientX, e.clientY); }
         }
       }
       this.isDragging = false;
@@ -1546,6 +1551,9 @@ var Engine = {
     if (this.started) return;
     this.started = true;
     this.lastTime = performance.now();
+    // In-room state: reveals room-only controls (e.g. the gallery button),
+    // which stay hidden on the avatar-config / landing screen.
+    document.body.classList.add('in-room');
     // #12 Show compass indicator
     var compass = document.getElementById('compass-indicator');
     if (compass) compass.style.display = 'flex';

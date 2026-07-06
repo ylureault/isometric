@@ -140,6 +140,7 @@ const Network = {
       password: config.password || undefined, // improvement #2
       creatorToken: config.creatorToken || storedToken,
       videoMode: !!config.videoMode,
+      createCode: (function () { try { return sessionStorage.getItem('insuffleCreateCode') || undefined; } catch (e) { return undefined; } })(),
     }, (response) => {
       if (response.error) {
         if (this.onError) this.onError(response.error);

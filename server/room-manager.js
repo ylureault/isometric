@@ -914,6 +914,20 @@ class RoomManager {
     if (furnitureData.height !== undefined) {
       item.height = Math.max(1, Math.min(14, parseInt(furnitureData.height) || 1));
     }
+
+    // Spaces/zones must NOT overlap each other (a person can only belong to one).
+    const idef = Environments.furnitureTypes[item.type];
+    if (idef && (idef.isZone || idef.isCollabSpace)) {
+      const iw = item.width || idef.width || 4, ih = item.height || idef.height || 4;
+      for (const f of room.furniture) {
+        const fdef = Environments.furnitureTypes[f.type];
+        if (!fdef || (!fdef.isZone && !fdef.isCollabSpace)) continue;
+        const fw = f.width || fdef.width || 4, fh = f.height || fdef.height || 4;
+        if (item.x < f.x + fw && item.x + iw > f.x && item.y < f.y + fh && item.y + ih > f.y) {
+          return { error: 'zone_overlap' };
+        }
+      }
+    }
     // Improvement #6: validate rotation to 0/90/180/270
     if (furnitureData.rotation !== undefined) {
       const rot = parseInt(furnitureData.rotation) || 0;

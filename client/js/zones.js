@@ -88,6 +88,8 @@ const Zones = {
         Engine._zonesSig = null; // force zone rebuild
         UI.showNotification && UI.showNotification('Espace créé — glissez-en d\'autres, ou redimensionnez ci-dessous');
         Zones.refresh();
+      } else if (r && r.error === 'zone_overlap') {
+        UI.showNotification && UI.showNotification('Les espaces ne peuvent pas se superposer — posez-le sur une zone libre.', 'warning');
       } else {
         UI.showNotification && UI.showNotification('Placement impossible' + (r && r.error ? ' (' + r.error + ')' : ''), 'warning');
       }

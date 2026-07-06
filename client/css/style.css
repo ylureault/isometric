@@ -724,7 +724,7 @@ body.ui-dark-mode .share-close:hover { background: rgba(255,255,255,0.1); color:
 
 /* ===== Mic Permission Hint ===== */
 .mic-permission-hint {
-  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: 138px; left: 50%; transform: translateX(-50%);
   background: rgba(231,76,60,0.95); color: #fff; padding: 10px 20px;
   border-radius: var(--radius-lg); display: flex; align-items: center; gap: 10px;
   font-size: 0.85rem; z-index: 75; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
@@ -2599,3 +2599,14 @@ body.zone-dragging::after{ content:''; position:fixed; inset:0; pointer-events:n
 body.ui-dark-mode .zones-toggle, body.ui-dark-mode .zones-panel{ background:#1a1e30; color:#e0e4f0; border-color:rgba(255,255,255,.1); }
 body.ui-dark-mode .zone-chip{ background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.14); }
 body.ui-dark-mode .zr-b{ background:rgba(255,255,255,.06); color:#d0d4e0; border-color:rgba(255,255,255,.14); }
+
+/* ===== Creation code hint (landing) ===== */
+.code-hint{ font-size:.78rem; color:rgba(255,255,255,.65); margin-top:6px; }
+.code-hint a{ color:#fff; text-decoration:underline; }
+#error-create a{ color:#fff; text-decoration:underline; }
+
+/* ===== Gallery button only visible while in a room (not on avatar config) ===== */
+.view-switch{ display:none; }
+body.in-room .view-switch{ display:inline-flex; }
+/* Belt-and-braces: never let the bottom controls overlap the toolbar */
+.view-switch{ pointer-events:auto; }

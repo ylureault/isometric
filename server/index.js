@@ -198,9 +198,17 @@ roomManager.setDestroyHook((room) => {
 
 app.get('/', (req, res) => res.redirect('/client/index.html'));
 
+// Creation gate: a room can only be created with a valid code.
+// Configurable via env INSUFFLE_CREATE_CODE (default 'insuffle').
+const CREATE_CODE = process.env.INSUFFLE_CREATE_CODE || 'insuffle';
+function validCreateCode(code) {
+  return typeof code === 'string' && code.trim().toLowerCase() === CREATE_CODE.toLowerCase();
+}
+
 // REST API
 app.post('/api/rooms', (req, res) => {
-  const { name, environment, gridSize } = req.body;
+  const { name, environment, gridSize, code } = req.body;
+  if (!validCreateCode(code)) return res.status(403).json({ error: 'invalid_code' });
   if (!name || !name.trim()) return res.status(400).json({ error: 'Le nom de la room est obligatoire' });
 
   const roomId = generateRoomId();
@@ -249,6 +257,8 @@ io.on('connection', (socket) => {
       return callback({ error: 'room_not_found' });
     }
     if (!room && isCreator) {
+      // Creating a room on the fly (direct creator URL) also needs the code.
+      if (!validCreateCode(data.createCode)) return callback({ error: 'invalid_code' });
       room = roomManager.createRoom(roomId, {
         name: data.roomName || 'Room',
         environment: data.environment || 'open-space',
@@ -629,11 +639,29 @@ io.on('connection', (socket) => {
     if (!p || !p.isAdmin) return;
     const item = room.furniture.find(f => f.id === data.furnitureId);
     if (!item) return;
-    const w = Math.max(1, Math.min(14, parseInt(data.width) || item.width || 1));
-    const h = Math.max(1, Math.min(14, parseInt(data.height) || item.height || 1));
+    let w = Math.max(1, Math.min(14, parseInt(data.width) || item.width || 1));
+    let h = Math.max(1, Math.min(14, parseInt(data.height) || item.height || 1));
     // keep the item inside the room
-    item.width = Math.min(w, room.gridSize - item.x);
-    item.height = Math.min(h, room.gridSize - item.y);
+    w = Math.min(w, room.gridSize - item.x);
+    h = Math.min(h, room.gridSize - item.y);
+    // Zones must not overlap: reject a resize that would collide with another zone.
+    const Env = require('../client/js/environments');
+    const idef = Env.furnitureTypes[item.type];
+    if (idef && (idef.isZone || idef.isCollabSpace)) {
+      for (const f of room.furniture) {
+        if (f.id === item.id) continue;
+        const fdef = Env.furnitureTypes[f.type];
+        if (!fdef || (!fdef.isZone && !fdef.isCollabSpace)) continue;
+        const fw = f.width || fdef.width || 4, fh = f.height || fdef.height || 4;
+        if (item.x < f.x + fw && item.x + w > f.x && item.y < f.y + fh && item.y + h > f.y) {
+          // keep the previous size (client corrects itself from the broadcast)
+          w = item.width || idef.width || 4;
+          h = item.height || idef.height || 4;
+          break;
+        }
+      }
+    }
+    item.width = w; item.height = h;
     io.to(currentRoomId).emit('furniture-resized', { furnitureId: item.id, width: item.width, height: item.height });
   });
 

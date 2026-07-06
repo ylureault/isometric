@@ -44,6 +44,11 @@
     <div class="landing-cols">
     <div class="landing-card">
       <div class="form-group">
+        <label for="create-code">Code de création</label>
+        <input type="text" id="create-code" placeholder="Votre clé de création" autocomplete="off" spellcheck="false">
+        <div class="code-hint" id="code-hint">Pas encore de clé ? <a href="https://www.insuffle.com/contactez-nous/" target="_blank" rel="noopener">Contactez-nous pour l'obtenir</a>.</div>
+      </div>
+      <div class="form-group">
         <label for="room-name">Nom de la salle</label>
         <input type="text" id="room-name" placeholder="Ma réunion d'équipe" maxlength="50">
         <span class="error-message" id="error-name">Veuillez saisir un nom pour votre salle</span>
@@ -213,23 +218,39 @@
 
       const env = document.getElementById('environment').value;
       const size = parseInt(gridSizeInput.value);
+      const code = (document.getElementById('create-code').value || '').trim();
+
+      if (!code) {
+        errorCreate.innerHTML = 'Un code de création est requis. <a href="https://www.insuffle.com/contactez-nous/" target="_blank" rel="noopener">Contactez-nous pour obtenir votre clé</a>.';
+        errorCreate.style.display = 'block';
+        createBtn.classList.remove('btn-loading');
+        createBtn.disabled = false;
+        document.getElementById('create-code').focus();
+        return;
+      }
 
       try {
         const resp = await fetch('/api/rooms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, environment: env, gridSize: size }),
+          body: JSON.stringify({ name, environment: env, gridSize: size, code }),
         });
 
         const data = await resp.json();
 
         if (!resp.ok) {
-          errorCreate.textContent = data.error || 'Impossible de créer la salle. Veuillez réessayer.';
+          if (data.error === 'invalid_code') {
+            errorCreate.innerHTML = 'Code de création invalide. <a href="https://www.insuffle.com/contactez-nous/" target="_blank" rel="noopener">Contactez-nous pour obtenir une clé valide</a>.';
+          } else {
+            errorCreate.textContent = data.error || 'Impossible de créer la salle. Veuillez réessayer.';
+          }
           errorCreate.style.display = 'block';
           createBtn.classList.remove('btn-loading');
           createBtn.disabled = false;
           return;
         }
+        // Remember the valid code so re-entering as creator works.
+        try { sessionStorage.setItem('insuffleCreateCode', code); } catch (e) {}
 
         // Redirect to room with creator flag
         const params = new URLSearchParams({
