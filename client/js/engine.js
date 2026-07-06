@@ -638,8 +638,13 @@ var Engine = {
   onMouseMove: function(e) {
     if (this.editMode) { this.onEditMouseMove(e); return; }
     if (this.isDragging) {
-      this.camera.x = this.cameraStart.x + (e.clientX - this.dragStart.x);
-      this.camera.y = this.cameraStart.y + (e.clientY - this.dragStart.y);
+      var panDX = e.clientX - this.dragStart.x;
+      var panDY = e.clientY - this.dragStart.y;
+      this.camera.x = this.cameraStart.x + panDX;
+      this.camera.y = this.cameraStart.y + panDY;
+      // Once the user actually pans, enter free-look so the follow-cam stops
+      // fighting the drag (this is what caused the violent shake).
+      if (Math.abs(panDX) + Math.abs(panDY) > 3) this._freeLook = true;
       // #18 Pan limits
       var maxPan = Board.gridSize * Board.tileWidth * this.zoom;
       this.camera.x = Math.max(-maxPan, Math.min(this.viewW + maxPan * 0.5, this.camera.x));
@@ -771,6 +776,7 @@ var Engine = {
     }
     var gp = this.screenToGridView(e.clientX, e.clientY);
     var ps = Board.iso(gp.x, gp.y);
+    this._freeLook = false; // double-click recentres, leaving free-look
     this._cameraCenterTarget = {
       x: this.viewW / 2 - ps.x * this.zoom,
       y: this.viewH / 2 - ps.y * this.zoom,
@@ -1559,7 +1565,9 @@ var Engine = {
     // Clic-pour-se-déplacer (design) : le clavier reprend toujours la main
     if (dx !== 0 || dy !== 0) {
       this.moveTarget = null;
+      this._freeLook = false; // walking re-engages the follow-cam
     } else if (this.moveTarget) {
+      this._freeLook = false; // click-to-move also re-centers the camera
       var mtx = this.moveTarget.x - this.player.x;
       var mty = this.moveTarget.y - this.player.y;
       var mtd = Math.sqrt(mtx * mtx + mty * mty);
@@ -1643,9 +1651,13 @@ var Engine = {
         this._cameraCenterTarget = null;
       }
     }
-    // #13 Smooth camera ease
-    this.camera.x += (tcx - this.camera.x) * 0.12;
-    this.camera.y += (tcy - this.camera.y) * 0.12;
+    // #13 Smooth camera ease — but NEVER while the user is manually panning
+    // (right/middle-drag) or in free-look, otherwise the follow fights the drag
+    // and the view shakes. Walking re-engages follow (see update()).
+    if (!this.isDragging && (this._cameraCenterTarget || !this._freeLook)) {
+      this.camera.x += (tcx - this.camera.x) * 0.12;
+      this.camera.y += (tcy - this.camera.y) * 0.12;
+    }
 
     // #24 Door approach prompt + #23 Proximity indicator for interactive furniture
     this._updateDoorPrompt();
@@ -2093,27 +2105,48 @@ var Engine = {
   },
 
   // #23 Draw subtle glow on interactive furniture when player is near
+  // #23 Proximity affordance for interactive furniture (whiteboards, post-it
+  // walls, collab spaces). Far away it is a faint hint; as the player approaches
+  // it brightens, and within click range (<=4 tiles) a green "Cliquer" pill
+  // appears so it reads as clearly clickable. Doors keep their own DOM prompt.
+  FAR_RANGE: 7,
+  CLICK_RANGE: 4,
   drawInteractiveGlow: function(ctx) {
     var px = this.player.x, py = this.player.y;
+    var t = (typeof performance !== 'undefined' ? performance.now() : 0) / 1000;
     for (var i = 0; i < Board.furniture.length; i++) {
       var item = Board.furniture[i];
       var def = Environments.furnitureTypes[item.type];
       if (!def) continue;
-      if (!def.isWhiteboard && !def.isPostItBoard && !def.isDoor && !def.isCollabSpace) continue;
-      var icx = item.x + (def.width || 1) / 2;
-      var icy = item.y + (def.height || 1) / 2;
+      if (!def.isWhiteboard && !def.isPostItBoard && !def.isCollabSpace) continue;
+      var w = def.width || 1, h = def.height || 1;
+      var icx = item.x + w / 2, icy = item.y + h / 2;
       var dist = Math.sqrt((px - icx) * (px - icx) + (py - icy) * (py - icy));
-      if (dist > 4) continue;
-      var glowAlpha = Math.max(0.05, 0.25 * (1 - dist / 4));
+      if (dist > this.FAR_RANGE) continue;
+
+      // ramp: 0 at FAR_RANGE, 1 at CLICK_RANGE (fully lit when clickable)
+      var ramp = Math.max(0, Math.min(1, (this.FAR_RANGE - dist) / (this.FAR_RANGE - this.CLICK_RANGE)));
+      var clickable = dist <= this.CLICK_RANGE;
+
+      // Soft radial glow on the floor under the item
       var isoPos = Board.iso(icx, icy);
-      var glowR = Board.tileWidth * Math.max(def.width || 1, def.height || 1) * 0.4;
+      var glowR = Board.tileWidth * Math.max(w, h) * 0.45;
+      var glowAlpha = 0.06 + 0.28 * ramp;
       var grad = ctx.createRadialGradient(isoPos.x, isoPos.y, 0, isoPos.x, isoPos.y, glowR);
-      grad.addColorStop(0, 'rgba(94,140,106,' + glowAlpha + ')');
-      grad.addColorStop(1, 'rgba(94,140,106,0)');
+      grad.addColorStop(0, 'rgba(46,204,113,' + glowAlpha + ')');
+      grad.addColorStop(1, 'rgba(46,204,113,0)');
       ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(isoPos.x, isoPos.y, glowR, 0, Math.PI * 2); ctx.fill();
+
+      // Green footprint outline (iso diamond), intensity ramped
+      var c0 = Board.iso(item.x, item.y), c1 = Board.iso(item.x + w, item.y),
+          c2 = Board.iso(item.x + w, item.y + h), c3 = Board.iso(item.x, item.y + h);
+      ctx.strokeStyle = 'rgba(46,204,113,' + (0.25 + 0.55 * ramp) + ')';
+      ctx.lineWidth = clickable ? 2.2 : 1.4;
       ctx.beginPath();
-      ctx.arc(isoPos.x, isoPos.y, glowR, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(c0.x, c0.y); ctx.lineTo(c1.x, c1.y); ctx.lineTo(c2.x, c2.y); ctx.lineTo(c3.x, c3.y);
+      ctx.closePath(); ctx.stroke();
+
     }
   },
 
@@ -2335,10 +2368,22 @@ var Engine = {
       else if (def.isDoor) { label = item.doorLabel || 'Sous-salle'; hint = 'Entrer'; }
       if (!label) continue;
       var cx = item.x + (def.width || 1) / 2;
-      var pos = Board.iso(cx, item.y + (def.height || 1) / 2);
+      var ccy = item.y + (def.height || 1) / 2;
+      var pos = Board.iso(cx, ccy);
       var topY = pos.y - (def.drawHeight || 0) - 34 + bob;
 
+      // Proximity affordance: dim when far, clear when close, GREEN when the
+      // player is within click range (so it reads as "you can click this").
+      var pdist = Math.sqrt((this.player.x - cx) * (this.player.x - cx) + (this.player.y - ccy) * (this.player.y - ccy));
+      var pramp = Math.max(0, Math.min(1, (this.FAR_RANGE - pdist) / (this.FAR_RANGE - this.CLICK_RANGE)));
+      var pAlpha = 0.12 + 0.88 * pramp;
+      var clickable = pdist <= this.CLICK_RANGE && !def.isDoor;
+      if (clickable) hint = def.isWhiteboard ? 'Cliquer pour dessiner'
+        : def.isPostItBoard ? 'Cliquer pour les post-its'
+        : def.isCollabSpace ? 'Cliquer pour partager' : hint;
+
       ctx.save();
+      ctx.globalAlpha *= pAlpha;
       ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
       var wLabel = ctx.measureText(label).width;
       ctx.font = '500 11px "Plus Jakarta Sans", sans-serif';
@@ -2362,12 +2407,14 @@ var Engine = {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // point accent avec halo
+      // point accent avec halo — vert & pulsé quand cliquable
+      var dotCol = clickable ? '#2ecc71' : accent;
       var dx0 = x0 + padX + 4;
-      ctx.fillStyle = this._withAlpha(accent, 0.25);
-      ctx.beginPath(); ctx.arc(dx0, topY, 7, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = accent;
-      ctx.beginPath(); ctx.arc(dx0, topY, 4, 0, Math.PI * 2); ctx.fill();
+      var dotPulse = clickable ? (5 + Math.sin(performance.now() / 300) * 1.2) : 4;
+      ctx.fillStyle = this._withAlpha(dotCol, 0.28);
+      ctx.beginPath(); ctx.arc(dx0, topY, clickable ? 8 : 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = dotCol;
+      ctx.beginPath(); ctx.arc(dx0, topY, dotPulse, 0, Math.PI * 2); ctx.fill();
 
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
@@ -2378,8 +2425,8 @@ var Engine = {
         var sepX = x0 + padX + dotW + wLabel + 6;
         ctx.strokeStyle = panelBorder;
         ctx.beginPath(); ctx.moveTo(sepX, topY - 6); ctx.lineTo(sepX, topY + 6); ctx.stroke();
-        ctx.font = '500 11px "Plus Jakarta Sans", sans-serif';
-        ctx.fillStyle = muted;
+        ctx.font = (clickable ? '700 11px' : '500 11px') + ' "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = clickable ? '#1f9d57' : muted;
         ctx.fillText(hint, sepX + 7, topY);
       }
       ctx.restore();
