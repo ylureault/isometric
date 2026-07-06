@@ -2485,3 +2485,10 @@ body.ui-dark-mode .dark-mode-toggle {
 #video-enlarged .ve-close:hover { background: rgba(0,0,0,.75); }
 body.ui-dark-mode .ob-mode-btn { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); color: #c0c4d0; }
 body.ui-dark-mode .ob-mode-btn.is-active { background: rgba(107,108,255,.18); border-color: #6b6cff; color: #cdd5ff; }
+
+/* ===== Insuffle brand under the room card ===== */
+.rc-brand { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border, rgba(0,0,0,.08)); display: flex; justify-content: flex-end; }
+.rc-brand-img { height: 22px; width: auto; opacity: .9; transition: opacity .15s ease; }
+.rc-brand a:hover .rc-brand-img { opacity: 1; }
+body.ui-dark-mode .rc-brand { border-top-color: rgba(255,255,255,.1); }
+body.ui-dark-mode .rc-brand-img { filter: brightness(0) invert(1); opacity: .85; }

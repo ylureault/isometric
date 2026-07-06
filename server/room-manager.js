@@ -568,6 +568,41 @@ class RoomManager {
     };
   }
 
+  // Ops overview for the /insuffle-read dashboard: every in-memory room with
+  // its live participants and how long each has been connected.
+  getAllSessions() {
+    const now = Date.now();
+    const sessions = [];
+    for (const [roomId, room] of this.rooms) {
+      const participants = [];
+      for (const [, p] of room.participants) {
+        participants.push({
+          pseudo: p.pseudo,
+          role: p.role,
+          isAdmin: !!p.isAdmin,
+          disconnected: !!p.disconnected,
+          videoMode: !!p.videoMode,
+          joinedAt: p.joinedAt,
+          connectedForMs: p.joinedAt ? (now - p.joinedAt) : 0,
+        });
+      }
+      sessions.push({
+        id: roomId,
+        name: room.name,
+        environment: room.environment,
+        createdAt: room.createdAt,
+        ageMs: room.createdAt ? (now - room.createdAt) : 0,
+        participantCount: room.participants.size,
+        activeCount: participants.filter((p) => !p.disconnected).length,
+        hasScreenShare: !!room.activeScreenShare,
+        participants: participants.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)),
+      });
+    }
+    // Busiest / newest first
+    sessions.sort((a, b) => b.participantCount - a.participantCount || b.createdAt - a.createdAt);
+    return sessions;
+  }
+
   getParticipantsList(roomId) {
     const room = this.rooms.get(roomId);
     if (!room) return [];

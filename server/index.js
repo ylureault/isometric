@@ -77,6 +77,109 @@ app.use('/shared', express.static(path.join(__dirname, '..', 'shared'), staticOp
 
 app.get('/health', (req, res) => res.json({ status: 'ok', rooms: roomManager.rooms.size, uptime: process.uptime() }));
 
+// ===== Secret ops dashboard: /insuffle-read =====
+// Lists every open session (who, since when) and lets you close/delete rooms.
+// Guarded by a key (env INSUFFLE_ADMIN_KEY, default 'insuffle-read').
+const ADMIN_KEY = process.env.INSUFFLE_ADMIN_KEY || 'insuffle-read';
+const DASHBOARD_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Insuffle — Sessions ouvertes</title>
+<style>
+  :root{--navy:#1d2138;--green:#2ecc71;--red:#e74c3c;--bg:#f4f6fb;--card:#fff;--muted:#737b96;--border:#e6e9f2}
+  *{box-sizing:border-box}body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--navy)}
+  header{background:var(--navy);color:#fff;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  header h1{margin:0;font-size:1.2rem;font-weight:700}
+  header .meta{font-size:.85rem;opacity:.8}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px}
+  .bar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+  .bar input{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:.9rem}
+  .btn{padding:8px 14px;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.85rem}
+  .btn-p{background:var(--navy);color:#fff}.btn-d{background:var(--red);color:#fff}
+  .btn-d:hover{filter:brightness(1.08)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(20,24,60,.05)}
+  .card h2{margin:0 0 2px;font-size:1.05rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pill{font-size:.72rem;padding:2px 8px;border-radius:20px;background:#eef1f8;color:var(--muted);font-weight:600}
+  .pill.live{background:rgba(46,204,113,.15);color:#1f9d57}
+  .pill.share{background:rgba(94,140,200,.15);color:#3a6ea5}
+  .sub{color:var(--muted);font-size:.82rem;margin:4px 0 10px}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.03em}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px}
+  .dot.off{background:#c3c8d6}
+  .empty{color:var(--muted);text-align:center;padding:40px}
+  .row-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+</style></head><body>
+<header><h1>🔎 Insuffle — Sessions ouvertes</h1><div class="meta" id="meta">…</div></header>
+<div class="wrap">
+  <div class="bar">
+    <button class="btn btn-p" onclick="load()">↻ Rafraîchir</button>
+    <label style="font-size:.82rem;color:var(--muted)"><input type="checkbox" id="auto" checked> auto (5s)</label>
+    <span style="flex:1"></span>
+    <input id="key" type="password" placeholder="clé admin" style="width:160px">
+    <button class="btn btn-p" onclick="saveKey()">OK</button>
+  </div>
+  <div id="list"><div class="empty">Chargement…</div></div>
+</div>
+<script>
+  var params=new URLSearchParams(location.search);
+  var KEY=params.get('key')||localStorage.getItem('insuffleReadKey')||'';
+  if(KEY) localStorage.setItem('insuffleReadKey',KEY);
+  document.getElementById('key').value=KEY;
+  function saveKey(){KEY=document.getElementById('key').value.trim();localStorage.setItem('insuffleReadKey',KEY);load();}
+  function fmt(ms){ms=ms||0;var s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);if(h>0)return h+'h'+(m%60)+'m';if(m>0)return m+'m'+(s%60)+'s';return s+'s';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  async function load(){
+    if(!KEY){document.getElementById('list').innerHTML='<div class="empty">Entrez la clé admin ci-dessus.</div>';return;}
+    try{
+      var r=await fetch('/insuffle-read/api/sessions?key='+encodeURIComponent(KEY));
+      if(r.status===401){document.getElementById('list').innerHTML='<div class="empty">Clé invalide.</div>';return;}
+      var d=await r.json();
+      document.getElementById('meta').textContent=d.sessions.length+' session(s) · '+d.rooms+' en mémoire · uptime '+fmt(d.uptime*1000);
+      if(!d.sessions.length){document.getElementById('list').innerHTML='<div class="empty">Aucune session ouverte.</div>';return;}
+      document.getElementById('list').innerHTML=d.sessions.map(function(s){
+        var rows=s.participants.map(function(p){return '<tr><td><span class="dot'+(p.disconnected?' off':'')+'"></span>'+esc(p.pseudo)+(p.isAdmin?' 👑':'')+(p.videoMode?' 📷':'')+'</td><td>'+esc(p.role)+'</td><td>'+fmt(p.connectedForMs)+'</td></tr>';}).join('');
+        return '<div class="card"><div class="row-top"><div><h2>'+esc(s.name)+' <span class="pill'+(s.activeCount?' live':'')+'">'+s.activeCount+' / '+s.participantCount+'</span>'+(s.hasScreenShare?' <span class="pill share">écran partagé</span>':'')+'</h2>'+
+          '<div class="sub">'+esc(s.id)+' · '+esc(s.environment)+' · ouverte depuis '+fmt(s.ageMs)+'</div></div>'+
+          '<button class="btn btn-d" onclick="del(\\''+s.id+'\\',\\''+esc(s.name).replace(/\\x27/g,"")+'\\')">🗑 Fermer</button></div>'+
+          (rows?'<table><thead><tr><th>Participant</th><th>Rôle</th><th>Connecté depuis</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="sub">Salle vide.</div>')+'</div>';
+      }).join('');
+    }catch(e){document.getElementById('list').innerHTML='<div class="empty">Erreur réseau.</div>';}
+  }
+  async function del(id,name){
+    if(!confirm('Fermer définitivement la session « '+name+' » ('+id+') ?\\nTous les participants seront déconnectés.'))return;
+    var r=await fetch('/insuffle-read/api/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,roomId:id})});
+    if(r.ok)load();else alert('Échec de la suppression.');
+  }
+  load();
+  setInterval(function(){if(document.getElementById('auto').checked)load();},5000);
+</script></body></html>`;
+function checkAdminKey(req) {
+  const k = req.query.key || (req.body && req.body.key) || req.get('x-admin-key');
+  return typeof k === 'string' && k.length > 0 &&
+    k.length === ADMIN_KEY.length && crypto.timingSafeEqual(Buffer.from(k), Buffer.from(ADMIN_KEY));
+}
+
+app.get('/insuffle-read/api/sessions', (req, res) => {
+  if (!checkAdminKey(req)) return res.status(401).json({ error: 'unauthorized' });
+  res.json({ rooms: roomManager.rooms.size, uptime: process.uptime(), sessions: roomManager.getAllSessions() });
+});
+
+app.post('/insuffle-read/api/close', (req, res) => {
+  if (!checkAdminKey(req)) return res.status(401).json({ error: 'unauthorized' });
+  const roomId = req.body && req.body.roomId;
+  if (typeof roomId !== 'string' || !roomManager.getRoom(roomId)) return res.status(404).json({ error: 'not_found' });
+  io.to(roomId).emit('room-closed', { reason: 'La session a été fermée par un administrateur.' });
+  roomManager._destroyRoom(roomId);
+  res.json({ success: true });
+});
+
+app.get('/insuffle-read', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  res.type('html').send(DASHBOARD_HTML);
+});
+
 // When a room is reclaimed, clear any timers/votes we own for it (prevents leaks)
 roomManager.setDestroyHook((room) => {
   if (room.timers) {
