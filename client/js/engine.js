@@ -117,6 +117,11 @@ var Engine = {
       UXEnhancements.init();
     }
 
+    // Gallery (Meet/Zoom view) + screen-share dock
+    if (typeof Gallery !== 'undefined') {
+      Gallery.init();
+    }
+
     Network.onParticipantJoined = function(d) {
       self.initSfx(); self.playSfx('join');
       // #30 Grouped join notifications
