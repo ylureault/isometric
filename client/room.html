@@ -49,8 +49,17 @@
         <div class="ob-logo">
           <img src="https://www.insuffle.com/wp-content/uploads/2025/04/cropped-logo-insuffle-v2-1.png" alt="Insuffle" class="ob-brand-img">
         </div>
-        <div class="ob-h">Créez votre avatar</div>
-        <div class="ob-sub">Personnalisez votre personnage avant de rejoindre l'espace collaboratif.</div>
+        <div class="ob-h">Rejoignez l'espace</div>
+        <div class="ob-sub">Choisissez comment vous apparaissez, puis entrez.</div>
+        <div class="ob-mode" id="ob-mode" role="group" aria-label="Mode d'apparence">
+          <button type="button" class="ob-mode-btn is-active" id="ob-mode-avatar" data-mode="avatar">
+            <span class="ob-mode-ic">🎭</span> Personnage
+          </button>
+          <button type="button" class="ob-mode-btn" id="ob-mode-webcam" data-mode="webcam">
+            <span class="ob-mode-ic">📷</span> Webcam
+          </button>
+        </div>
+        <div class="ob-mode-hint" id="ob-mode-hint">Un avatar isométrique personnalisable. La caméra reste éteinte.</div>
         <div id="room-info-display" class="room-info-display" style="display: none;"></div>
         <div class="ob-field">
           <label for="pseudo-input">Votre pseudo</label>
@@ -212,6 +221,9 @@
     <div class="toolbar-center">
       <button class="toolbar-btn" id="btn-screen-share" title="Partager mon écran" aria-label="Partager l'ecran">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
+      </button>
+      <button class="toolbar-btn" id="btn-camera" title="Activer / Couper la webcam" aria-label="Basculer la webcam">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
       </button>
       <div class="reaction-bar" id="reaction-bar" role="group" aria-label="Réactions rapides">
         <button class="reaction-btn" data-emoji="👍" title="Pouce levé (1)" aria-label="Réaction pouce levé">👍</button>
@@ -706,6 +718,7 @@
   <script src="js/character.js?v=2.0.0"></script>
   <script src="js/network.js?v=2.0.0"></script>
   <script src="js/audio.js?v=2.0.0"></script>
+  <script src="js/video.js?v=2.0.0"></script>
   <script src="js/screen-share.js?v=2.0.0"></script>
   <script src="js/ui.js?v=2.0.0"></script>
   <script src="js/ux-enhancements.js?v=2.0.0"></script>

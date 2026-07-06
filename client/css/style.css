@@ -2441,3 +2441,47 @@ body.ui-dark-mode .dark-mode-toggle {
   .toolbar, .hud, .minimap-container, .chat-container,
   .admin-panel, .context-menu, .notifications-container { display: none !important; }
 }
+
+/* ===== Webcam mode: login choice, camera button, enlarged view ===== */
+.ob-mode { display: flex; gap: 8px; margin: 6px 0 4px; }
+.ob-mode-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 12px; border: 1.5px solid var(--color-border-strong, #ddd);
+  background: #fff; color: #444; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  border-radius: 12px; transition: all .15s ease;
+}
+.ob-mode-btn:hover { border-color: #9aa; }
+.ob-mode-btn.is-active { border-color: #6b6cff; background: #f2f3ff; color: #3a3f8f; box-shadow: 0 2px 8px rgba(107,108,255,.18); }
+.ob-mode-ic { font-size: 1.05rem; }
+.ob-mode-hint { font-size: .78rem; color: var(--color-text-muted, #999); margin-bottom: 6px; }
+.ob-preview.is-webcam { opacity: .35; filter: grayscale(.4); }
+
+/* Camera toolbar button active state */
+.toolbar-btn.cam-on { background: rgba(46,204,113,.16); border-color: rgba(46,204,113,.4); color: #2ecc71; }
+
+/* Enlarged webcam view */
+#video-enlarged {
+  display: none; position: fixed; inset: 0; z-index: 4000;
+  background: rgba(10,12,20,.72); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center; padding: 24px;
+}
+#video-enlarged .ve-inner {
+  position: relative; background: #0d1020; border-radius: 20px; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5); max-width: min(720px, 92vw); max-height: 84vh;
+}
+#video-enlarged video {
+  display: block; width: min(640px, 88vw); max-height: 78vh; object-fit: cover; background: #000;
+}
+#video-enlarged .ve-name {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 18px;
+  color: #fff; font-weight: 700; font-size: 1.05rem;
+  background: linear-gradient(transparent, rgba(0,0,0,.6));
+}
+#video-enlarged .ve-close {
+  position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border: none;
+  border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; font-size: 1.5rem; cursor: pointer;
+  line-height: 1; display: flex; align-items: center; justify-content: center;
+}
+#video-enlarged .ve-close:hover { background: rgba(0,0,0,.75); }
+body.ui-dark-mode .ob-mode-btn { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); color: #c0c4d0; }
+body.ui-dark-mode .ob-mode-btn.is-active { background: rgba(107,108,255,.18); border-color: #6b6cff; color: #cdd5ff; }

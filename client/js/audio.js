@@ -33,19 +33,39 @@ const Audio = {
     }
   },
 
-  async requestMicrophone() {
+  wantVideo: false, // camera bubble mode
+
+  // Back-compat: audio only.
+  requestMicrophone() {
+    return this.requestMedia(false);
+  },
+
+  // Acquire the local media stream. withVideo=true also captures the camera so
+  // the video track rides the existing audio mesh (no separate signaling).
+  async requestMedia(withVideo) {
+    this.wantVideo = !!withVideo;
+    // Stop any previous local tracks (avoid leaks) and reset the speaking analyser,
+    // since we're about to swap in a fresh stream.
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+    }
+    this._analyser = null;
+    this._analyserData = null;
     try {
       const constraints = {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          // Prefer higher quality voice settings
           sampleRate: { ideal: 48000 },
           channelCount: { ideal: 1 },
           latency: { ideal: 0.01 },
         },
-        video: false,
+        video: withVideo ? {
+          width: { ideal: 320 }, height: { ideal: 320 },
+          frameRate: { ideal: 24, max: 30 },
+          facingMode: 'user',
+        } : false,
       };
 
       if (this.selectedInputDevice) {
@@ -55,19 +75,46 @@ const Audio = {
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
       this.hasPermission = true;
 
-      // Apply mute state to newly acquired tracks
+      // Apply mute state to newly acquired audio tracks
       if (this.isMuted) {
-        this.localStream.getAudioTracks().forEach(track => {
-          track.enabled = false;
-        });
+        this.localStream.getAudioTracks().forEach(track => { track.enabled = false; });
       }
 
       return true;
     } catch (e) {
-      console.warn('Microphone permission denied:', e.message);
+      console.warn('getUserMedia denied/failed:', e.message);
+      // If video was requested and failed, retry audio-only so the user still joins.
+      if (withVideo) {
+        this.wantVideo = false;
+        try {
+          this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          this.hasPermission = true;
+          if (this.isMuted) this.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
+          return 'audio-only';
+        } catch (e2) { /* fall through */ }
+      }
       this.hasPermission = false;
       return false;
     }
+  },
+
+  // True once the local camera track is live (for rendering the own bubble).
+  hasLocalVideo() {
+    return !!(this.localStream && this.localStream.getVideoTracks().length > 0 &&
+      this.localStream.getVideoTracks()[0].readyState === 'live');
+  },
+
+  // Hidden but rendered sink so incoming <video> tracks keep decoding frames.
+  _getVideoSink() {
+    let sink = document.getElementById('cam-video-sink');
+    if (!sink) {
+      sink = document.createElement('div');
+      sink.id = 'cam-video-sink';
+      sink.setAttribute('aria-hidden', 'true');
+      sink.style.cssText = 'position:fixed;left:-10000px;top:0;width:2px;height:2px;overflow:hidden;opacity:0;pointer-events:none;';
+      document.body.appendChild(sink);
+    }
+    return sink;
   },
 
   toggleMute() {
@@ -137,10 +184,19 @@ const Audio = {
       });
     }
 
-    // Handle remote stream
+    // Handle remote stream (audio always; video when the peer is in camera mode)
     connection.ontrack = (event) => {
-      audioElement.srcObject = event.streams[0];
+      const stream = event.streams[0];
+      audioElement.srcObject = stream;
       peer.connected = true;
+      peer.stream = stream;
+      if (stream && stream.getVideoTracks().length > 0) {
+        this._attachPeerVideo(peer, stream);
+      }
+      // A camera track can arrive after renegotiation — react to that too.
+      stream.addEventListener && stream.addEventListener('addtrack', (ev) => {
+        if (ev.track && ev.track.kind === 'video') this._attachPeerVideo(peer, stream);
+      });
     };
 
     // ICE candidates
@@ -188,6 +244,20 @@ const Audio = {
     };
 
     return peer;
+  },
+
+  // Create a hidden, playing <video> for a peer's camera so it can be drawn to canvas.
+  _attachPeerVideo(peer, stream) {
+    if (!peer.videoEl) {
+      const v = document.createElement('video');
+      v.autoplay = true; v.muted = true; v.playsInline = true;
+      v.setAttribute('playsinline', '');
+      this._getVideoSink().appendChild(v);
+      peer.videoEl = v;
+    }
+    if (peer.videoEl.srcObject !== stream) peer.videoEl.srcObject = stream;
+    const p = peer.videoEl.play();
+    if (p && p.catch) p.catch(() => {});
   },
 
   // Prefer Opus codec with high bitrate for voice clarity
@@ -343,6 +413,12 @@ const Audio = {
     if (peer.audioElement) {
       peer.audioElement.srcObject = null;
       try { peer.audioElement.remove(); } catch (e) { /* ignore */ }
+    }
+    if (peer.videoEl) {
+      try { peer.videoEl.pause(); } catch (e) { /* ignore */ }
+      peer.videoEl.srcObject = null;
+      if (peer.videoEl.parentNode) peer.videoEl.parentNode.removeChild(peer.videoEl);
+      peer.videoEl = null;
     }
     this.peers.delete(socketId);
     this._connectingPeers.delete(socketId);

@@ -431,6 +431,7 @@ class RoomManager {
       lastAction: Date.now(), // improvement #9: activity tracking
       joinOrder: room.nextJoinOrder++, // improvement #23: join order
       disconnected: false,
+      videoMode: !!data.videoMode, // camera bubble vs avatar character
     };
 
     if (isCreator) room.creatorSocketId = socketId;
@@ -589,6 +590,7 @@ class RoomManager {
         tableId: p.tableId,
         handRaised: p.handRaised,
         disconnected: p.disconnected,
+        videoMode: !!p.videoMode,
         joinOrder: p.joinOrder, // improvement #23
         lastAction: p.lastAction, // improvement #9
       });
@@ -1199,6 +1201,17 @@ class RoomManager {
     if (!p) return null;
     p.isMuted = !!muted;
     return { isMuted: p.isMuted };
+  }
+
+  // ===== VIDEO MODE (webcam bubble vs avatar) =====
+
+  setVideoMode(roomId, socketId, enabled) {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+    const p = room.participants.get(socketId);
+    if (!p) return null;
+    p.videoMode = !!enabled;
+    return { videoMode: p.videoMode, pseudo: p.pseudo };
   }
 
   // ===== CANCEL TIMER (improvement #1) =====

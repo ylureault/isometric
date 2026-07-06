@@ -19,6 +19,28 @@ const UI = {
     this.previewCanvas = document.getElementById('avatar-preview-canvas');
     this.previewCtx = this.previewCanvas.getContext('2d');
 
+    // Appearance mode: avatar character (default) vs webcam bubble.
+    this._joinVideoMode = false;
+    var self = this;
+    var modeAvatar = document.getElementById('ob-mode-avatar');
+    var modeWebcam = document.getElementById('ob-mode-webcam');
+    var modeHint = document.getElementById('ob-mode-hint');
+    var custom = document.getElementById('ob-custom');
+    var setMode = function(video) {
+      self._joinVideoMode = video;
+      if (modeAvatar) modeAvatar.classList.toggle('is-active', !video);
+      if (modeWebcam) modeWebcam.classList.toggle('is-active', video);
+      if (modeHint) modeHint.textContent = video
+        ? 'Votre caméra sera demandée : vous apparaîtrez dans un rond (vert quand vous parlez).'
+        : 'Un avatar isométrique personnalisable. La caméra reste éteinte.';
+      // Hide avatar customisation when in webcam mode (not relevant then).
+      if (custom) custom.style.display = video ? 'none' : '';
+      var preview = document.querySelector('.ob-preview');
+      if (preview) preview.classList.toggle('is-webcam', video);
+    };
+    if (modeAvatar) modeAvatar.addEventListener('click', function() { setMode(false); });
+    if (modeWebcam) modeWebcam.addEventListener('click', function() { setMode(true); });
+
     const colorInputs = {
       skin: document.getElementById('color-skin'),
       hair: document.getElementById('color-hair'),
@@ -114,7 +136,7 @@ const UI = {
 
       var accessorySelect = document.getElementById('accessory-select');
       var accessory = accessorySelect ? accessorySelect.value : 'none';
-      onEnter({ pseudo, colors: { ...this.currentColors }, accessory: accessory });
+      onEnter({ pseudo, colors: { ...this.currentColors }, accessory: accessory, videoMode: !!this._joinVideoMode });
 
       // #17 Show keyboard hint overlay on first join
       this.showKeyboardHintOnce();
@@ -373,6 +395,13 @@ const UI = {
       this.updateScreenShareButton();
     });
 
+    // Camera (webcam bubble) toggle button
+    document.getElementById('btn-camera')?.addEventListener('click', () => {
+      if (typeof Video === 'undefined') return;
+      Video.toggle();
+    });
+    this.updateVideoButton(false);
+
     // View toggle button (#13 smooth transition)
     document.getElementById('btn-view-toggle')?.addEventListener('click', () => {
       Engine.viewMode = Engine.viewMode === 'iso' ? 'topdown' : 'iso';
@@ -520,6 +549,13 @@ const UI = {
     if (!btn) return;
     btn.classList.toggle('sharing', ScreenShare.isSharing);
     btn.title = ScreenShare.isSharing ? 'Arrêter le partage' : 'Partager mon écran';
+  },
+
+  updateVideoButton(on) {
+    const btn = document.getElementById('btn-camera');
+    if (!btn) return;
+    btn.classList.toggle('cam-on', !!on);
+    btn.title = on ? 'Couper la webcam' : 'Activer la webcam';
   },
 
   // Show/hide admin-only buttons

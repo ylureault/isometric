@@ -139,6 +139,7 @@ const Network = {
       gridSize: config.gridSize,
       password: config.password || undefined, // improvement #2
       creatorToken: config.creatorToken || storedToken,
+      videoMode: !!config.videoMode,
     }, (response) => {
       if (response.error) {
         if (this.onError) this.onError(response.error);

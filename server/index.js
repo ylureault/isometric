@@ -160,6 +160,7 @@ io.on('connection', (socket) => {
       accessory: data.accessory,
       password: data.password,
       creatorToken: data.creatorToken,
+      videoMode: data.videoMode,
       x: spawn.x, y: spawn.y,
     });
 
@@ -181,6 +182,7 @@ io.on('connection', (socket) => {
       role: result.participant.role,
       isAdmin: result.participant.isAdmin,
       isMuted: result.participant.isMuted,
+      videoMode: !!result.participant.videoMode,
       tableId: null,
       handRaised: false,
     });
@@ -378,6 +380,17 @@ io.on('connection', (socket) => {
     socket.to(currentRoomId).emit('participant-mute-changed', {
       socketId: socket.id,
       muted: data.muted,
+    });
+  });
+
+  // Video mode toggle (webcam bubble vs avatar) — broadcast to the room
+  socket.on('set-video-mode', (data) => {
+    if (!currentRoomId) return;
+    const result = roomManager.setVideoMode(currentRoomId, socket.id, data && data.enabled);
+    if (!result) return;
+    io.to(currentRoomId).emit('participant-video-mode-changed', {
+      socketId: socket.id,
+      videoMode: result.videoMode,
     });
   });
 

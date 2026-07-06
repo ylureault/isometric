@@ -82,6 +82,7 @@ var Engine = {
     window.addEventListener('wheel', function(e) { self.onWheel(e); }, { passive: false });
     window.addEventListener('beforeunload', function() {
       if (self.sfxCtx) { try { self.sfxCtx.close(); } catch(e) {} self.sfxCtx = null; }
+      if (typeof Video !== 'undefined') Video.destroy();
       Audio.destroy();
       Network.leaveRoom();
     });
@@ -218,6 +219,7 @@ var Engine = {
     s.on('participant-kicked', function(d) { Network.remotePlayers.delete(d.socketId); });
     s.on('room-closed', function(d) { alert('Cette salle a été fermée par l\'administrateur.'); window.location.href = '/client/index.html'; });
     s.on('participant-mute-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.isMuted = d.muted; });
+    s.on('participant-video-mode-changed', function(d) { var r = Network.remotePlayers.get(d.socketId); if (r) r.videoMode = d.videoMode; });
     s.on('table-created', function(t) { self.tables.set(t.id, t); });
     s.on('table-deleted', function(d) { self.tables.delete(d.tableId); });
     s.on('table-renamed', function(d) { var t = self.tables.get(d.tableId); if (t) t.name = d.name; });
@@ -403,6 +405,7 @@ var Engine = {
       self.player.pseudo = config.pseudo;
       self.player.colors = config.colors;
       self.player.accessory = config.accessory || 'none';
+      self.player.videoMode = !!config.videoMode;
       // Save session for reconnect
       try {
         localStorage.setItem('insuffle_session', JSON.stringify({
@@ -419,11 +422,19 @@ var Engine = {
 
   requestMicAndJoin: function() {
     var self = this;
-    Audio.requestMicrophone().then(function(mic) {
-      self.player.isMuted = !mic;
+    var wantVideo = !!self.player.videoMode;
+    Audio.requestMedia(wantVideo).then(function(res) {
+      // res: true (ok), 'audio-only' (video refused, joined w/ mic), false (nothing)
+      self.player.isMuted = !res;
       UI.updateMuteButton(self.player.isMuted);
-      if (!mic) {
-        UI.showMicPermissionHint();
+      if (!res) UI.showMicPermissionHint();
+      if (wantVideo && res === 'audio-only') {
+        self.player.videoMode = false;
+        UI.showNotification && UI.showNotification('Caméra refusée — vous rejoignez en personnage.');
+      }
+      if (self.player.videoMode && typeof Video !== 'undefined') {
+        Video.enabled = true;
+        Video.ensureLocalVideo();
       }
       self.joinRoom();
     });
@@ -436,6 +447,7 @@ var Engine = {
       accessory: this.player.accessory || 'none',
       isCreator: this.roomConfig.isCreator, roomName: this.roomConfig.name,
       environment: this.roomConfig.environment, gridSize: this.roomConfig.gridSize,
+      videoMode: !!this.player.videoMode,
     }, function(r) {
       if (r.error) {
         var msgs = {
@@ -801,6 +813,21 @@ var Engine = {
     UI.hideContextMenu();
     if (!this.started) return;
     if (this.editMode) { this.onEditClick(e); return; }
+
+    // Click on a webcam bubble → open the enlarged camera view.
+    if (this._videoBubbles && this._videoBubbles.length && this.viewMode !== 'topdown' && typeof Video !== 'undefined') {
+      var bwx = (e.clientX - this.camera.x) / this.zoom;
+      var bwy = (e.clientY - this.camera.y) / this.zoom;
+      for (var vb = this._videoBubbles.length - 1; vb >= 0; vb--) {
+        var b = this._videoBubbles[vb];
+        var ddx = bwx - b.sx, ddy = bwy - b.cy;
+        if (ddx * ddx + ddy * ddy <= b.r * b.r) {
+          Video.showEnlarged(b.sid);
+          return;
+        }
+      }
+    }
+
     var gp = this.screenToGridView(e.clientX, e.clientY);
     var clickX = Math.floor(gp.x);
     var clickY = Math.floor(gp.y);
@@ -1735,6 +1762,9 @@ var Engine = {
     // #45 Only resort when entities actually change positions
     entities.sort(function(a, b) { return a.sk - b.sk; });
 
+    // Reset the per-frame list of webcam bubbles (world coords) for click hit-testing.
+    this._videoBubbles = [];
+
     for (var ei = 0; ei < entities.length; ei++) {
       var e = entities[ei];
       if (e.type === 'f') {
@@ -1767,18 +1797,29 @@ var Engine = {
         var myChatBubble = this.player.chatBubble;
         if (myChatBubble && Date.now() - myChatBubble.time > 5000) { myChatBubble = null; this.player.chatBubble = null; }
 
-        Character.draw(ctx, this.player.x, this.player.y, 0, 0, {
-          colors: this.player.colors, direction: this.player.direction,
-          walkPhase: this.player.walkPhase, isWalking: this.player.isWalking,
-          pseudo: this.player.pseudo, isOnStage: onS, isAdmin: this.player.isAdmin,
-          isMuted: this.player.isMuted, handRaised: this.player.handRaised,
-          isBroadcasting: this.player.isBroadcasting,
-          isSpeaking: Audio.isSpeaking(),
-          isSharingScreen: ScreenShare.isSharing,
-          accessory: this.player.accessory || 'none',
-          chatBubble: myChatBubble,
-          isMe: true,
-        });
+        var meSpeaking = Audio.isSpeaking();
+        if (this.player.videoMode && typeof Video !== 'undefined') {
+          var meBounds = Video.drawBubble(ctx, this.player.x, this.player.y, {
+            videoEl: Video.ensureLocalVideo(), mirror: true,
+            colors: this.player.colors, pseudo: this.player.pseudo,
+            speaking: meSpeaking && !this.player.isMuted, muted: this.player.isMuted,
+            isAdmin: this.player.isAdmin,
+          });
+          if (meBounds) this._videoBubbles.push({ sid: 'me', sx: meBounds.sx, cy: meBounds.cy, r: meBounds.r });
+        } else {
+          Character.draw(ctx, this.player.x, this.player.y, 0, 0, {
+            colors: this.player.colors, direction: this.player.direction,
+            walkPhase: this.player.walkPhase, isWalking: this.player.isWalking,
+            pseudo: this.player.pseudo, isOnStage: onS, isAdmin: this.player.isAdmin,
+            isMuted: this.player.isMuted, handRaised: this.player.handRaised,
+            isBroadcasting: this.player.isBroadcasting,
+            isSpeaking: meSpeaking,
+            isSharingScreen: ScreenShare.isSharing,
+            accessory: this.player.accessory || 'none',
+            chatBubble: myChatBubble,
+            isMe: true,
+          });
+        }
       } else if (e.type === 'r') {
         var p = e.p;
         // Expire old chat bubbles
@@ -1787,17 +1828,28 @@ var Engine = {
         ctx.save();
         ctx.globalAlpha = p.opacity;
         if (self.spotlight && self.spotlight !== e.sid) ctx.globalAlpha *= 0.4;
-        Character.draw(ctx, p.renderX, p.renderY, 0, 0, {
-          colors: p.colors, direction: p.direction, walkPhase: p.walkPhase,
-          isWalking: p.isWalking, pseudo: p.pseudo,
-          isOnStage: Board.isOnStage(Math.floor(p.renderX), Math.floor(p.renderY)),
-          isAdmin: p.isAdmin, disconnected: p.disconnected, isMuted: p.isMuted,
-          handRaised: p.handRaised, isBroadcasting: p.isBroadcasting,
-          isSpeaking: p.isSpeaking,
-          isSharingScreen: ScreenShare.isSharingFrom(e.sid),
-          accessory: p.accessory || 'none',
-          chatBubble: p.chatBubble,
-        });
+        if (p.videoMode && typeof Video !== 'undefined') {
+          var peer = Audio.peers && Audio.peers.get(e.sid);
+          var rBounds = Video.drawBubble(ctx, p.renderX, p.renderY, {
+            videoEl: peer && peer.videoEl, mirror: false,
+            colors: p.colors, pseudo: p.pseudo,
+            speaking: p.isSpeaking && !p.isMuted, muted: p.isMuted,
+            isAdmin: p.isAdmin, alpha: p.opacity,
+          });
+          if (rBounds) this._videoBubbles.push({ sid: e.sid, sx: rBounds.sx, cy: rBounds.cy, r: rBounds.r });
+        } else {
+          Character.draw(ctx, p.renderX, p.renderY, 0, 0, {
+            colors: p.colors, direction: p.direction, walkPhase: p.walkPhase,
+            isWalking: p.isWalking, pseudo: p.pseudo,
+            isOnStage: Board.isOnStage(Math.floor(p.renderX), Math.floor(p.renderY)),
+            isAdmin: p.isAdmin, disconnected: p.disconnected, isMuted: p.isMuted,
+            handRaised: p.handRaised, isBroadcasting: p.isBroadcasting,
+            isSpeaking: p.isSpeaking,
+            isSharingScreen: ScreenShare.isSharingFrom(e.sid),
+            accessory: p.accessory || 'none',
+            chatBubble: p.chatBubble,
+          });
+        }
         ctx.restore();
       }
     }
