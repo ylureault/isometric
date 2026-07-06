@@ -922,7 +922,7 @@ const UI = {
     var html = '';
     for (var type in Environments.furnitureTypes) {
       var def = Environments.furnitureTypes[type];
-      if (def.isZone) continue;
+      if (def.isZone || def.hidden) continue;
       var icon = icons[type] || '📦';
       html += '<button class="catalog-item" data-type="' + type + '">' + icon + ' ' + def.name + '</button>';
     }
@@ -2401,6 +2401,7 @@ const UI = {
 
     for (var type in Environments.furnitureTypes) {
       var def = Environments.furnitureTypes[type];
+      if (def.hidden) continue; // meubles retirés du catalogue (ex. classeur)
       var card = document.createElement('button');
       card.type = 'button';
       card.className = 'edit-palette-card';
@@ -2450,7 +2451,7 @@ const UI = {
     var html = '<option value="">-- Choisir un type de mobilier --</option>';
     for (var type in Environments.furnitureTypes) {
       var def = Environments.furnitureTypes[type];
-      if (def.isZone) continue;
+      if (def.isZone || def.hidden) continue;
       html += '<option value="' + type + '">' + def.name + ' (' + (def.width || 1) + 'x' + (def.height || 1) + ')</option>';
     }
     select.innerHTML = html;

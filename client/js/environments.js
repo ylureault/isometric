@@ -89,7 +89,7 @@ const Environments = {
     },
     filingCabinet: {
       name: 'Classeur', width: 1, height: 1, solid: true,
-      color: '#808080', topColor: '#909090', drawHeight: 20,
+      color: '#808080', topColor: '#909090', drawHeight: 20, hidden: true,
     },
     standingDesk: {
       name: 'Bureau debout', width: 2, height: 1, solid: true,
@@ -113,11 +113,11 @@ const Environments = {
     },
     conferencePhone: {
       name: 'Téléphone conf.', width: 1, height: 1, solid: true,
-      color: '#2a2a2a', topColor: '#3a3a3a', drawHeight: 10, isConfPhone: true,
+      color: '#2a2a2a', topColor: '#3a3a3a', drawHeight: 10, isConfPhone: true, hidden: true,
     },
     trashBin: {
       name: 'Corbeille', width: 1, height: 1, solid: true,
-      color: '#606060', topColor: '#707070', drawHeight: 8,
+      color: '#606060', topColor: '#707070', drawHeight: 8, hidden: true,
     },
     clock: {
       name: 'Horloge murale', width: 1, height: 1, solid: true,
