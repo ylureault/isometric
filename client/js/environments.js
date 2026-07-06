@@ -20,7 +20,7 @@ const Environments = {
     },
     partition: {
       name: 'Cloison vitrée', width: 1, height: 3, solid: true,
-      color: '#b0c4d8', topColor: '#c8daea', drawHeight: 30, isPartition: true,
+      color: '#b0c4d8', topColor: '#c8daea', drawHeight: 30, isPartition: true, hidden: true,
     },
     largeTable: {
       name: 'Grande table', width: 4, height: 2, solid: true,
@@ -48,7 +48,7 @@ const Environments = {
     },
     bookshelf: {
       name: 'Bibliothèque', width: 2, height: 1, solid: true,
-      color: '#f0f0f0', topColor: '#fafafa', drawHeight: 32,
+      color: '#f0f0f0', topColor: '#fafafa', drawHeight: 32, hidden: true,
     },
     whiteboard: {
       name: 'Tableau blanc', width: 2, height: 1, solid: true,
@@ -85,7 +85,7 @@ const Environments = {
     },
     waterCooler: {
       name: 'Fontaine à eau', width: 1, height: 1, solid: true,
-      color: '#87CEEB', topColor: '#ADD8E6', drawHeight: 16, isWaterCooler: true,
+      color: '#87CEEB', topColor: '#ADD8E6', drawHeight: 16, isWaterCooler: true, hidden: true,
     },
     filingCabinet: {
       name: 'Classeur', width: 1, height: 1, solid: true,
@@ -93,7 +93,7 @@ const Environments = {
     },
     standingDesk: {
       name: 'Bureau debout', width: 2, height: 1, solid: true,
-      color: '#C8A96E', topColor: '#DFC088', drawHeight: 18, isStandingDesk: true,
+      color: '#C8A96E', topColor: '#DFC088', drawHeight: 18, isStandingDesk: true, hidden: true,
     },
     collabSpace: {
       name: 'Espace collab', width: 4, height: 4, solid: false,
@@ -105,7 +105,7 @@ const Environments = {
     },
     lamp: {
       name: 'Lampadaire', width: 1, height: 1, solid: true,
-      color: '#C0C0C0', topColor: '#D0D0D0', drawHeight: 28, isLamp: true,
+      color: '#C0C0C0', topColor: '#D0D0D0', drawHeight: 28, isLamp: true, hidden: true,
     },
     door: {
       name: 'Porte / Portail', width: 1, height: 1, solid: false,
@@ -121,7 +121,7 @@ const Environments = {
     },
     clock: {
       name: 'Horloge murale', width: 1, height: 1, solid: true,
-      color: '#f5f5f5', topColor: '#ffffff', drawHeight: 30, isClock: true,
+      color: '#f5f5f5', topColor: '#ffffff', drawHeight: 30, isClock: true, hidden: true,
     },
   },
 
