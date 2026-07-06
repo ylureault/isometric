@@ -724,7 +724,7 @@ body.ui-dark-mode .share-close:hover { background: rgba(255,255,255,0.1); color:
 
 /* ===== Mic Permission Hint ===== */
 .mic-permission-hint {
-  position: fixed; bottom: 138px; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: 156px; left: 50%; transform: translateX(-50%);
   background: rgba(231,76,60,0.95); color: #fff; padding: 10px 20px;
   border-radius: var(--radius-lg); display: flex; align-items: center; gap: 10px;
   font-size: 0.85rem; z-index: 75; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
@@ -2495,7 +2495,7 @@ body.ui-dark-mode .rc-brand-img { filter: brightness(0) invert(1); opacity: .85;
 
 /* ===== View switch (bottom-center) + Gallery (Meet/Zoom) + Screen dock ===== */
 .view-switch{
-  position:fixed; left:50%; bottom:84px; transform:translateX(-50%); z-index:800;
+  position:fixed; left:50%; bottom:102px; transform:translateX(-50%); z-index:800;
   display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border:none; cursor:pointer;
   border-radius:999px; background:var(--color-surface-solid,#fff); color:var(--color-text,#333);
   font-weight:700; font-size:.85rem; box-shadow:0 6px 20px rgba(20,24,60,.16);
@@ -2532,7 +2532,7 @@ body.gallery-open .view-switch{ z-index:1600; background:#fff; color:#333; }
 
 /* Screen-share dock (iso view) */
 #share-dock{
-  display:none; position:fixed; right:16px; bottom:210px; z-index:900; width:260px;
+  display:none; position:fixed; right:16px; top:232px; bottom:auto; z-index:900; width:260px;
   background:#0d1020; border-radius:14px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.4);
   border:2px solid rgba(255,255,255,.12);
 }
@@ -2551,7 +2551,7 @@ body.gallery-open .view-switch{ z-index:1600; background:#fff; color:#333; }
 .gal-fs-close{ position:absolute; top:16px; right:16px; width:40px; height:40px; border:none; border-radius:50%; background:rgba(255,255,255,.2); color:#fff; font-size:1.6rem; cursor:pointer; }
 
 /* ===== Zones widget (bottom-right, admin): create by drag & drop + modify ===== */
-.zones-widget{ position:fixed; right:16px; bottom:150px; z-index:850; }
+.zones-widget{ position:fixed; right:16px; bottom:102px; z-index:850; }
 .zones-toggle{
   display:inline-flex; align-items:center; gap:8px; padding:10px 15px; border:none; cursor:pointer;
   border-radius:999px; background:var(--color-surface-solid,#fff); color:var(--color-text,#333);
