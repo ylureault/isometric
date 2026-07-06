@@ -620,6 +620,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Resize a furniture item (used to resize zones/spaces). Admin only, bounded.
+  socket.on('resize-furniture', (data) => {
+    if (!currentRoomId) return;
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+    const p = room.participants.get(socket.id);
+    if (!p || !p.isAdmin) return;
+    const item = room.furniture.find(f => f.id === data.furnitureId);
+    if (!item) return;
+    const w = Math.max(1, Math.min(14, parseInt(data.width) || item.width || 1));
+    const h = Math.max(1, Math.min(14, parseInt(data.height) || item.height || 1));
+    // keep the item inside the room
+    item.width = Math.min(w, room.gridSize - item.x);
+    item.height = Math.min(h, room.gridSize - item.y);
+    io.to(currentRoomId).emit('furniture-resized', { furnitureId: item.id, width: item.width, height: item.height });
+  });
+
   // Link two doors together (paired teleportation)
   socket.on('link-doors', (data) => {
     if (!currentRoomId) return;

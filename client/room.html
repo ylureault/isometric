@@ -261,6 +261,20 @@
     <span>Galerie</span>
   </button>
 
+  <!-- Zones widget (bottom-right, admin) : créer par glisser-déposer et modifier des espaces -->
+  <div class="zones-widget" id="zones-widget" style="display:none;">
+    <button class="zones-toggle" id="zones-toggle" title="Gérer les espaces / sous-groupes">
+      <span class="zt-ic">🗂️</span><span class="zt-l">Espaces</span><span class="zones-badge" id="zones-count">0</span>
+    </button>
+    <div class="zones-panel" id="zones-panel" style="display:none;">
+      <div class="zones-head"><strong>Espaces & sous-groupes</strong><button class="zones-close" id="zones-close" aria-label="Fermer">&times;</button></div>
+      <div class="zones-sub">Glissez un type dans la salle pour créer un espace de la taille voulue.</div>
+      <div class="zones-chips" id="zones-chips"></div>
+      <div class="zones-list-title">Espaces existants</div>
+      <div class="zones-list" id="zones-list"></div>
+    </div>
+  </div>
+
   <!-- Edit Mode Toolbar -->
   <div class="edit-toolbar" id="edit-toolbar" style="display: none;">
     <div class="edit-toolbar-section">
@@ -731,6 +745,7 @@
   <script src="js/audio.js?v=2.0.0"></script>
   <script src="js/video.js?v=2.0.0"></script>
   <script src="js/gallery.js?v=2.0.0"></script>
+  <script src="js/zones.js?v=2.0.0"></script>
   <script src="js/screen-share.js?v=2.0.0"></script>
   <script src="js/ui.js?v=2.0.0"></script>
   <script src="js/ux-enhancements.js?v=2.0.0"></script>

@@ -122,6 +122,11 @@ var Engine = {
       Gallery.init();
     }
 
+    // Zones panel (create/modify subgroup spaces by drag & drop)
+    if (typeof Zones !== 'undefined') {
+      Zones.init();
+    }
+
     Network.onParticipantJoined = function(d) {
       self.initSfx(); self.playSfx('join');
       // #30 Grouped join notifications
@@ -213,6 +218,7 @@ var Engine = {
         var wasAdmin = self.player.isAdmin;
         self.player.isAdmin = d.isAdmin;
         UI.updateAdminUI(d.isAdmin);
+        if (typeof Zones !== 'undefined') Zones.setAdmin(d.isAdmin);
         // #10 Crown animation when promoted to admin
         if (!wasAdmin && d.isAdmin && typeof UXEnhancements !== 'undefined') {
           UXEnhancements.showAdminCrown();
@@ -262,12 +268,19 @@ var Engine = {
     s.on('timer-ended', function() { self.initSfx(); self.playSfx('notification'); UI.showNotification('Le minuteur est terminé !'); });
     s.on('timer-paused', function(d) { if (UI.activeTimer) UI.activeTimer.paused = d.paused; });
     s.on('timer-cancelled', function(d) { UI.activeTimer = null; UI.hideTimer(); UI.showNotification('Minuteur annulé'); });
-    s.on('furniture-added', function(i) { Board.furniture.push(i); Board.buildCollisionMap(); });
+    s.on('furniture-added', function(i) { Board.furniture.push(i); Board.buildCollisionMap(); self._zonesSig = null; if (typeof Zones !== 'undefined') Zones.refresh(); });
+    s.on('furniture-resized', function(d) {
+      var f = Board.furniture.find(function(it) { return it.id === d.furnitureId; });
+      if (f) { f.width = d.width; f.height = d.height; Board.buildCollisionMap(); }
+      self._zonesSig = null;
+      if (typeof Zones !== 'undefined') Zones.refresh();
+    });
     s.on('zone-label-changed', function(d) {
       self._zoneLabels = self._zoneLabels || {};
       if (d.label) self._zoneLabels[d.key] = d.label;
       else delete self._zoneLabels[d.key];
       self._zonesSig = null;
+      if (typeof Zones !== 'undefined') Zones.refresh();
       UI.showNotification(d.label ? '✏️ Espace renommé : « ' + d.label + ' »' : 'Nom d\'espace réinitialisé');
     });
     s.on('furniture-updated', function(d) {
@@ -275,7 +288,7 @@ var Engine = {
       if (f) Object.assign(f, d.item);
       self._zonesSig = null; // les noms d'espaces se rafraîchissent
     });
-    s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); });
+    s.on('furniture-removed', function(d) { Board.furniture = Board.furniture.filter(function(f) { return f.id !== d.furnitureId; }); Board.buildCollisionMap(); self._zonesSig = null; if (typeof Zones !== 'undefined') Zones.refresh(); });
     s.on('furniture-moved', function(d) {
       var f = Board.furniture.find(function(item) { return item.id === d.furnitureId; });
       if (f) { f.x = d.x; f.y = d.y; Board.buildCollisionMap(); }
@@ -508,6 +521,7 @@ var Engine = {
       }
       UI.showCopyLink(self.roomConfig.roomId);
       UI.updateAdminUI(self.player.isAdmin);
+      if (typeof Zones !== 'undefined') Zones.setAdmin(self.player.isAdmin);
       // Restore active screen share if one is in progress
       if (r.activeScreenShare) {
         ScreenShare.activeGlobalShare = { socketId: r.activeScreenShare.socketId, pseudo: r.activeScreenShare.pseudo };
