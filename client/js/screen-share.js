@@ -125,6 +125,22 @@ const ScreenShare = {
     }
   },
 
+  // Hidden (but rendered) sink so incoming <video> elements actually decode
+  // frames. A detached or display:none video is throttled by the browser and
+  // paints black when drawn to the canvas — it must be connected and playing.
+  _getVideoSink() {
+    let sink = document.getElementById('screen-share-sink');
+    if (!sink) {
+      sink = document.createElement('div');
+      sink.id = 'screen-share-sink';
+      sink.setAttribute('aria-hidden', 'true');
+      // Off-screen but still rendered/decoded (do NOT use display:none).
+      sink.style.cssText = 'position:fixed;left:-10000px;top:0;width:2px;height:2px;overflow:hidden;opacity:0;pointer-events:none;';
+      document.body.appendChild(sink);
+    }
+    return sink;
+  },
+
   async handleScreenOffer(fromSocketId, offer) {
     const config = {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -135,12 +151,24 @@ const ScreenShare = {
     videoElement.autoplay = true;
     videoElement.muted = true;
     videoElement.playsInline = true;
+    videoElement.setAttribute('playsinline', '');
+    // Attach to the DOM so the browser keeps decoding frames for canvas drawing.
+    this._getVideoSink().appendChild(videoElement);
 
     this.incomingShares.set(fromSocketId, { connection, videoElement });
 
     connection.ontrack = (event) => {
-      videoElement.srcObject = event.streams[0];
+      if (videoElement.srcObject !== event.streams[0]) {
+        videoElement.srcObject = event.streams[0];
+      }
+      // Explicitly start playback; autoplay alone is unreliable here.
+      const p = videoElement.play();
+      if (p && p.catch) p.catch(() => { /* will retry on loadedmetadata */ });
     };
+    videoElement.addEventListener('loadedmetadata', () => {
+      const p = videoElement.play();
+      if (p && p.catch) p.catch(() => {});
+    });
 
     connection.onicecandidate = (event) => {
       if (event.candidate) {
@@ -196,7 +224,11 @@ const ScreenShare = {
     const share = this.incomingShares.get(socketId);
     if (share) {
       if (share.connection) share.connection.close();
-      if (share.videoElement) share.videoElement.srcObject = null;
+      if (share.videoElement) {
+        try { share.videoElement.pause(); } catch (e) { /* ignore */ }
+        share.videoElement.srcObject = null;
+        if (share.videoElement.parentNode) share.videoElement.parentNode.removeChild(share.videoElement);
+      }
       this.incomingShares.delete(socketId);
     }
     if (this.activeGlobalShare && this.activeGlobalShare.socketId === socketId) {
